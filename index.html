@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bar — Коктейли</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body>
+  <div class="container">
+    <!-- Хедер с кнопками входа -->
+    <header>
+      <h1>Bar</h1>
+      <p>Изысканные коктейли, созданные с любовью</p>
+      <div class="auth-buttons">
+        <button id="loginBtn">Войти</button>
+        <button id="registerBtn">Регистрация</button>
+        <button id="logoutBtn" style="display:none">Выйти</button>
+        <span id="userEmail" style="margin-left: 20px; font-weight: 500;"></span>
+      </div>
+    </header>
+
+    <!-- Модальное окно для входа/регистрации -->
+    <div id="authModal" class="modal">
+      <div class="modal-content">
+        <span class="close">&times;</span>
+        <h3 id="modalTitle">Вход</h3>
+        <form id="authForm">
+          <input type="email" id="email" placeholder="Email" required>
+          <input type="password" id="password" placeholder="Пароль" required>
+          <button type="submit">Продолжить</button>
+          <p id="toggleForm">Нет аккаунта? <a href="#" id="switchToRegister">Зарегистрироваться</a></p>
+        </form>
+      </div>
+    </div>
+
+    <main class="cocktails-grid">
+      <!-- Коктейли (здесь 3 для примера, остальные добавь по шаблону) -->
+      <div class="cocktail-card">
+        <img src="https://images.unsplash.com/photo-1582716961908-67476f398b5b?w=600&h=800&fit=crop&crop=entropy" alt="Мохито">
+        <div class="card-content">
+          <h2>Мохито</h2>
+          <p class="ingredients">Ром, мята, лайм, сахар, содовая</p>
+          <button class="order-btn" data-name="Мохито" data-price="450₽">Заказать</button>
+        </div>
+      </div>
+
+      <div class="cocktail-card">
+        <img src="https://images.unsplash.com/photo-1578608976700-7a27a5b5d2a8?w=600&h=800&fit=crop&crop=entropy" alt="Маргарита">
+        <div class="card-content">
+          <h2>Маргарита</h2>
+          <p class="ingredients">Текила, ликёр Трипл Сек, сок лайма</p>
+          <button class="order-btn" data-name="Маргарита" data-price="500₽">Заказать</button>
+        </div>
+      </div>
+
+      <div class="cocktail-card">
+        <img src="https://images.unsplash.com/photo-1600275549035-53693d556705?w=600&h=800&fit=crop&crop=entropy" alt="Олд Фэшн">
+        <div class="card-content">
+          <h2>Олд Фэшн</h2>
+          <p class="ingredients">Бурбон, сахар, ангостура, апельсин</p>
+          <button class="order-btn" data-name="Олд Фэшн" data-price="550₽">Заказать</button>
+        </div>
+      </div>
+
+      <!-- Добавь остальные 12 по шаблону -->
+    </main>
+  </div>
+
+  <!-- Модальное окно подтверждения заказа -->
+  <div id="orderModal" class="modal">
+    <div class="modal-content">
+      <span class="close" id="closeOrderModal">&times;</span>
+      <h3>Подтвердите заказ</h3>
+      <p id="orderSummary"></p>
+      <button id="confirmOrder">Подтвердить заказ</button>
+    </div>
+  </div>
+
+  <!-- Firebase и логика -->
+  <script>
+    // 🔥 ВСТАВЬ СЮДА СВОЙ FIREBASE CONFIG (из Шага 1)
+    const firebaseConfig = {
+      const firebaseConfig = {
+      apiKey: "AIzaSyB4bD8UAu0Aj5IRK5H-uZg6kxNAIbkZc9k",
+      authDomain: "bar-menu-6145c.firebaseapp.com",
+      projectId: "bar-menu-6145c",
+      storageBucket: "bar-menu-6145c.firebasestorage.app",
+      messagingSenderId: "493608422842",
+      appId: "1:493608422842:web:3b4b6bd8a4cb681c436183",
+      measurementId: "G-KRZXJW8JYG"
+    };
+
+    // Инициализация Firebase
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // Telegram настройки — 🔑 ВСТАВЬ СВОИ ДАННЫЕ
+    const TELEGRAM_BOT_TOKEN = "6071828339:AAHTBqgSBMCC8vAU7BiSoTr5j9PTscaw9CQ"; // например: "123456789:ABCdefGhIJKlmNoPQRstuVWXyz"
+    const TELEGRAM_CHAT_ID = "1743362083"; // например: "123456789"
+
+    // DOM элементы
+    const loginBtn = document.getElementById('loginBtn');
+    const registerBtn = document.getElementById('registerBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const userEmail = document.getElementById('userEmail');
+    const authModal = document.getElementById('authModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const authForm = document.getElementById('authForm');
+    const toggleForm = document.getElementById('toggleForm');
+    const switchToRegister = document.getElementById('switchToRegister');
+    const closeBtns = document.querySelectorAll('.close');
+    const orderButtons = document.querySelectorAll('.order-btn');
+    const orderModal = document.getElementById('orderModal');
+    const orderSummary = document.getElementById('orderSummary');
+    const confirmOrderBtn = document.getElementById('confirmOrder');
+
+    let currentOrder = null;
+
+    // Проверка состояния пользователя
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        loginBtn.style.display = 'none';
+        registerBtn.style.display = 'none';
+        logoutBtn.style.display = 'inline-block';
+        userEmail.textContent = user.email;
+      } else {
+        loginBtn.style.display = 'inline-block';
+        registerBtn.style.display = 'inline-block';
+        logoutBtn.style.display = 'none';
+        userEmail.textContent = '';
+      }
+    });
+
+    // Открытие модалки входа
+    loginBtn.addEventListener('click', () => {
+      modalTitle.textContent = 'Вход';
+      toggleForm.innerHTML = 'Нет аккаунта? <a href="#" id="switchToRegister">Зарегистрироваться</a>';
+      authModal.style.display = 'block';
+    });
+
+    // Переключение на регистрацию
+    authModal.addEventListener('click', (e) => {
+      if (e.target.id === 'switchToRegister') {
+        modalTitle.textContent = 'Регистрация';
+        toggleForm.innerHTML = 'Уже есть аккаунт? <a href="#" id="switchToLogin">Войти</a>';
+        e.preventDefault();
+      } else if (e.target.id === 'switchToLogin') {
+        modalTitle.textContent = 'Вход';
+        toggleForm.innerHTML = 'Нет аккаунта? <a href="#" id="switchToRegister">Зарегистрироваться</a>';
+        e.preventDefault();
+      }
+    });
+
+    // Закрытие модалок
+    closeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        authModal.style.display = 'none';
+        orderModal.style.display = 'none';
+      });
+    });
+
+    // Обработка формы входа/регистрации
+    authForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        if (modalTitle.textContent === 'Регистрация') {
+          await auth.createUserWithEmailAndPassword(email, password);
+          alert('Регистрация успешна!');
+        } else {
+          await auth.signInWithEmailAndPassword(email, password);
+        }
+        authModal.style.display = 'none';
+      } catch (error) {
+        alert('Ошибка: ' + error.message);
+      }
+    });
+
+    // Выход
+    logoutBtn.addEventListener('click', async () => {
+      await auth.signOut();
+    });
+
+    // Заказ коктейля
+    orderButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (!auth.currentUser) {
+          alert('Пожалуйста, войдите или зарегистрируйтесь для заказа.');
+          return;
+        }
+        const name = btn.getAttribute('data-name');
+        const price = btn.getAttribute('data-price');
+        currentOrder = { name, price, user: auth.currentUser.email, timestamp: new Date() };
+        orderSummary.innerHTML = `<strong>Коктейль:</strong> ${name}<br><strong>Цена:</strong> ${price}<br><strong>Ваш email:</strong> ${auth.currentUser.email}`;
+        orderModal.style.display = 'block';
+      });
+    });
+
+    // Подтверждение заказа
+    confirmOrderBtn.addEventListener('click', async () => {
+      if (!currentOrder) return;
+
+      try {
+        // Сохраняем заказ в Firestore
+        await db.collection('orders').add(currentOrder);
+
+        // Отправляем уведомление в Telegram
+        const message = `🆕 Новый заказ!\n\n🍸 ${currentOrder.name}\n💰 ${currentOrder.price}\n📬 Пользователь: ${currentOrder.user}\n🕒 ${currentOrder.timestamp.toLocaleString()}`;
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: TELEGRAM_CHAT_ID,
+            text: message,
+            parse_mode: 'HTML'
+          })
+        });
+
+        alert('Заказ успешно отправлен! Ожидайте подтверждения.');
+        orderModal.style.display = 'none';
+        currentOrder = null;
+      } catch (error) {
+        alert('Ошибка при отправке заказа: ' + error.message);
+      }
+    });
+
+    // Закрытие модалки по клику вне
+    window.addEventListener('click', (e) => {
+      if (e.target === authModal) authModal.style.display = 'none';
+      if (e.target === orderModal) orderModal.style.display = 'none';
+    });
+  </script>
+</body>
+</html>
