@@ -6,10 +6,10 @@
   <title>Bar — Коктейли</title>
   <link rel="stylesheet" href="style.css">
 
-  <!-- Firebase v10 (современная, модульная) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
+  <!-- ✅ Firebase COMPAT-версия — работает без type="module" -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 </head>
 <body>
   <div class="container">
@@ -85,21 +85,21 @@
   <!-- 🚨 ОСНОВНОЙ СКРИПТ — ВСТАВЬ СВОИ КЛЮЧИ! -->
   <script>
     // 🔥 ЗАМЕНИ ЭТИ XXX НА СВОИ ДАННЫЕ ИЗ FIREBASE КОНСОЛИ
-      const firebaseConfig = {
-        apiKey: "AIzaSyB4bD8UAu0Aj5IRK5H-uZg6kxNAIbkZc9k",
-        authDomain: "bar-menu-6145c.firebaseapp.com",
-        projectId: "bar-menu-6145c",
-        storageBucket: "bar-menu-6145c.firebasestorage.app",
-        messagingSenderId: "493608422842",
-        appId: "1:493608422842:web:3b4b6bd8a4cb681c436183",
-        measurementId: "G-KRZXJW8JYG"
-      };
+    const firebaseConfig = {
+      apiKey: "AIzaSyB4bD8UAu0Aj5IRK5H-uZg6kxNAIbkZc9k",
+      authDomain: "bar-menu-6145c.firebaseapp.com",
+      projectId: "bar-menu-6145c",
+      storageBucket: "bar-menu-6145c.firebasestorage.app",
+      messagingSenderId: "493608422842",
+      appId: "1:493608422842:web:3b4b6bd8a4cb681c436183",
+      measurementId: "G-KRZXJW8JYG"
+    };
 
     // 🤖 ЗАМЕНИ НА СВОЙ TELEGRAM ТОКЕН И CHAT ID
     const TELEGRAM_BOT_TOKEN = "XXX";
     const TELEGRAM_CHAT_ID = "XXX";
 
-    // Инициализация Firebase
+    // ✅ Инициализация Firebase COMPAT
     const app = firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.firestore();
