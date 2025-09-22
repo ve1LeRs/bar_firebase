@@ -618,7 +618,6 @@
 🍸 *Коктейль:* ${currentOrder.name}
 👤 *Имя клиента:* ${currentOrder.user}
 🕒 *Время:* ${currentOrder.timestamp}
-🆔 *ID заказа:* ${docRef.id}
         `.trim();
 
         const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
@@ -635,6 +634,15 @@
         // Вибрация при успешном заказе (если поддерживается)
         if (navigator.vibrate) {
           navigator.vibrate([200, 100, 200]);
+        } else if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+          // Альтернативная вибрация для мобильных устройств
+          try {
+            if (window.Telegram && window.Telegram.WebApp) {
+              window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+            }
+          } catch (e) {
+            console.log('Haptic feedback not available');
+          }
         }
 
         // Анимация шампанского
