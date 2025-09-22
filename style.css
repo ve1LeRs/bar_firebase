@@ -191,11 +191,12 @@ header h1::after {
 .image-container {
   position: relative;
   overflow: hidden;
+  height: 480px;
 }
 
 .image-container img {
   width: 100%;
-  height: 480px;
+  height: 100%;
   object-fit: cover;
   display: block;
   transition: transform 0.5s ease;
@@ -603,7 +604,7 @@ header h1::after {
     width: 100px;
   }
   
-  .cocktail-card img {
+  .image-container {
     height: 400px;
   }
 }
@@ -625,7 +626,7 @@ header h1::after {
     gap: 2.5rem;
   }
 
-  .cocktail-card img {
+  .image-container {
     height: 360px;
   }
 
@@ -713,7 +714,7 @@ header h1::after {
     font-size: 2.5rem;
   }
 
-  .cocktail-card img {
+  .image-container {
     height: 300px;
   }
 
