@@ -15,8 +15,13 @@
 <body>
   <div class="container">
     <header>
-      <h1>Asafiev Bar</h1>
-      <p>Изысканные коктейли, созданные с любовью</p>
+      <div class="header-content">
+        <img src="logo.png" alt="Asafiev Bar" class="logo">
+        <div class="header-text">
+          <h1>Asafiev Bar</h1>
+          <p>Изысканные коктейли, созданные с любовью</p>
+        </div>
+      </div>
       <div class="auth-buttons">
         <button id="loginBtn">Войти</button>
         <button id="registerBtn">Регистрация</button>
@@ -258,11 +263,15 @@
     let currentOrder = null;
 
     // Проверка состояния пользователя
-    auth.onAuthStateChanged(user => {
+    auth.onAuthStateChanged(async user => {
       if (user) {
         loginBtn.style.display = 'none';
         registerBtn.style.display = 'none';
         logoutBtn.style.display = 'inline-block';
+        // 👇 Если displayName пуст — пробуем обновить данные
+        if (!user.displayName) {
+          await user.reload();
+        }
         userName.textContent = user.displayName || "Гость";
       } else {
         loginBtn.style.display = 'inline-block';
@@ -307,7 +316,11 @@
       const password = document.getElementById('password').value;
 
       try {
-        await auth.signInWithEmailAndPassword(email, password);
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        // 👇 Принудительно обновляем данные пользователя, чтобы получить displayName
+        await userCredential.user.reload();
+        const updatedUser = auth.currentUser;
+        userName.textContent = updatedUser.displayName || "Гость";
         authModal.style.display = 'none';
       } catch (error) {
         alert('❌ Ошибка входа: ' + error.message);
