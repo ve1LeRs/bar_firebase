@@ -278,6 +278,12 @@
         </div>
       </div>
     </main>
+    
+    <!-- Плашка с авторскими правами -->
+    <div class="copyright">
+      <p>© 2025 Asafiev Bar. Все права защищены.</p>
+      <p>С любовью к коктейлям и хорошему настроению.</p>
+    </div>
   </div>
 
   <!-- Модальное окно подтверждения заказа -->
@@ -308,6 +314,9 @@
     <div class="background-overlay"></div>
     <div class="sparkles"></div>
   </div>
+  
+  <!-- Анимация шампанского -->
+  <div id="champagneAnimation" class="champagne-animation"></div>
 
   <script>
     // 🔥 ТВОИ КЛЮЧИ FIREBASE
@@ -351,6 +360,7 @@
     const confirmOrderBtn = document.getElementById('confirmOrder');
     const ordersList = document.getElementById('ordersList');
     const closeNotification = document.getElementById('closeNotification');
+    const champagneAnimation = document.getElementById('champagneAnimation');
 
     let currentOrder = null;
 
@@ -494,6 +504,7 @@
     // Закрытие уведомления
     closeNotification?.addEventListener('click', () => {
       notificationModal.style.display = 'none';
+      champagneAnimation.innerHTML = '';
     });
 
     // Обработка входа
@@ -617,23 +628,17 @@
           body: JSON.stringify({
             chat_id: TELEGRAM_CHAT_ID,
             text: message,
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: "✅ Подтвердить",
-                    callback_data: `confirm_${docRef.id}_${currentOrder.userId}`
-                  },
-                  {
-                    text: "❌ Отменить",
-                    callback_data: `cancel_${docRef.id}_${currentOrder.userId}`
-                  }
-                ]
-              ]
-            },
             parse_mode: 'Markdown'
           })
         });
+
+        // Вибрация при успешном заказе (если поддерживается)
+        if (navigator.vibrate) {
+          navigator.vibrate([200, 100, 200]);
+        }
+
+        // Анимация шампанского
+        createChampagneAnimation();
 
         // Показываем уведомление
         orderModal.style.display = 'none';
@@ -645,6 +650,25 @@
         alert('❌ Не удалось отправить заказ.');
       }
     });
+
+    // Создание анимации шампанского
+    function createChampagneAnimation() {
+      champagneAnimation.innerHTML = '';
+      for (let i = 0; i < 50; i++) {
+        const bubble = document.createElement('div');
+        bubble.className = 'champagne-bubble';
+        bubble.style.left = Math.random() * 100 + '%';
+        bubble.style.animationDelay = Math.random() * 2 + 's';
+        bubble.style.width = (Math.random() * 10 + 5) + 'px';
+        bubble.style.height = bubble.style.width;
+        champagneAnimation.appendChild(bubble);
+      }
+      
+      // Удаляем анимацию через 3 секунды
+      setTimeout(() => {
+        champagneAnimation.innerHTML = '';
+      }, 3000);
+    }
 
     // Закрытие по клику вне
     window.addEventListener('click', (e) => {
