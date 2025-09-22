@@ -34,6 +34,34 @@ header {
   z-index: 10;
 }
 
+.header-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.logo {
+  height: 120px;
+  width: 120px;
+  object-fit: contain;
+  border-radius: 20px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+  border: 4px solid white;
+}
+
+.logo:hover {
+  transform: scale(1.05);
+}
+
+.header-text {
+  text-align: center;
+}
+
 header h1 {
   font-size: 6rem;
   font-weight: 600;
@@ -175,20 +203,6 @@ header h1::after {
 
 .image-container:hover img {
   transform: scale(1.05);
-}
-
-.price-tag {
-  position: absolute;
-  top: 15px;
-  right: 15px;
-  background: rgba(201, 168, 124, 0.9);
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  font-family: 'Inter', sans-serif;
-  font-weight: 500;
-  font-size: 1.1rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .card-content {
@@ -577,36 +591,6 @@ header h1::after {
   color: #e74c3c;
 }
 
-.header-content {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2.5rem;
-  margin-bottom: 2rem;
-  flex-wrap: nowrap;
-}
-
-.logo {
-  height: 120px;
-  width: 120px;
-  object-fit: contain;
-  border-radius: 20px;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-  transition: transform 0.3s ease;
-  flex-shrink: 0;
-  border: 4px solid white;
-}
-
-.logo:hover {
-  transform: scale(1.05);
-}
-
-.header-text {
-  text-align: left;
-  flex: 1;
-  min-width: 300px;
-}
-
 /* ============= Мобильные улучшения ============= */
 @media (max-width: 1024px) {
   .header-content {
@@ -656,14 +640,6 @@ header h1::after {
   .auth-buttons button {
     width: 100%;
     max-width: 250px;
-  }
-
-  /* Центрируем название и описание бара */
-  .header-text {
-    text-align: center !important;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
   }
 
   header h1 {
@@ -716,17 +692,6 @@ header h1::after {
     font-size: 1rem;
   }
 
-  .header-content {
-    flex-direction: column;
-    text-align: center;
-    gap: 1.5rem;
-  }
-
-  .logo {
-    height: 90px;
-    width: 90px;
-  }
-
   .orders-modal {
     margin: 5% auto;
     max-height: 90vh;
@@ -739,11 +704,6 @@ header h1::after {
   
   .order-name {
     font-size: 1.1rem;
-  }
-  
-  .price-tag {
-    font-size: 1rem;
-    padding: 0.4rem 0.8rem;
   }
 }
 
@@ -781,11 +741,6 @@ header h1::after {
   .auth-buttons button {
     font-size: 0.9rem;
     padding: 0.5rem 1rem;
-  }
-  
-  .price-tag {
-    font-size: 0.9rem;
-    padding: 0.3rem 0.7rem;
   }
 }
 
@@ -934,81 +889,6 @@ header h1::after {
   .sparkle {
     animation: flicker 4s infinite ease-in-out;
   }
-}
-
-/* Footer */
-.footer {
-  background: rgba(255, 255, 255, 0.7);
-  border-top: 1px solid rgba(201, 168, 124, 0.3);
-  padding: 2rem 0;
-  margin-top: 3rem;
-}
-
-.footer-content {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 2rem;
-  max-width: 1300px;
-  margin: 0 auto;
-  padding: 0 2rem;
-}
-
-.footer-section h3 {
-  color: #1a1a1a;
-  margin-bottom: 1rem;
-  font-size: 1.4rem;
-  position: relative;
-  padding-bottom: 0.5rem;
-}
-
-.footer-section h3::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 50px;
-  height: 2px;
-  background: #c9a87c;
-}
-
-.footer-section p {
-  margin-bottom: 0.5rem;
-  color: #6b5c47;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.social-icons {
-  display: flex;
-  gap: 1rem;
-  margin-top: 1rem;
-}
-
-.social-icons a {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: #c9a87c;
-  color: white;
-  border-radius: 50%;
-  transition: all 0.3s ease;
-}
-
-.social-icons a:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 4px 8px rgba(201, 168, 124, 0.4);
-}
-
-.footer-bottom {
-  text-align: center;
-  padding-top: 2rem;
-  margin-top: 2rem;
-  border-top: 1px solid rgba(201, 168, 124, 0.2);
-  color: #6b5c47;
-  font-size: 0.9rem;
 }
 
 /* Анимации для карточек */
