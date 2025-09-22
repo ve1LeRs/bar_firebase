@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport"="width=device-width, initial-scale=1.0">
   <title>Asafiev Bar — Коктейли</title>
   <link rel="icon" href="favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="style.css">
@@ -237,7 +237,9 @@
     <div class="modal-content order-modal">
       <span class="close" id="closeOrderModal">&times;</span>
       <h3>Подтвердите заказ</h3>
-      <img id="orderImagePreview" src="" alt="Коктейль" class="order-image-preview">
+      <div class="order-image-container">
+        <img id="orderImagePreview" src="" alt="Коктейль" class="order-image-preview">
+      </div>
       <p id="orderSummary"></p>
       <button id="confirmOrder">Подтвердить заказ</button>
     </div>
@@ -255,7 +257,7 @@
   
   <!-- Фоновые эффекты -->
   <div id="background" class="background-container">
-    <div class="particles"></div>
+    <div class="background-overlay"></div>
     <div class="sparkles"></div>
   </div>
 
@@ -309,14 +311,15 @@
       const sparklesContainer = document.querySelector('.sparkles');
       if (sparklesContainer) {
         sparklesContainer.innerHTML = '';
-        for (let i = 1; i <= 20; i++) {
+        for (let i = 1; i <= 30; i++) {
           const sparkle = document.createElement('div');
           sparkle.className = 'sparkle';
           sparkle.style.left = Math.random() * 100 + '%';
           sparkle.style.top = Math.random() * 100 + '%';
-          sparkle.style.animationDelay = Math.random() * 3 + 's';
-          sparkle.style.width = (Math.random() * 3 + 1) + 'px';
+          sparkle.style.animationDelay = Math.random() * 4 + 's';
+          sparkle.style.width = (Math.random() * 4 + 2) + 'px';
           sparkle.style.height = sparkle.style.width;
+          sparkle.style.opacity = Math.random() * 0.8 + 0.2;
           sparklesContainer.appendChild(sparkle);
         }
       }
@@ -348,23 +351,33 @@
       }
     });
 
-    // Загрузка истории заказов
+    // Загрузка истории заказов (без индекса, используем фильтрацию на клиенте)
     async function loadOrderHistory(userId) {
       try {
         const ordersSnapshot = await db.collection('orders')
-          .where('userId', '==', userId)
           .orderBy('timestamp', 'desc')
           .get();
         
         ordersList.innerHTML = '';
         
-        if (ordersSnapshot.empty) {
+        // Фильтруем заказы на клиенте
+        const userOrders = [];
+        ordersSnapshot.forEach(doc => {
+          const order = doc.data();
+          if (order.userId === userId) {
+            userOrders.push({ id: doc.id, ...order });
+          }
+        });
+        
+        if (userOrders.length === 0) {
           ordersList.innerHTML = '<p class="no-orders">У вас пока нет заказов</p>';
           return;
         }
         
-        ordersSnapshot.forEach(doc => {
-          const order = doc.data();
+        // Сортируем по времени (новые первыми)
+        userOrders.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        userOrders.forEach(order => {
           const orderElement = document.createElement('div');
           orderElement.className = 'order-item';
           orderElement.innerHTML = `
