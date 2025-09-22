@@ -125,7 +125,6 @@ header p {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.08);
 }
 
-/* ✅ УБРАЛИ БЕЛОЕ НАПЫЛЕНИЕ — УДАЛИЛИ ::before */
 .cocktail-card img {
   width: 100%;
   height: 480px;
@@ -162,6 +161,16 @@ header p {
   color: #7d6e5d;
   line-height: 1.6;
   letter-spacing: 0.3px;
+}
+
+.cocktail-card .mood {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 0.92rem;
+  font-style: italic;
+  color: #a18c6a;
+  margin-top: 0.4rem;
+  line-height: 1.5;
+  letter-spacing: 0.5px;
 }
 
 .order-btn {
@@ -306,6 +315,30 @@ header p {
   text-decoration: underline;
 }
 
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.logo {
+  height: 80px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transition: transform 0.3s ease;
+}
+
+.logo:hover {
+  transform: scale(1.03);
+}
+
+.header-text {
+  text-align: left;
+}
+
+/* ============= Мобильные улучшения ============= */
 @media (max-width: 768px) {
   body {
     padding: 1rem 0;
@@ -340,66 +373,8 @@ header p {
     width: 100%;
     max-width: 250px;
   }
-}
 
-@media (max-width: 480px) {
-  header h1 {
-    font-size: 2.8rem;
-  }
-
-  .cocktail-card img {
-    height: 300px;
-  }
-
-  .cocktail-card h2 {
-    font-size: 1.6rem;
-  }
-
-  .cocktail-card .mood {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 0.92rem;
-  font-style: italic;
-  color: #a18c6a;
-  margin-top: 0.4rem;
-  line-height: 1.5;
-  letter-spacing: 0.5px;
-}
-.header-content {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.logo {
-  height: 80px;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  transition: transform 0.3s ease;
-}
-
-.logo:hover {
-  transform: scale(1.03);
-}
-
-.header-text {
-  text-align: left;
-}
-
-@media (max-width: 768px) {
-  .header-content {
-    flex-direction: column;
-    text-align: center;
-  }
-
-  .logo {
-    height: 60px;
-  }
-/* ============= Мобильные улучшения ============= */
-@media (max-width: 768px) {
-
-  /* 1. Центрируем название и описание бара */
+  /* Центрируем название и описание бара */
   .header-text {
     text-align: center !important;
     display: flex;
@@ -417,7 +392,7 @@ header p {
     text-align: center;
   }
 
-  /* 2. Имя пользователя над кнопкой "Выйти", чуть крупнее */
+  /* Имя пользователя над кнопкой "Выйти", чуть крупнее */
   .auth-buttons {
     flex-direction: column;
     align-items: center;
@@ -435,7 +410,7 @@ header p {
     margin-top: 0.5rem;
   }
 
-  /* 3. Миниатюра коктейля в модальном окне подтверждения */
+  /* Миниатюра коктейля в модальном окне подтверждения */
   #orderModal .modal-content {
     padding: 1.5rem;
   }
@@ -460,6 +435,31 @@ header p {
     padding: 0.8rem;
     font-size: 1rem;
   }
+
+  .header-content {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .logo {
+    height: 60px;
+  }
+}
+
+@media (max-width: 480px) {
+  header h1 {
+    font-size: 2.8rem;
+  }
+
+  .cocktail-card img {
+    height: 300px;
+  }
+
+  .cocktail-card h2 {
+    font-size: 1.6rem;
+  }
+}
+
 /* ============= Анимированный лоадер ============= */
 .loader-container {
   position: fixed;
@@ -534,6 +534,7 @@ header p {
     opacity: 1;
     transform: translateY(0);
   }
+}
 
 /* ============= Фоновые эффекты ============= */
 .background-container {
@@ -582,11 +583,11 @@ header p {
 /* Мерцающие огоньки */
 @keyframes flick {
   0% { opacity: 0; }
- 50% { opacity: 1; }
- 100% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
-.fparkles {
+.sparkles {
   position: absolute;
   width: 100%;
   height: 100%;
@@ -604,12 +605,12 @@ header p {
   opacity: 0;
 }
 
-.sparkle:nth-child(1) { left: 10%; Top: 20%; animation-delay: 0s; }
-.sparkle:nth-child(2) { Left: 20%; top: 30%; animations-delay: 0.5s; }
-.sparkle:nth-child(3) { left: 30%; top: 40%;animations-delay: 1s; }
-.sparkle:nth-child(4) { left: 40%; top: 50%;animations-delays: 1.5s; }
-.sparkle:nth-child(5) { Left: 50%; top: 60%;animations-delays: 2s; }
-.sparkle:nth-child(6) { left: 60%; top: 70%;animations-delays: 2.5s; }
-.sparkle:nth-child(7) { left: 70%; top: 80%;animations-delays: 3s; }
-.sparkle:nth-child(8) { Left: 80%; top: 90%;animations-delays: 3.5s; }
+.sparkle:nth-child(1) { left: 10%; top: 20%; animation-delay: 0s; }
+.sparkle:nth-child(2) { left: 20%; top: 30%; animation-delay: 0.5s; }
+.sparkle:nth-child(3) { left: 30%; top: 40%; animation-delay: 1s; }
+.sparkle:nth-child(4) { left: 40%; top: 50%; animation-delay: 1.5s; }
+.sparkle:nth-child(5) { left: 50%; top: 60%; animation-delay: 2s; }
+.sparkle:nth-child(6) { left: 60%; top: 70%; animation-delay: 2.5s; }
+.sparkle:nth-child(7) { left: 70%; top: 80%; animation-delay: 3s; }
+.sparkle:nth-child(8) { left: 80%; top: 90%; animation-delay: 3.5s; }
 }

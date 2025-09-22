@@ -213,29 +213,30 @@
   </div>
 
   <!-- Модальное окно подтверждения заказа -->
-    <div id="orderModal" class="modal">
-      <div class="modal-content">
-        <span class="close" id="closeOrderModal">&times;</span>
-        <h3>Подтвердите заказ</h3>
-        <img id="orderImagePreview" src="" alt="Коктейль" style="display:none;">
-        <p id="orderSummary"></p>
-        <button id="confirmOrder">Подтвердить заказ</button>
-      </div>
-  <!-- Анимированный лоадер -->
-    <div id="loader" class="loader-container">
-      <div class="loader">
-        <div class="loader-circle"></div>
-        <div class="loader-circle"></div>
-        <div class="loader-circle"></div>
-      </div>
-      <p class="loader-text">Подготавливаем ваш бар...</p>
-    </div>
-    <!-- Фоновые эффекты -->
-     <div id="background" class="background-container">
-      <div class="particles"></div>
+  <div id="orderModal" class="modal">
+    <div class="modal-content">
+      <span class="close" id="closeOrderModal">&times;</span>
+      <h3>Подтвердите заказ</h3>
+      <img id="orderImagePreview" src="" alt="Коктейль" style="display:none;">
+      <p id="orderSummary"></p>
+      <button id="confirmOrder">Подтвердить заказ</button>
     </div>
   </div>
-
+  
+  <!-- Анимированный лоадер -->
+  <div id="loader" class="loader-container">
+    <div class="loader">
+      <div class="loader-circle"></div>
+      <div class="loader-circle"></div>
+      <div class="loader-circle"></div>
+    </div>
+    <p class="loader-text">Подготавливаем ваш бар...</p>
+  </div>
+  
+  <!-- Фоновые эффекты -->
+  <div id="background" class="background-container">
+    <div class="particles"></div>
+  </div>
 
   <script>
     // 🔥 ТВОИ КЛЮЧИ FIREBASE
@@ -247,6 +248,7 @@
       messagingSenderId: "493608422842",
       appId: "1:493608422842:web:3b4b6bd8a4cb681c436183"
     };
+    
     // Создаем мерцающие огоньки
     const background = document.getElementById('background');
     if (background) {
