@@ -419,14 +419,14 @@
       const loader = document.getElementById('loader');
       loader.classList.add('active');
       
-      // Скрываем лоадер через 1 секунду (или когда Firebase загрузится)
-      setTimeout(() => {
-        loader.classList.remove('active');
-        document.querySelectorAll('.cocktail-card').forEach(card => {
-          card.classList.add('fade-in-content');
-        });
-      }, 1000);
-    });
+    // Скрываем лоадер через 1 секунду (или когда Firebase загрузится)
+    setTimeout(() => {
+      loader.classList.remove('active');
+      document.querySelectorAll('.cocktail-card').forEach(card => {
+        card.classList.add('fade-in-content');
+      });
+    }, 1000);
+  });
 
     // Подтверждение заказа
     confirmOrderBtn?.addEventListener('click', async () => {
