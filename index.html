@@ -213,14 +213,15 @@
   </div>
 
   <!-- Модальное окно подтверждения заказа -->
-  <div id="orderModal" class="modal">
-    <div class="modal-content">
-      <span class="close" id="closeOrderModal">&times;</span>
-      <h3>Подтвердите заказ</h3>
-      <p id="orderSummary"></p>
-      <button id="confirmOrder">Подтвердить заказ</button>
+    <div id="orderModal" class="modal">
+      <div class="modal-content">
+        <span class="close" id="closeOrderModal">&times;</span>
+        <h3>Подтвердите заказ</h3>
+        <img id="orderImagePreview" src="" alt="Коктейль" style="display:none;">
+        <p id="orderSummary"></p>
+        <button id="confirmOrder">Подтвердить заказ</button>
+      </div>
     </div>
-  </div>
 
   <script>
     // 🔥 ТВОИ КЛЮЧИ FIREBASE
@@ -358,15 +359,22 @@
           return;
         }
         const name = btn.getAttribute('data-name');
+        // 👇 Получаем изображение коктейля из родительской карточки
+        const imgSrc = btn.closest('.cocktail-card').querySelector('img').src;
         currentOrder = { 
           name, 
           user: user.displayName || "Гость", 
-          timestamp: new Date().toLocaleString('ru-RU') 
+          timestamp: new Date().toLocaleString('ru-RU'),
+          image: imgSrc // сохраняем ссылку на изображение
         };
         orderSummary.innerHTML = `
           <strong>🍸 Коктейль:</strong> ${name}<br>
           <strong>📬 Ваше имя:</strong> ${currentOrder.user}
         `;
+        // 👇 Показываем и подставляем изображение
+        const orderImagePreview = document.getElementById('orderImagePreview');
+        orderImagePreview.src = imgSrc;
+        orderImagePreview.style.display = 'block';
         orderModal.style.display = 'block';
       });
     });

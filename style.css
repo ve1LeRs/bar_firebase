@@ -396,4 +396,68 @@ header p {
   .logo {
     height: 60px;
   }
+/* ============= Мобильные улучшения ============= */
+@media (max-width: 768px) {
+
+  /* 1. Центрируем название и описание бара */
+  .header-text {
+    text-align: center !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header h1 {
+    font-size: 2.8rem;
+    text-align: center;
+  }
+
+  header p {
+    font-size: 1.1rem;
+    text-align: center;
+  }
+
+  /* 2. Имя пользователя над кнопкой "Выйти", чуть крупнее */
+  .auth-buttons {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  #userName {
+    font-size: 1.1rem;
+    font-weight: 600;
+    order: -1; /* Перемещаем имя НАД кнопками */
+    margin: 0.5rem 0 0.2rem;
+  }
+
+  #logoutBtn {
+    margin-top: 0.5rem;
+  }
+
+  /* 3. Миниатюра коктейля в модальном окне подтверждения */
+  #orderModal .modal-content {
+    padding: 1.5rem;
+  }
+
+  #orderImagePreview {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 12px;
+    margin: 0 auto 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    display: block;
+  }
+
+  #orderSummary {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+
+  /* Уменьшаем кнопки заказа для лучшего тапа */
+  .order-btn {
+    padding: 0.8rem;
+    font-size: 1rem;
+  }
 }
