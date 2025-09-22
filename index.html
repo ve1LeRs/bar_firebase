@@ -19,14 +19,20 @@
         <img src="logo.png" alt="Asafiev Bar" class="logo">
         <div class="header-text">
           <h1>Asafiev Bar</h1>
-          <p>Изысканные коктейли, созданные с любовью</p>
+          <p class="subtitle">Изысканные коктейли,<br>созданные с любовью</p>
         </div>
       </div>
       <div class="auth-buttons">
         <button id="loginBtn">Войти</button>
         <button id="registerBtn">Регистрация</button>
         <button id="logoutBtn" style="display:none">Выйти</button>
-        <span id="userName" style="margin-left: 20px; font-weight: 500;"></span>
+        <span id="userName" class="user-name"></span>
+      </div>
+      
+      <!-- История заказов -->
+      <div id="orderHistory" class="order-history" style="display:none">
+        <h3>История заказов</h3>
+        <div id="ordersList" class="orders-list"></div>
       </div>
     </header>
 
@@ -288,6 +294,8 @@
     const orderModal = document.getElementById('orderModal');
     const orderSummary = document.getElementById('orderSummary');
     const confirmOrderBtn = document.getElementById('confirmOrder');
+    const orderHistory = document.getElementById('orderHistory');
+    const ordersList = document.getElementById('ordersList');
 
     let currentOrder = null;
 
@@ -302,13 +310,63 @@
           await user.reload();
         }
         userName.textContent = user.displayName || "Гость";
+        userName.style.display = 'block';
+        
+        // Загружаем историю заказов
+        loadOrderHistory(user.uid);
+        orderHistory.style.display = 'block';
       } else {
         loginBtn.style.display = 'inline-block';
         registerBtn.style.display = 'inline-block';
         logoutBtn.style.display = 'none';
         userName.textContent = '';
+        userName.style.display = 'none';
+        orderHistory.style.display = 'none';
       }
     });
+
+    // Загрузка истории заказов
+    async function loadOrderHistory(userId) {
+      try {
+        const ordersSnapshot = await db.collection('orders')
+          .where('userId', '==', userId)
+          .orderBy('timestamp', 'desc')
+          .get();
+        
+        ordersList.innerHTML = '';
+        
+        if (ordersSnapshot.empty) {
+          ordersList.innerHTML = '<p>У вас пока нет заказов</p>';
+          return;
+        }
+        
+        ordersSnapshot.forEach(doc => {
+          const order = doc.data();
+          const orderElement = document.createElement('div');
+          orderElement.className = 'order-item';
+          orderElement.innerHTML = `
+            <div class="order-header">
+              <span class="order-name">${order.name}</span>
+              <span class="order-status ${order.status || 'pending'}">${getStatusText(order.status)}</span>
+            </div>
+            <div class="order-time">${order.timestamp}</div>
+          `;
+          ordersList.appendChild(orderElement);
+        });
+      } catch (error) {
+        console.error('Ошибка загрузки истории заказов:', error);
+      }
+    }
+
+    // Получение текста статуса
+    function getStatusText(status) {
+      switch(status) {
+        case 'confirmed': return 'Подтверждён';
+        case 'completed': return 'Выполнен';
+        case 'cancelled': return 'Отменён';
+        default: return 'В обработке';
+      }
+    }
 
     // Открытие модалки входа
     loginBtn?.addEventListener('click', () => {
@@ -419,8 +477,10 @@
         currentOrder = { 
           name, 
           user: user.displayName || "Гость", 
+          userId: user.uid,
           timestamp: new Date().toLocaleString('ru-RU'),
-          image: imgSrc // сохраняем ссылку на изображение
+          image: imgSrc,
+          status: 'pending' // Статус по умолчанию
         };
         orderSummary.innerHTML = `
           <strong>🍸 Коктейль:</strong> ${name}<br>
@@ -439,13 +499,15 @@
       if (!currentOrder) return;
 
       try {
-        await db.collection('orders').add(currentOrder);
+        // Сохраняем заказ в Firestore
+        const docRef = await db.collection('orders').add(currentOrder);
 
         const message = `
 🆕 *Новый заказ в Asafiev Bar!*
 🍸 *Коктейль:* ${currentOrder.name}
 👤 *Имя клиента:* ${currentOrder.user}
 🕒 *Время:* ${currentOrder.timestamp}
+🆔 *ID заказа:* ${docRef.id}
         `.trim();
 
         const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
@@ -454,13 +516,17 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chat_id: TELEGRAM_CHAT_ID,
-            text: `🍸 *Новый заказ в Asafiev Bar!*\n\nКоктейль: ${currentOrder.name}\nИмя: ${currentOrder.user}\nВремя: ${currentOrder.timestamp}`,
+            text: message,
             reply_markup: {
               inline_keyboard: [
                 [
                   {
                     text: "✅ Подтвердить заказ",
-                    callback_data: `confirm_${Date.now()}_${currentOrder.name}`
+                    callback_data: `confirm_${docRef.id}`
+                  },
+                  {
+                    text: "❌ Отменить заказ",
+                    callback_data: `cancel_${docRef.id}`
                   }
                 ]
               ]
@@ -472,6 +538,11 @@
         alert('✅ Заказ отправлен! Ожидайте подтверждения.');
         orderModal.style.display = 'none';
         currentOrder = null;
+        
+        // Обновляем историю заказов
+        if (auth.currentUser) {
+          loadOrderHistory(auth.currentUser.uid);
+        }
       } catch (error) {
         console.error("Ошибка:", error);
         alert('❌ Не удалось отправить заказ.');

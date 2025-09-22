@@ -50,13 +50,14 @@ header h1::after {
   margin: 1rem auto 0;
 }
 
-header p {
+.subtitle {
   font-family: 'Inter', sans-serif;
   font-size: 1.35rem;
   font-weight: 300;
   color: #6b5c47;
   margin-top: 1.5rem;
   letter-spacing: 0.5px;
+  text-align: center;
 }
 
 .auth-buttons {
@@ -65,6 +66,7 @@ header p {
   gap: 1rem;
   justify-content: center;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .auth-buttons button {
@@ -94,12 +96,15 @@ header p {
   background: #c0392b;
 }
 
-#userName {
-  align-self: center;
+.user-name {
+  font-size: 1.2rem;
+  font-weight: 600;
   font-style: italic;
   color: #6b5c47;
-  margin-left: 20px;
-  font-weight: 500;
+  text-align: center;
+  display: block;
+  width: 100%;
+  margin: 1rem 0;
 }
 
 .cocktails-grid {
@@ -315,6 +320,79 @@ header p {
   text-decoration: underline;
 }
 
+/* История заказов */
+.order-history {
+  margin-top: 2rem;
+  padding: 2rem;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 15px;
+  backdrop-filter: blur(5px);
+}
+
+.order-history h3 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: #1a1a1a;
+  font-size: 1.5rem;
+}
+
+.orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.order-item {
+  padding: 1rem;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.order-name {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.order-status {
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.order-status.pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.order-status.confirmed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.order-status.completed {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.order-status.cancelled {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.order-time {
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
 .header-content {
   display: flex;
   align-items: center;
@@ -335,7 +413,7 @@ header p {
 }
 
 .header-text {
-  text-align: left;
+  text-align: center;
 }
 
 /* ============= Мобильные улучшения ============= */
@@ -348,7 +426,7 @@ header p {
     font-size: 3.5rem;
   }
 
-  header p {
+  .subtitle {
     font-size: 1.15rem;
   }
 
@@ -387,7 +465,7 @@ header p {
     text-align: center;
   }
 
-  header p {
+  .subtitle {
     font-size: 1.1rem;
     text-align: center;
   }
@@ -399,7 +477,7 @@ header p {
     gap: 0.5rem;
   }
 
-  #userName {
+  .user-name {
     font-size: 1.1rem;
     font-weight: 600;
     order: -1; /* Перемещаем имя НАД кнопками */
@@ -443,6 +521,10 @@ header p {
 
   .logo {
     height: 60px;
+  }
+
+  .order-history {
+    padding: 1rem;
   }
 }
 
