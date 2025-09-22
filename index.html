@@ -243,6 +243,18 @@
       messagingSenderId: "493608422842",
       appId: "1:493608422842:web:3b4b6bd8a4cb681c436183"
     };
+    // Создаем мерцающие огоньки
+    const backgrounds = document.getElementById('backgrounds');
+    if (background) {
+      const sparkles = document.createElement('div');
+      sparkles.className = 'sparkles';
+      for (let i = 1; i <= 8; i++) {
+        const sparkle = document.createElement('div');
+        sparkle.className = 'sparkle';
+        sparkles.appendChild(sparkle);
+      }
+      backgrounds.appendChild(sparkles);
+    }
 
     // 🤖 TELEGRAM
     const TELEGRAM_BOT_TOKEN = "8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo";
@@ -359,13 +371,26 @@
       const email = document.getElementById('regEmail').value;
       const password = document.getElementById('regPassword').value;
 
+      const loader = document.getElementById('loader');
+      loader.classList.add('active');
+
       try {
         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
         await userCredential.user.updateProfile({ displayName });
+        
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
         alert('✅ Регистрация успешна!');
         registerModal.style.display = 'none';
+        
+        document.querySelectorAll('.cocktail-card').forEach(card => {
+          card.classList.add('fade-in-content');
+        });
+        
       } catch (error) {
         alert('❌ Ошибка регистрации: ' + error.message);
+      } finally {
+        loader.classList.remove('active');
       }
     });
 
@@ -423,7 +448,17 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chat_id: TELEGRAM_CHAT_ID,
-            text: message,
+            text: `Новый заказ: ${currentOrder.name}\nКлиент: ${currentOrder.user}`,
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "✅ Подтвердить",
+                    callback_ `confirm_${Date.now()}_${currentOrder.name}`
+                  }
+                ]
+              ]
+            },
             parse_mode: 'Markdown'
           })
         });
@@ -444,5 +479,9 @@
       if (e.target === orderModal) orderModal.style.display = 'none';
     });
   </script>
+  <!-- Фоновые эффекты -->
+   <div id="background" class="background-container">
+    <div class="particles"></div>
+  </div>
 </body>
 </html>
