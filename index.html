@@ -448,13 +448,13 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chat_id: TELEGRAM_CHAT_ID,
-            text: `Новый заказ: ${currentOrder.name}\nКлиент: ${currentOrder.user}`,
+            text: `🍸 *Новый заказ в Asafiev Bar!*\n\nКоктейль: ${currentOrder.name}\nИмя: ${currentOrder.user}\nВремя: ${currentOrder.timestamp}`,
             reply_markup: {
               inline_keyboard: [
                 [
                   {
-                    text: "✅ Подтвердить",
-                    callback_ `confirm_${Date.now()}_${currentOrder.name}`
+                    text: "✅ Подтвердить заказ",
+                    callback_data: `confirm_${Date.now()}_${currentOrder.name}`
                   }
                 ]
               ]
