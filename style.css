@@ -339,23 +339,33 @@ header h1::after {
 
 /* Модальное окно заказа */
 .order-modal {
-  max-width: 400px;
+  max-width: 450px;
+  padding: 2rem;
+}
+
+.order-image-container {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0;
 }
 
 .order-image-preview {
-  width: 120px;
-  height: 120px;
+  width: 150px;
+  height: 150px;
   object-fit: cover;
-  border-radius: 12px;
-  margin: 0 auto 1rem;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border-radius: 16px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.15);
   display: block;
+  border: 3px solid #f0f0f0;
 }
 
 #orderSummary {
   margin: 1.5rem 0;
   font-size: 1.1rem;
   line-height: 1.6;
+  padding: 1rem;
+  background: rgba(249, 247, 243, 0.7);
+  border-radius: 12px;
 }
 
 /* Модальное окно уведомлений */
@@ -407,10 +417,12 @@ header h1::after {
   max-width: 600px;
   max-height: 80vh;
   overflow-y: auto;
+  padding: 2rem;
 }
 
 .orders-modal h3 {
   margin-bottom: 2rem;
+  color: #1a1a1a;
 }
 
 .orders-list {
@@ -420,11 +432,16 @@ header h1::after {
 }
 
 .order-item {
-  padding: 1rem;
+  padding: 1.2rem;
   background: white;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  border-left: 4px solid #c9a87c;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  border-left: 5px solid #c9a87c;
+  transition: transform 0.2s ease;
+}
+
+.order-item:hover {
+  transform: translateX(5px);
 }
 
 .order-header {
@@ -436,11 +453,12 @@ header h1::after {
 
 .order-name {
   font-weight: 600;
-  font-size: 1.1rem;
+  font-size: 1.2rem;
+  color: #1a1a1a;
 }
 
 .order-status {
-  padding: 0.3rem 0.8rem;
+  padding: 0.4rem 0.9rem;
   border-radius: 20px;
   font-size: 0.85rem;
   font-weight: 500;
@@ -467,8 +485,9 @@ header h1::after {
 }
 
 .order-time {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: #6c757d;
+  font-style: italic;
 }
 
 .no-orders, .error {
@@ -476,6 +495,7 @@ header h1::after {
   padding: 2rem;
   color: #6b5c47;
   font-style: italic;
+  font-size: 1.1rem;
 }
 
 .error {
@@ -486,27 +506,44 @@ header h1::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2rem;
+  gap: 2.5rem;
   margin-bottom: 2rem;
+  flex-wrap: nowrap;
 }
 
 .logo {
-  height: 100px;
-  border-radius: 16px;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+  height: 120px;
+  width: 120px;
+  object-fit: contain;
+  border-radius: 20px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
   transition: transform 0.3s ease;
   flex-shrink: 0;
+  border: 4px solid white;
 }
 
 .logo:hover {
-  transform: scale(1.03);
+  transform: scale(1.05);
 }
 
 .header-text {
   text-align: left;
+  flex: 1;
+  min-width: 300px;
 }
 
 /* ============= Мобильные улучшения ============= */
+@media (max-width: 1024px) {
+  .header-content {
+    gap: 2rem;
+  }
+  
+  .logo {
+    height: 100px;
+    width: 100px;
+  }
+}
+
 @media (max-width: 768px) {
   body {
     padding: 1rem 0;
@@ -581,11 +618,12 @@ header h1::after {
   /* Миниатюра коктейля в модальном окне подтверждения */
   .order-modal {
     padding: 1.5rem;
+    margin: 10% auto;
   }
 
   .order-image-preview {
-    width: 100px;
-    height: 100px;
+    width: 120px;
+    height: 120px;
   }
 
   #orderSummary {
@@ -602,16 +640,26 @@ header h1::after {
   .header-content {
     flex-direction: column;
     text-align: center;
-    gap: 1rem;
+    gap: 1.5rem;
   }
 
   .logo {
-    height: 80px;
+    height: 90px;
+    width: 90px;
   }
 
   .orders-modal {
     margin: 5% auto;
     max-height: 90vh;
+    padding: 1.5rem;
+  }
+  
+  .order-item {
+    padding: 1rem;
+  }
+  
+  .order-name {
+    font-size: 1.1rem;
   }
 }
 
@@ -635,6 +683,15 @@ header h1::after {
 
   .notification-content {
     padding: 2rem 1rem;
+  }
+  
+  .order-modal {
+    max-width: 90%;
+  }
+  
+  .order-image-preview {
+    width: 100px;
+    height: 100px;
   }
 }
 
@@ -723,41 +780,22 @@ header h1::after {
   height: 100%;
   pointer-events: none;
   z-index: 1;
-}
-
-.particles {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: radial-gradient(ellipse at center, rgba(249, 247, 243, 0.8) 0%, rgba(255, 255, 255, 0.2) 100%);
   overflow: hidden;
 }
 
-.particles::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-image: url('https://i.pinimg.com/736x/8c/f1/01/8cf1015d787dcd32d7e51d75db9debb0.jpg');
-  background-size: cover;
-  background-position: center;
-  opacity: 0.1;
-  background-attachment: fixed;
-}
-
-.particles::after {
-  content: '';
+.background-overlay {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, rgba(249, 247, 243, 0.9), rgba(255, 255, 255, 0.8));
-  z-index: 1;
+  background: 
+    radial-gradient(circle at 20% 30%, rgba(249, 247, 243, 0.3) 0%, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(201, 168, 124, 0.1) 0%, transparent 40%),
+    linear-gradient(135deg, rgba(249, 247, 243, 0.9) 0%, rgba(240, 236, 230, 0.95) 100%);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
 }
 
 /* Мерцающие огоньки */
@@ -773,13 +811,33 @@ header h1::after {
 
 .sparkle {
   position: absolute;
-  background-color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(255, 255, 255, 0.9);
   border-radius: 50%;
-  animation: flicker 2s infinite ease-in-out;
+  animation: flicker 3s infinite ease-in-out;
   opacity: 0;
 }
 
 @keyframes flicker {
-  0%, 100% { opacity: 0; transform: scale(0.5); }
-  50% { opacity: 1; transform: scale(1); }
+  0%, 100% { 
+    opacity: 0; 
+    transform: scale(0.3);
+  }
+  50% { 
+    opacity: 1; 
+    transform: scale(1);
+  }
+}
+
+/* Улучшенные эффекты для компьютерной версии */
+@media (min-width: 1024px) {
+  .background-overlay {
+    background: 
+      radial-gradient(circle at 15% 25%, rgba(249, 247, 243, 0.4) 0%, transparent 50%),
+      radial-gradient(circle at 85% 75%, rgba(201, 168, 124, 0.2) 0%, transparent 50%),
+      linear-gradient(135deg, rgba(249, 247, 243, 0.92) 0%, rgba(240, 236, 230, 0.97) 100%);
+  }
+  
+  .sparkle {
+    animation: flicker 4s infinite ease-in-out;
+  }
 }
