@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bar — Коктейли</title>
+  <title>Asafiev Bar — Коктейли</title>
   <link rel="stylesheet" href="style.css">
 
-  <!-- ⚠️ ВАЖНО: именно эти ссылки — БЕЗ ПРОБЕЛОВ, ТОЛЬКО COMPAT -->
+  <!-- Firebase COMPAT -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -14,16 +14,17 @@
 <body>
   <div class="container">
     <header>
-      <h1>Bar</h1>
+      <h1>Asafiev Bar</h1>
       <p>Изысканные коктейли, созданные с любовью</p>
       <div class="auth-buttons">
         <button id="loginBtn">Войти</button>
         <button id="registerBtn">Регистрация</button>
         <button id="logoutBtn" style="display:none">Выйти</button>
-        <span id="userEmail" style="margin-left: 20px; font-weight: 500;"></span>
+        <span id="userName" style="margin-left: 20px; font-weight: 500;"></span>
       </div>
     </header>
 
+    <!-- Модальное окно входа -->
     <div id="authModal" class="modal">
       <div class="modal-content">
         <span class="close">&times;</span>
@@ -37,13 +38,28 @@
       </div>
     </div>
 
+    <!-- Модальное окно регистрации -->
+    <div id="registerModal" class="modal">
+      <div class="modal-content">
+        <span class="close">&times;</span>
+        <h3>Регистрация</h3>
+        <form id="registerForm">
+          <input type="text" id="displayName" placeholder="Ваше имя" required>
+          <input type="email" id="regEmail" placeholder="Email" required>
+          <input type="password" id="regPassword" placeholder="Пароль" required>
+          <button type="submit">Зарегистрироваться</button>
+        </form>
+      </div>
+    </div>
+
     <main class="cocktails-grid">
+      <!-- 15 коктейлей -->
       <div class="cocktail-card">
         <img src="https://images.unsplash.com/photo-1582716961908-67476f398b5b?w=600&h=800&fit=crop&crop=entropy" alt="Мохито">
         <div class="card-content">
           <h2>Мохито</h2>
           <p class="ingredients">Ром, мята, лайм, сахар, содовая</p>
-          <button class="order-btn" data-name="Мохито" data-price="450₽">Заказать</button>
+          <button class="order-btn" data-name="Мохито">Заказать</button>
         </div>
       </div>
 
@@ -52,7 +68,7 @@
         <div class="card-content">
           <h2>Маргарита</h2>
           <p class="ingredients">Текила, ликёр Трипл Сек, сок лайма</p>
-          <button class="order-btn" data-name="Маргарита" data-price="500₽">Заказать</button>
+          <button class="order-btn" data-name="Маргарита">Заказать</button>
         </div>
       </div>
 
@@ -61,12 +77,121 @@
         <div class="card-content">
           <h2>Олд Фэшн</h2>
           <p class="ingredients">Бурбон, сахар, ангостура, апельсин</p>
-          <button class="order-btn" data-name="Олд Фэшн" data-price="550₽">Заказать</button>
+          <button class="order-btn" data-name="Олд Фэшн">Заказать</button>
+        </div>
+      </div>
+
+      <div class="cocktail-card">
+        <img src="https://images.unsplash.com/photo-1544145337-3840a8592a88?w=600&h=800&fit=crop&crop=entropy" alt="Негрони">
+        <div class="card-content">
+          <h2>Негрони</h2>
+          <p class="ingredients">Джин, Кампари, сладкий вермут</p>
+          <button class="order-btn" data-name="Негрони">Заказать</button>
+        </div>
+      </div>
+
+      <div class="cocktail-card">
+        <img src="https://images.unsplash.com/photo-1582716961892-5d2b3f0c4e4b?w=600&h=800&fit=crop&crop=entropy" alt="Дайкири">
+        <div class="card-content">
+          <h2>Дайкири</h2>
+          <p class="ingredients">Ром, лайм, сахарный сироп</p>
+          <button class="order-btn" data-name="Дайкири">Заказать</button>
+        </div>
+      </div>
+
+      <div class="cocktail-card">
+        <img src="https://images.unsplash.com/photo-1600275549050-2e1e0b5b5b1d?w=600&h=800&fit=crop&crop=entropy" alt="Манхэттен">
+        <div class="card-content">
+          <h2>Манхэттен</h2>
+          <p class="ingredients">Ржаной виски, сладкий вермут, биттер</p>
+          <button class="order-btn" data-name="Манхэттен">Заказать</button>
+        </div>
+      </div>
+
+      <div class="cocktail-card">
+        <img src="https://images.unsplash.com/photo-1582716961926-5a0f36c3b4d5?w=600&h=800&fit=crop&crop=entropy" alt="Беллини">
+        <div class="card-content">
+          <h2>Беллини</h2>
+          <p class="ingredients">Просекко, пюре персика</p>
+          <button class="order-btn" data-name="Беллини">Заказать</button>
+        </div>
+      </div>
+
+      <div class="cocktail-card">
+        <img src="https://images.unsplash.com/photo-1582716961889-5d2b3f0c4e4b?w=600&h=800&fit=crop&crop=entropy" alt="Пина Колада">
+        <div class="card-content">
+          <h2>Пина Колада</h2>
+          <p class="ingredients">Ром, кокосовый крем, ананасовый сок</p>
+          <button class="order-btn" data-name="Пина Колада">Заказать</button>
+        </div>
+      </div>
+
+      <div class="cocktail-card">
+        <img src="https://images.unsplash.com/photo-1582716961910-5d2b3f0c4e4b?w=600&h=800&fit=crop&crop=entropy" alt="Гин Тоник">
+        <div class="card-content">
+          <h2>Гин Тоник</h2>
+          <p class="ingredients">Джин, тоник, лайм, можжевельник</p>
+          <button class="order-btn" data-name="Гин Тоник">Заказать</button>
+        </div>
+      </div>
+
+      <div class="cocktail-card">
+        <img src="https://images.unsplash.com/photo-1582716961915-5d2b3f0c4e4b?w=600&h=800&fit=crop&crop=entropy" alt="Апероль Шприц">
+        <div class="card-content">
+          <h2>Апероль Шприц</h2>
+          <p class="ingredients">Апероль, просекко, содовая, апельсин</p>
+          <button class="order-btn" data-name="Апероль Шприц">Заказать</button>
+        </div>
+      </div>
+
+      <div class="cocktail-card">
+        <img src="https://images.unsplash.com/photo-1582716961920-5d2b3f0c4e4b?w=600&h=800&fit=crop&crop=entropy" alt="Виски Сауэр">
+        <div class="card-content">
+          <h2>Виски Сауэр</h2>
+          <p class="ingredients">Виски, лимонный сок, сахарный сироп, яичный белок</p>
+          <button class="order-btn" data-name="Виски Сауэр">Заказать</button>
+        </div>
+      </div>
+
+      <div class="cocktail-card">
+        <img src="https://images.unsplash.com/photo-1582716961924-5d2b3f0c4e4b?w=600&h=800&fit=crop&crop=entropy" alt="Французский 75">
+        <div class="card-content">
+          <h2>Французский 75</h2>
+          <p class="ingredients">Джин, шампанское, лимонный сок, сахар</p>
+          <button class="order-btn" data-name="Французский 75">Заказать</button>
+        </div>
+      </div>
+
+      <div class="cocktail-card">
+        <img src="https://images.unsplash.com/photo-1582716961928-5d2b3f0c4e4b?w=600&h=800&fit=crop&crop=entropy" alt="Текила Санрайз">
+        <div class="card-content">
+          <h2>Текила Санрайз</h2>
+          <p class="ingredients">Текила, апельсиновый сок, гренадин</p>
+          <button class="order-btn" data-name="Текила Санрайз">Заказать</button>
+        </div>
+      </div>
+
+      <div class="cocktail-card">
+        <img src="https://images.unsplash.com/photo-1582716961932-5d2b3f0c4e4b?w=600&h=800&fit=crop&crop=entropy" alt="Секс на пляже">
+        <div class="card-content">
+          <h2>Секс на пляже</h2>
+          <p class="ingredients">Водка, персиковый ликёр, клюква, апельсин</p>
+          <button class="order-btn" data-name="Секс на пляже">Заказать</button>
+        </div>
+      </div>
+
+      <div class="cocktail-card">
+        <img src="https://images.unsplash.com/photo-1582716961936-5d2b3f0c4e4b?w=600&h=800&fit=crop&crop=entropy" alt="Куба Либре">
+        <div class="card-content">
+          <h2>Куба Либре</h2>
+          <p class="ingredients">Ром, кола, лайм</p>
+          <button class="order-btn" data-name="Куба Либре">Заказать</button>
         </div>
       </div>
     </main>
   </div>
 
+  <!-- Модальное окно подтверждения заказа -->
   <div id="orderModal" class="modal">
     <div class="modal-content">
       <span class="close" id="closeOrderModal">&times;</span>
@@ -77,7 +202,7 @@
   </div>
 
   <script>
-    // 🔥 ТВОИ РЕАЛЬНЫЕ КЛЮЧИ FIREBASE — УБЕДИСЬ, ЧТО НЕТ ЛИШНИХ СИМВОЛОВ
+    // 🔥 ТВОИ КЛЮЧИ FIREBASE
     const firebaseConfig = {
       apiKey: "AIzaSyB4bD8UAu0Aj5IRK5H-uZg6kxNAIbkZc9k",
       authDomain: "bar-menu-6145c.firebaseapp.com",
@@ -87,164 +212,176 @@
       appId: "1:493608422842:web:3b4b6bd8a4cb681c436183"
     };
 
-    // 🤖 Telegram — пока оставь XXX, сначала добьёмся, чтобы Firebase заработал
+    // 🤖 TELEGRAM
     const TELEGRAM_BOT_TOKEN = "8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo";
     const TELEGRAM_CHAT_ID = "1743362083";
 
-    // ✅ Инициализация Firebase — если firebase не определён — ошибка будет здесь
-    if (typeof firebase === 'undefined') {
-      alert('❌ Firebase не загружен. Проверь ссылки на скрипты в <head>');
-    } else {
-      const app = firebase.initializeApp(firebaseConfig);
-      const auth = firebase.auth();
-      const db = firebase.firestore();
+    // Инициализация Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
 
-      // ✅ Если дошли сюда — Firebase работает
-      console.log('✅ Firebase успешно инициализирован');
+    // DOM
+    const loginBtn = document.getElementById('loginBtn');
+    const registerBtn = document.getElementById('registerBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const userName = document.getElementById('userName');
+    const authModal = document.getElementById('authModal');
+    const registerModal = document.getElementById('registerModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const authForm = document.getElementById('authForm');
+    const registerForm = document.getElementById('registerForm');
+    const toggleForm = document.getElementById('toggleForm');
+    const switchToRegister = document.getElementById('switchToRegister');
+    const closeBtns = document.querySelectorAll('.close');
+    const orderButtons = document.querySelectorAll('.order-btn');
+    const orderModal = document.getElementById('orderModal');
+    const orderSummary = document.getElementById('orderSummary');
+    const confirmOrderBtn = document.getElementById('confirmOrder');
 
-      // ... остальной код ...
-      const loginBtn = document.getElementById('loginBtn');
-      const registerBtn = document.getElementById('registerBtn');
-      const logoutBtn = document.getElementById('logoutBtn');
-      const userEmail = document.getElementById('userEmail');
-      const authModal = document.getElementById('authModal');
-      const modalTitle = document.getElementById('modalTitle');
-      const authForm = document.getElementById('authForm');
-      const toggleForm = document.getElementById('toggleForm');
-      const switchToRegister = document.getElementById('switchToRegister');
-      const closeBtns = document.querySelectorAll('.close');
-      const orderButtons = document.querySelectorAll('.order-btn');
-      const orderModal = document.getElementById('orderModal');
-      const orderSummary = document.getElementById('orderSummary');
-      const confirmOrderBtn = document.getElementById('confirmOrder');
+    let currentOrder = null;
 
-      let currentOrder = null;
+    // Проверка состояния пользователя
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        loginBtn.style.display = 'none';
+        registerBtn.style.display = 'none';
+        logoutBtn.style.display = 'inline-block';
+        userName.textContent = user.displayName || "Гость";
+      } else {
+        loginBtn.style.display = 'inline-block';
+        registerBtn.style.display = 'inline-block';
+        logoutBtn.style.display = 'none';
+        userName.textContent = '';
+      }
+    });
 
-      auth.onAuthStateChanged(user => {
-        if (user) {
-          loginBtn.style.display = 'none';
-          registerBtn.style.display = 'none';
-          logoutBtn.style.display = 'inline-block';
-          userEmail.textContent = user.email;
-        } else {
-          loginBtn.style.display = 'inline-block';
-          registerBtn.style.display = 'inline-block';
-          logoutBtn.style.display = 'none';
-          userEmail.textContent = '';
-        }
-      });
+    // Открытие модалки входа
+    loginBtn?.addEventListener('click', () => {
+      authModal.style.display = 'block';
+    });
 
-      loginBtn?.addEventListener('click', () => {
-        modalTitle.textContent = 'Вход';
-        toggleForm.innerHTML = 'Нет аккаунта? <a href="#" id="switchToRegister">Зарегистрироваться</a>';
-        authModal.style.display = 'block';
-      });
+    // Открытие модалки регистрации
+    registerBtn?.addEventListener('click', () => {
+      registerModal.style.display = 'block';
+    });
 
-      authModal?.addEventListener('click', (e) => {
-        if (e.target.id === 'switchToRegister') {
-          modalTitle.textContent = 'Регистрация';
-          toggleForm.innerHTML = 'Уже есть аккаунт? <a href="#" id="switchToLogin">Войти</a>';
-          e.preventDefault();
-        } else if (e.target.id === 'switchToLogin') {
-          modalTitle.textContent = 'Вход';
-          toggleForm.innerHTML = 'Нет аккаунта? <a href="#" id="switchToRegister">Зарегистрироваться</a>';
-          e.preventDefault();
-        }
-      });
-
-      closeBtns.forEach(btn => {
-        btn?.addEventListener('click', () => {
-          authModal.style.display = 'none';
-          orderModal.style.display = 'none';
-        });
-      });
-
-      authForm?.addEventListener('submit', async (e) => {
+    // Переключение на регистрацию
+    toggleForm?.addEventListener('click', (e) => {
+      if (e.target.id === 'switchToRegister') {
+        authModal.style.display = 'none';
+        registerModal.style.display = 'block';
         e.preventDefault();
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
+      }
+    });
 
-        try {
-          if (modalTitle.textContent === 'Регистрация') {
-            await auth.createUserWithEmailAndPassword(email, password);
-            alert('✅ Регистрация успешна!');
-          } else {
-            await auth.signInWithEmailAndPassword(email, password);
-          }
-          authModal.style.display = 'none';
-        } catch (error) {
-          alert('❌ Ошибка: ' + error.message);
+    // Закрытие модалок
+    closeBtns.forEach(btn => {
+      btn?.addEventListener('click', () => {
+        authModal.style.display = 'none';
+        registerModal.style.display = 'none';
+        orderModal.style.display = 'none';
+      });
+    });
+
+    // Обработка входа
+    authForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        await auth.signInWithEmailAndPassword(email, password);
+        authModal.style.display = 'none';
+      } catch (error) {
+        alert('❌ Ошибка входа: ' + error.message);
+      }
+    });
+
+    // Обработка регистрации
+    registerForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const displayName = document.getElementById('displayName').value;
+      const email = document.getElementById('regEmail').value;
+      const password = document.getElementById('regPassword').value;
+
+      try {
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        await userCredential.user.updateProfile({ displayName });
+        alert('✅ Регистрация успешна!');
+        registerModal.style.display = 'none';
+      } catch (error) {
+        alert('❌ Ошибка регистрации: ' + error.message);
+      }
+    });
+
+    // Выход
+    logoutBtn?.addEventListener('click', async () => {
+      await auth.signOut();
+    });
+
+    // Заказ
+    orderButtons.forEach(btn => {
+      btn?.addEventListener('click', () => {
+        const user = auth.currentUser;
+        if (!user) {
+          alert('🔒 Пожалуйста, войдите или зарегистрируйтесь для заказа.');
+          return;
         }
+        const name = btn.getAttribute('data-name');
+        currentOrder = { 
+          name, 
+          user: user.displayName || "Гость", 
+          timestamp: new Date().toLocaleString('ru-RU') 
+        };
+        orderSummary.innerHTML = `
+          <strong>🍸 Коктейль:</strong> ${name}<br>
+          <strong>📬 Ваше имя:</strong> ${currentOrder.user}
+        `;
+        orderModal.style.display = 'block';
       });
+    });
 
-      logoutBtn?.addEventListener('click', async () => {
-        await auth.signOut();
-        alert('Вы вышли из аккаунта');
-      });
+    // Подтверждение заказа
+    confirmOrderBtn?.addEventListener('click', async () => {
+      if (!currentOrder) return;
 
-      orderButtons.forEach(btn => {
-        btn?.addEventListener('click', () => {
-          const user = auth.currentUser;
-          if (!user) {
-            alert('🔒 Пожалуйста, войдите или зарегистрируйтесь для заказа.');
-            return;
-          }
-          const name = btn.getAttribute('data-name');
-          const price = btn.getAttribute('data-price');
-          currentOrder = { 
-            name, 
-            price, 
-            user: user.email, 
-            timestamp: new Date().toLocaleString('ru-RU') 
-          };
-          orderSummary.innerHTML = `
-            <strong>🍸 Коктейль:</strong> ${name}<br>
-            <strong>💰 Цена:</strong> ${price}<br>
-            <strong>📬 Ваш email:</strong> ${user.email}
-          `;
-          orderModal.style.display = 'block';
-        });
-      });
+      try {
+        await db.collection('orders').add(currentOrder);
 
-      confirmOrderBtn?.addEventListener('click', async () => {
-        if (!currentOrder) return;
-
-        try {
-          await db.collection('orders').add(currentOrder);
-
-          const message = `
-🆕 *Новый заказ!*
+        const message = `
+🆕 *Новый заказ в Asafiev Bar!*
 🍸 *Коктейль:* ${currentOrder.name}
-💰 *Цена:* ${currentOrder.price}
-📬 *Пользователь:* ${currentOrder.user}
+👤 *Имя клиента:* ${currentOrder.user}
 🕒 *Время:* ${currentOrder.timestamp}
-          `.trim();
+        `.trim();
 
-          const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-          await fetch(telegramUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: TELEGRAM_CHAT_ID,
-              text: message,
-              parse_mode: 'Markdown'
-            })
-          });
+        const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        await fetch(telegramUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: TELEGRAM_CHAT_ID,
+            text: message,
+            parse_mode: 'Markdown'
+          })
+        });
 
-          alert('✅ Заказ отправлен! Ожидайте подтверждения.');
-          orderModal.style.display = 'none';
-          currentOrder = null;
-        } catch (error) {
-          console.error("Ошибка:", error);
-          alert('❌ Не удалось отправить заказ. Проверьте консоль.');
-        }
-      });
+        alert('✅ Заказ отправлен! Ожидайте подтверждения.');
+        orderModal.style.display = 'none';
+        currentOrder = null;
+      } catch (error) {
+        console.error("Ошибка:", error);
+        alert('❌ Не удалось отправить заказ.');
+      }
+    });
 
-      window.addEventListener('click', (e) => {
-        if (e.target === authModal) authModal.style.display = 'none';
-        if (e.target === orderModal) orderModal.style.display = 'none';
-      });
-    }
+    // Закрытие по клику вне
+    window.addEventListener('click', (e) => {
+      if (e.target === authModal) authModal.style.display = 'none';
+      if (e.target === registerModal) registerModal.style.display = 'none';
+      if (e.target === orderModal) orderModal.style.display = 'none';
+    });
   </script>
 </body>
 </html>
