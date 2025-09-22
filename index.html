@@ -26,13 +26,8 @@
         <button id="loginBtn">Войти</button>
         <button id="registerBtn">Регистрация</button>
         <button id="logoutBtn" style="display:none">Выйти</button>
+        <button id="ordersBtn" style="display:none">Мои заказы</button>
         <span id="userName" class="user-name"></span>
-      </div>
-      
-      <!-- История заказов -->
-      <div id="orderHistory" class="order-history" style="display:none">
-        <h3>История заказов</h3>
-        <div id="ordersList" class="orders-list"></div>
       </div>
     </header>
 
@@ -61,6 +56,25 @@
           <input type="password" id="regPassword" placeholder="Пароль" required>
           <button type="submit">Зарегистрироваться</button>
         </form>
+      </div>
+    </div>
+
+    <!-- Модальное окно истории заказов -->
+    <div id="ordersModal" class="modal">
+      <div class="modal-content orders-modal">
+        <span class="close">&times;</span>
+        <h3>История заказов</h3>
+        <div id="ordersList" class="orders-list"></div>
+      </div>
+    </div>
+
+    <!-- Модальное окно уведомления -->
+    <div id="notificationModal" class="modal notification-modal">
+      <div class="modal-content notification-content">
+        <div class="notification-icon">✅</div>
+        <h3>Заказ отправлен!</h3>
+        <p>Ваш заказ успешно отправлен. Ожидайте подтверждения от бармена.</p>
+        <button id="closeNotification" class="notification-btn">Хорошо</button>
       </div>
     </div>
 
@@ -220,10 +234,10 @@
 
   <!-- Модальное окно подтверждения заказа -->
   <div id="orderModal" class="modal">
-    <div class="modal-content">
+    <div class="modal-content order-modal">
       <span class="close" id="closeOrderModal">&times;</span>
       <h3>Подтвердите заказ</h3>
-      <img id="orderImagePreview" src="" alt="Коктейль" style="display:none;">
+      <img id="orderImagePreview" src="" alt="Коктейль" class="order-image-preview">
       <p id="orderSummary"></p>
       <button id="confirmOrder">Подтвердить заказ</button>
     </div>
@@ -242,6 +256,7 @@
   <!-- Фоновые эффекты -->
   <div id="background" class="background-container">
     <div class="particles"></div>
+    <div class="sparkles"></div>
   </div>
 
   <script>
@@ -255,19 +270,6 @@
       appId: "1:493608422842:web:3b4b6bd8a4cb681c436183"
     };
     
-    // Создаем мерцающие огоньки
-    const background = document.getElementById('background');
-    if (background) {
-      const sparkles = document.createElement('div');
-      sparkles.className = 'sparkles';
-      for (let i = 1; i <= 8; i++) {
-        const sparkle = document.createElement('div');
-        sparkle.className = 'sparkle';
-        sparkles.appendChild(sparkle);
-      }
-      background.appendChild(sparkles);
-    }
-
     // 🤖 TELEGRAM
     const TELEGRAM_BOT_TOKEN = "8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo";
     const TELEGRAM_CHAT_ID = "1743362083";
@@ -281,9 +283,12 @@
     const loginBtn = document.getElementById('loginBtn');
     const registerBtn = document.getElementById('registerBtn');
     const logoutBtn = document.getElementById('logoutBtn');
+    const ordersBtn = document.getElementById('ordersBtn');
     const userName = document.getElementById('userName');
     const authModal = document.getElementById('authModal');
     const registerModal = document.getElementById('registerModal');
+    const ordersModal = document.getElementById('ordersModal');
+    const notificationModal = document.getElementById('notificationModal');
     const modalTitle = document.getElementById('modalTitle');
     const authForm = document.getElementById('authForm');
     const registerForm = document.getElementById('registerForm');
@@ -294,10 +299,31 @@
     const orderModal = document.getElementById('orderModal');
     const orderSummary = document.getElementById('orderSummary');
     const confirmOrderBtn = document.getElementById('confirmOrder');
-    const orderHistory = document.getElementById('orderHistory');
     const ordersList = document.getElementById('ordersList');
+    const closeNotification = document.getElementById('closeNotification');
 
     let currentOrder = null;
+
+    // Создаем мерцающие огоньки
+    function createSparkles() {
+      const sparklesContainer = document.querySelector('.sparkles');
+      if (sparklesContainer) {
+        sparklesContainer.innerHTML = '';
+        for (let i = 1; i <= 20; i++) {
+          const sparkle = document.createElement('div');
+          sparkle.className = 'sparkle';
+          sparkle.style.left = Math.random() * 100 + '%';
+          sparkle.style.top = Math.random() * 100 + '%';
+          sparkle.style.animationDelay = Math.random() * 3 + 's';
+          sparkle.style.width = (Math.random() * 3 + 1) + 'px';
+          sparkle.style.height = sparkle.style.width;
+          sparklesContainer.appendChild(sparkle);
+        }
+      }
+    }
+
+    // Вызываем создание огоньков
+    createSparkles();
 
     // Проверка состояния пользователя
     auth.onAuthStateChanged(async user => {
@@ -305,23 +331,20 @@
         loginBtn.style.display = 'none';
         registerBtn.style.display = 'none';
         logoutBtn.style.display = 'inline-block';
+        ordersBtn.style.display = 'inline-block';
         // 👇 Если displayName пуст — пробуем обновить данные
         if (!user.displayName) {
           await user.reload();
         }
         userName.textContent = user.displayName || "Гость";
         userName.style.display = 'block';
-        
-        // Загружаем историю заказов
-        loadOrderHistory(user.uid);
-        orderHistory.style.display = 'block';
       } else {
         loginBtn.style.display = 'inline-block';
         registerBtn.style.display = 'inline-block';
         logoutBtn.style.display = 'none';
+        ordersBtn.style.display = 'none';
         userName.textContent = '';
         userName.style.display = 'none';
-        orderHistory.style.display = 'none';
       }
     });
 
@@ -336,7 +359,7 @@
         ordersList.innerHTML = '';
         
         if (ordersSnapshot.empty) {
-          ordersList.innerHTML = '<p>У вас пока нет заказов</p>';
+          ordersList.innerHTML = '<p class="no-orders">У вас пока нет заказов</p>';
           return;
         }
         
@@ -355,6 +378,7 @@
         });
       } catch (error) {
         console.error('Ошибка загрузки истории заказов:', error);
+        ordersList.innerHTML = '<p class="error">Ошибка загрузки заказов</p>';
       }
     }
 
@@ -378,6 +402,14 @@
       registerModal.style.display = 'block';
     });
 
+    // Открытие модалки истории заказов
+    ordersBtn?.addEventListener('click', async () => {
+      if (auth.currentUser) {
+        await loadOrderHistory(auth.currentUser.uid);
+        ordersModal.style.display = 'block';
+      }
+    });
+
     // Переключение на регистрацию
     toggleForm?.addEventListener('click', (e) => {
       if (e.target.id === 'switchToRegister') {
@@ -393,7 +425,14 @@
         authModal.style.display = 'none';
         registerModal.style.display = 'none';
         orderModal.style.display = 'none';
+        ordersModal.style.display = 'none';
+        notificationModal.style.display = 'none';
       });
+    });
+
+    // Закрытие уведомления
+    closeNotification?.addEventListener('click', () => {
+      notificationModal.style.display = 'none';
     });
 
     // Обработка входа
@@ -521,12 +560,12 @@
               inline_keyboard: [
                 [
                   {
-                    text: "✅ Подтвердить заказ",
-                    callback_data: `confirm_${docRef.id}`
+                    text: "✅ Подтвердить",
+                    callback_data: `confirm_${docRef.id}_${currentOrder.userId}`
                   },
                   {
-                    text: "❌ Отменить заказ",
-                    callback_data: `cancel_${docRef.id}`
+                    text: "❌ Отменить",
+                    callback_data: `cancel_${docRef.id}_${currentOrder.userId}`
                   }
                 ]
               ]
@@ -535,14 +574,11 @@
           })
         });
 
-        alert('✅ Заказ отправлен! Ожидайте подтверждения.');
+        // Показываем уведомление
         orderModal.style.display = 'none';
+        notificationModal.style.display = 'block';
         currentOrder = null;
         
-        // Обновляем историю заказов
-        if (auth.currentUser) {
-          loadOrderHistory(auth.currentUser.uid);
-        }
       } catch (error) {
         console.error("Ошибка:", error);
         alert('❌ Не удалось отправить заказ.');
@@ -554,6 +590,8 @@
       if (e.target === authModal) authModal.style.display = 'none';
       if (e.target === registerModal) registerModal.style.display = 'none';
       if (e.target === orderModal) orderModal.style.display = 'none';
+      if (e.target === ordersModal) ordersModal.style.display = 'none';
+      if (e.target === notificationModal) notificationModal.style.display = 'none';
     });
   </script>
 </body>

@@ -14,12 +14,16 @@ body {
   color: #1a1a1a;
   line-height: 1.7;
   padding: 2rem 0;
+  position: relative;
+  min-height: 100vh;
 }
 
 .container {
   max-width: 1300px;
   margin: 0 auto;
   padding: 0 2rem;
+  position: relative;
+  z-index: 10;
 }
 
 header {
@@ -27,6 +31,7 @@ header {
   margin-bottom: 5rem;
   padding: 3rem 0;
   position: relative;
+  z-index: 10;
 }
 
 header h1 {
@@ -96,6 +101,16 @@ header h1::after {
   background: #c0392b;
 }
 
+#ordersBtn {
+  background: #3498db;
+  color: white;
+  border-color: #3498db;
+}
+
+#ordersBtn:hover {
+  background: #2980b9;
+}
+
 .user-name {
   font-size: 1.2rem;
   font-weight: 600;
@@ -112,6 +127,8 @@ header h1::after {
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 3.5rem;
   padding: 1rem 0 4rem;
+  position: relative;
+  z-index: 10;
 }
 
 .cocktail-card {
@@ -232,7 +249,7 @@ header h1::after {
 .modal {
   display: none;
   position: fixed;
-  z-index: 100;
+  z-index: 1000;
   left: 0;
   top: 0;
   width: 100%;
@@ -320,20 +337,80 @@ header h1::after {
   text-decoration: underline;
 }
 
-/* История заказов */
-.order-history {
-  margin-top: 2rem;
-  padding: 2rem;
-  background: rgba(255, 255, 255, 0.7);
-  border-radius: 15px;
-  backdrop-filter: blur(5px);
+/* Модальное окно заказа */
+.order-modal {
+  max-width: 400px;
 }
 
-.order-history h3 {
-  text-align: center;
-  margin-bottom: 1.5rem;
-  color: #1a1a1a;
-  font-size: 1.5rem;
+.order-image-preview {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 12px;
+  margin: 0 auto 1rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  display: block;
+}
+
+#orderSummary {
+  margin: 1.5rem 0;
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+/* Модальное окно уведомлений */
+.notification-modal {
+  z-index: 2000;
+}
+
+.notification-content {
+  max-width: 400px;
+  padding: 3rem 2rem;
+}
+
+.notification-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+.notification-content h3 {
+  font-size: 1.8rem;
+  margin-bottom: 1rem;
+  color: #27ae60;
+}
+
+.notification-content p {
+  margin-bottom: 2rem;
+  font-size: 1.1rem;
+  color: #6b5c47;
+}
+
+.notification-btn {
+  padding: 0.8rem 2rem;
+  background: linear-gradient(135deg, #27ae60, #219653);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.notification-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(39, 174, 96, 0.3);
+}
+
+/* Модальное окно истории заказов */
+.orders-modal {
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.orders-modal h3 {
+  margin-bottom: 2rem;
 }
 
 .orders-list {
@@ -347,6 +424,7 @@ header h1::after {
   background: white;
   border-radius: 10px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border-left: 4px solid #c9a87c;
 }
 
 .order-header {
@@ -393,19 +471,31 @@ header h1::after {
   color: #6c757d;
 }
 
+.no-orders, .error {
+  text-align: center;
+  padding: 2rem;
+  color: #6b5c47;
+  font-style: italic;
+}
+
+.error {
+  color: #e74c3c;
+}
+
 .header-content {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1.5rem;
+  gap: 2rem;
   margin-bottom: 2rem;
 }
 
 .logo {
-  height: 80px;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  height: 100px;
+  border-radius: 16px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.1);
   transition: transform 0.3s ease;
+  flex-shrink: 0;
 }
 
 .logo:hover {
@@ -413,7 +503,7 @@ header h1::after {
 }
 
 .header-text {
-  text-align: center;
+  text-align: left;
 }
 
 /* ============= Мобильные улучшения ============= */
@@ -489,18 +579,13 @@ header h1::after {
   }
 
   /* Миниатюра коктейля в модальном окне подтверждения */
-  #orderModal .modal-content {
+  .order-modal {
     padding: 1.5rem;
   }
 
-  #orderImagePreview {
-    width: 80px;
-    height: 80px;
-    object-fit: cover;
-    border-radius: 12px;
-    margin: 0 auto 1rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    display: block;
+  .order-image-preview {
+    width: 100px;
+    height: 100px;
   }
 
   #orderSummary {
@@ -517,20 +602,22 @@ header h1::after {
   .header-content {
     flex-direction: column;
     text-align: center;
+    gap: 1rem;
   }
 
   .logo {
-    height: 60px;
+    height: 80px;
   }
 
-  .order-history {
-    padding: 1rem;
+  .orders-modal {
+    margin: 5% auto;
+    max-height: 90vh;
   }
 }
 
 @media (max-width: 480px) {
   header h1 {
-    font-size: 2.8rem;
+    font-size: 2.5rem;
   }
 
   .cocktail-card img {
@@ -539,6 +626,15 @@ header h1::after {
 
   .cocktail-card h2 {
     font-size: 1.6rem;
+  }
+
+  .modal-content {
+    padding: 1.5rem;
+    margin: 15% auto;
+  }
+
+  .notification-content {
+    padding: 2rem 1rem;
   }
 }
 
@@ -626,7 +722,7 @@ header h1::after {
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: -1;
+  z-index: 1;
 }
 
 .particles {
@@ -648,7 +744,9 @@ header h1::after {
   bottom: 0;
   background-image: url('https://i.pinimg.com/736x/8c/f1/01/8cf1015d787dcd32d7e51d75db9debb0.jpg');
   background-size: cover;
+  background-position: center;
   opacity: 0.1;
+  background-attachment: fixed;
 }
 
 .particles::after {
@@ -663,36 +761,25 @@ header h1::after {
 }
 
 /* Мерцающие огоньки */
-@keyframes flick {
-  0% { opacity: 0; }
-  50% { opacity: 1; }
-  100% { opacity: 0; }
-}
-
 .sparkles {
   position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   z-index: 2;
+  pointer-events: none;
 }
 
 .sparkle {
   position: absolute;
-  width: 1px;
-  height: 1px;
-  background-color: #fff;
+  background-color: rgba(255, 255, 255, 0.8);
   border-radius: 50%;
-  filter: blur(1px);
-  animation: flick 2s infinite;
+  animation: flicker 2s infinite ease-in-out;
   opacity: 0;
 }
 
-.sparkle:nth-child(1) { left: 10%; top: 20%; animation-delay: 0s; }
-.sparkle:nth-child(2) { left: 20%; top: 30%; animation-delay: 0.5s; }
-.sparkle:nth-child(3) { left: 30%; top: 40%; animation-delay: 1s; }
-.sparkle:nth-child(4) { left: 40%; top: 50%; animation-delay: 1.5s; }
-.sparkle:nth-child(5) { left: 50%; top: 60%; animation-delay: 2s; }
-.sparkle:nth-child(6) { left: 60%; top: 70%; animation-delay: 2.5s; }
-.sparkle:nth-child(7) { left: 70%; top: 80%; animation-delay: 3s; }
-.sparkle:nth-child(8) { left: 80%; top: 90%; animation-delay: 3.5s; }
+@keyframes flicker {
+  0%, 100% { opacity: 0; transform: scale(0.5); }
+  50% { opacity: 1; transform: scale(1); }
 }
