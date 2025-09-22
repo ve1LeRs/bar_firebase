@@ -230,6 +230,10 @@
       </div>
       <p class="loader-text">Подготавливаем ваш бар...</p>
     </div>
+    <!-- Фоновые эффекты -->
+     <div id="background" class="background-container">
+      <div class="particles"></div>
+    </div>
   </div>
 
 
@@ -244,7 +248,7 @@
       appId: "1:493608422842:web:3b4b6bd8a4cb681c436183"
     };
     // Создаем мерцающие огоньки
-    const backgrounds = document.getElementById('backgrounds');
+    const background = document.getElementById('background');
     if (background) {
       const sparkles = document.createElement('div');
       sparkles.className = 'sparkles';
@@ -479,9 +483,5 @@
       if (e.target === orderModal) orderModal.style.display = 'none';
     });
   </script>
-  <!-- Фоновые эффекты -->
-   <div id="background" class="background-container">
-    <div class="particles"></div>
-  </div>
 </body>
 </html>
