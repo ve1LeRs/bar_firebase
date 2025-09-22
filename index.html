@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport"="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Asafiev Bar — Коктейли</title>
   <link rel="icon" href="favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="style.css">
@@ -11,22 +11,25 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  
+  <!-- Font Awesome для иконок -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
   <div class="container">
     <header>
       <div class="header-content">
-        <img src="logo.png" alt="Asafiev Bar" class="logo">
+        <img src="https://i.ibb.co/0X1Lvz5/logo.png" alt="Asafiev Bar" class="logo">
         <div class="header-text">
           <h1>Asafiev Bar</h1>
           <p class="subtitle">Изысканные коктейли,<br>созданные с любовью</p>
         </div>
       </div>
       <div class="auth-buttons">
-        <button id="loginBtn">Войти</button>
-        <button id="registerBtn">Регистрация</button>
-        <button id="logoutBtn" style="display:none">Выйти</button>
-        <button id="ordersBtn" style="display:none">Мои заказы</button>
+        <button id="loginBtn"><i class="fas fa-sign-in-alt"></i> Войти</button>
+        <button id="registerBtn"><i class="fas fa-user-plus"></i> Регистрация</button>
+        <button id="logoutBtn" style="display:none"><i class="fas fa-sign-out-alt"></i> Выйти</button>
+        <button id="ordersBtn" style="display:none"><i class="fas fa-history"></i> Мои заказы</button>
         <span id="userName" class="user-name"></span>
       </div>
     </header>
@@ -35,11 +38,17 @@
     <div id="authModal" class="modal">
       <div class="modal-content">
         <span class="close">&times;</span>
-        <h3 id="modalTitle">Вход</h3>
+        <h3 id="modalTitle"><i class="fas fa-sign-in-alt"></i> Вход</h3>
         <form id="authForm">
-          <input type="email" id="email" placeholder="Email" required>
-          <input type="password" id="password" placeholder="Пароль" required>
-          <button type="submit">Продолжить</button>
+          <div class="input-group">
+            <i class="fas fa-envelope"></i>
+            <input type="email" id="email" placeholder="Email" required>
+          </div>
+          <div class="input-group">
+            <i class="fas fa-lock"></i>
+            <input type="password" id="password" placeholder="Пароль" required>
+          </div>
+          <button type="submit"><i class="fas fa-arrow-right"></i> Продолжить</button>
           <p id="toggleForm">Нет аккаунта? <a href="#" id="switchToRegister">Зарегистрироваться</a></p>
         </form>
       </div>
@@ -49,12 +58,21 @@
     <div id="registerModal" class="modal">
       <div class="modal-content">
         <span class="close">&times;</span>
-        <h3>Регистрация</h3>
+        <h3><i class="fas fa-user-plus"></i> Регистрация</h3>
         <form id="registerForm">
-          <input type="text" id="displayName" placeholder="Ваше имя" required>
-          <input type="email" id="regEmail" placeholder="Email" required>
-          <input type="password" id="regPassword" placeholder="Пароль" required>
-          <button type="submit">Зарегистрироваться</button>
+          <div class="input-group">
+            <i class="fas fa-user"></i>
+            <input type="text" id="displayName" placeholder="Ваше имя" required>
+          </div>
+          <div class="input-group">
+            <i class="fas fa-envelope"></i>
+            <input type="email" id="regEmail" placeholder="Email" required>
+          </div>
+          <div class="input-group">
+            <i class="fas fa-lock"></i>
+            <input type="password" id="regPassword" placeholder="Пароль" required>
+          </div>
+          <button type="submit"><i class="fas fa-check"></i> Зарегистрироваться</button>
         </form>
       </div>
     </div>
@@ -63,7 +81,7 @@
     <div id="ordersModal" class="modal">
       <div class="modal-content orders-modal">
         <span class="close">&times;</span>
-        <h3>История заказов</h3>
+        <h3><i class="fas fa-history"></i> История заказов</h3>
         <div id="ordersList" class="orders-list"></div>
       </div>
     </div>
@@ -81,167 +99,238 @@
     <main class="cocktails-grid">
       <!-- 15 коктейлей -->
       <div class="cocktail-card">
-        <img src="https://i.pinimg.com/736x/8c/f1/01/8cf1015d787dcd32d7e51d75db9debb0.jpg" alt="Мохито">
+        <div class="image-container">
+          <img src="https://i.pinimg.com/736x/8c/f1/01/8cf1015d787dcd32d7e51d75db9debb0.jpg" alt="Мохито">
+          <div class="price-tag">₽550</div>
+        </div>
         <div class="card-content">
           <h2>Мохито</h2>
           <p class="ingredients">Ром, мята, лайм, тростниковый сахар, содовая</p>
           <p class="mood">Освежающий, с ноткой мяты 🌿</p>
-          <button class="order-btn" data-name="Мохито">Заказать</button>
+          <button class="order-btn" data-name="Мохито"><i class="fas fa-glass-martini-alt"></i> Заказать</button>
         </div>
       </div>
 
       <div class="cocktail-card">
-        <img src="https://i.pinimg.com/736x/38/79/33/387933cfef687aa0bf4cb98936c559ae.jpg" alt="Маргарита">
+        <div class="image-container">
+          <img src="https://i.pinimg.com/736x/38/79/33/387933cfef687aa0bf4cb98936c559ae.jpg" alt="Маргарита">
+          <div class="price-tag">₽600</div>
+        </div>
         <div class="card-content">
           <h2>Маргарита</h2>
           <p class="ingredients">Текила, ликёр Трипл Сек, сок лайма, сахар</p>
           <p class="mood">Кисло-сладкий, с ярким цитрусом 🍋</p>
-          <button class="order-btn" data-name="Маргарита">Заказать</button>
+          <button class="order-btn" data-name="Маргарита"><i class="fas fa-glass-martini-alt"></i> Заказать</button>
         </div>
       </div>
 
       <div class="cocktail-card">
-        <img src="https://static.foodeon.com/assets/uploaded-media/product-media/magazin-bar-vintazh-tflb-ipiolfqnln-ypysargigy-UAHbDvSZXJ6H2_52L3-lr.jpg" alt="Космополитен">
+        <div class="image-container">
+          <img src="https://static.foodeon.com/assets/uploaded-media/product-media/magazin-bar-vintazh-tflb-ipiolfqnln-ypysargigy-UAHbDvSZXJ6H2_52L3-lr.jpg" alt="Космополитен">
+          <div class="price-tag">₽650</div>
+        </div>
         <div class="card-content">
           <h2>Космополитен</h2>
           <p class="ingredients">Водка, ликёр Трипл Сек, сок клюквы, сок лимона</p>
           <p class="mood">Элегантный, ягодный, с лёгкой кислинкой 💖</p>
-          <button class="order-btn" data-name="Космополитен">Заказать</button>
+          <button class="order-btn" data-name="Космополитен"><i class="fas fa-glass-martini-alt"></i> Заказать</button>
         </div>
       </div>
 
       <div class="cocktail-card">
-        <img src="https://i.pinimg.com/736x/90/6d/d6/906dd60f2e2940978e4da0eea1656aa5.jpg" alt="Палома">
+        <div class="image-container">
+          <img src="https://i.pinimg.com/736x/90/6d/d6/906dd60f2e2940978e4da0eea1656aa5.jpg" alt="Палома">
+          <div class="price-tag">₽580</div>
+        </div>
         <div class="card-content">
           <h2>Палома</h2>
           <p class="ingredients">Текила, сок грейпфрута, содовая, сок лимона</p>
           <p class="mood">Цитрусовый взрыв, идеален для лета 🍊</p>
-          <button class="order-btn" data-name="Палома">Заказать</button>
+          <button class="order-btn" data-name="Палома"><i class="fas fa-glass-martini-alt"></i> Заказать</button>
         </div>
       </div>
 
       <div class="cocktail-card">
-        <img src="https://i.pinimg.com/736x/1e/51/95/1e5195bff8a970552512a138db8eef5a.jpg" alt="Голубая лагуна">
+        <div class="image-container">
+          <img src="https://i.pinimg.com/736x/1e/51/95/1e5195bff8a970552512a138db8eef5a.jpg" alt="Голубая лагуна">
+          <div class="price-tag">₽620</div>
+        </div>
         <div class="card-content">
           <h2>Голубая лагуна</h2>
           <p class="ingredients">Водка, сироп Блю Курасао, сок лимона, содовая</p>
           <p class="mood">Тропический, сладкий, как морской бриз 🌊</p>
-          <button class="order-btn" data-name="Голубая лагуна">Заказать</button>
+          <button class="order-btn" data-name="Голубая лагуна"><i class="fas fa-glass-martini-alt"></i> Заказать</button>
         </div>
       </div>
 
       <div class="cocktail-card">
-        <img src="https://i.pinimg.com/736x/27/32/b2/2732b2f2f046a11b560401e6bee4b1c2.jpg" alt="Long Island Iced Tea">
+        <div class="image-container">
+          <img src="https://i.pinimg.com/736x/27/32/b2/2732b2f2f046a11b560401e6bee4b1c2.jpg" alt="Long Island Iced Tea">
+          <div class="price-tag">₽700</div>
+        </div>
         <div class="card-content">
           <h2>Long Island Iced Tea</h2>
           <p class="ingredients">Водка, джин, текила, ром, ликёр Трипл Сек, сок лимона, сахар, Coca-Cola</p>
           <p class="mood">Обманчиво сладкий — крепкий как чай бунтаря 🍹</p>
-          <button class="order-btn" data-name="Long Island Iced Tea">Заказать</button>
+          <button class="order-btn" data-name="Long Island Iced Tea"><i class="fas fa-glass-martini-alt"></i> Заказать</button>
         </div>
       </div>
 
       <div class="cocktail-card">
-        <img src="https://i.pinimg.com/originals/9b/42/b8/9b42b82afc562c349a44bbb2c9d62864.jpg" alt="Кловер Клаб">
+        <div class="image-container">
+          <img src="https://i.pinimg.com/originals/9b/42/b8/9b42b82afc562c349a44bbb2c9d62864.jpg" alt="Кловер Клаб">
+          <div class="price-tag">₽630</div>
+        </div>
         <div class="card-content">
           <h2>Кловер Клаб</h2>
           <p class="ingredients">Джин, сок лимона, белок, малина</p>
           <p class="mood">Нежный, цветочный, с ягодной ноткой 🍓</p>
-          <button class="order-btn" data-name="Кловер Клаб">Заказать</button>
+          <button class="order-btn" data-name="Кловер Клаб"><i class="fas fa-glass-martini-alt"></i> Заказать</button>
         </div>
       </div>
 
       <div class="cocktail-card">
-        <img src="https://i.pinimg.com/originals/33/e6/d4/33e6d4b2ce047fe01573cc2e229da563.webp" alt="Пина Колада">
+        <div class="image-container">
+          <img src="https://i.pinimg.com/originals/33/e6/d4/33e6d4b2ce047fe01573cc2e229da563.webp" alt="Пина Колада">
+          <div class="price-tag">₽590</div>
+        </div>
         <div class="card-content">
           <h2>Пина Колада</h2>
           <p class="ingredients">Ром, сливки, ананасовый сок</p>
           <p class="mood">Сладкий тропический коктейль 🍍🥥</p>
-          <button class="order-btn" data-name="Пина Колада">Заказать</button>
+          <button class="order-btn" data-name="Пина Колада"><i class="fas fa-glass-martini-alt"></i> Заказать</button>
         </div>
       </div>
 
       <div class="cocktail-card">
-        <img src="https://howtomakeacocktail.com/wp-content/uploads/2020/07/Vodka-Tonic.jpg" alt="Джин Тоник">
+        <div class="image-container">
+          <img src="https://howtomakeacocktail.com/wp-content/uploads/2020/07/Vodka-Tonic.jpg" alt="Джин Тоник">
+          <div class="price-tag">₽550</div>
+        </div>
         <div class="card-content">
           <h2>Джин Тоник</h2>
           <p class="ingredients">Джин, тоник, лайм</p>
           <p class="mood">Чистый, бодрящий, с цитрусом 🍋</p>
-          <button class="order-btn" data-name="Джин Тоник">Заказать</button>
+          <button class="order-btn" data-name="Джин Тоник"><i class="fas fa-glass-martini-alt"></i> Заказать</button>
         </div>
       </div>
 
       <div class="cocktail-card">
-        <img src="https://cocktail.apetime.com/wp-content/uploads/2019/07/spritz-aperol-scaled.jpg" alt="Апероль Шприц">
+        <div class="image-container">
+          <img src="https://cocktail.apetime.com/wp-content/uploads/2019/07/spritz-aperol-scaled.jpg" alt="Апероль Шприц">
+          <div class="price-tag">₽600</div>
+        </div>
         <div class="card-content">
           <h2>Апероль Шприц</h2>
           <p class="ingredients">Апероль, просекко, содовая, апельсин</p>
           <p class="mood">Лёгкий, горьковато-сладкий, как итальянский закат 🍊</p>
-          <button class="order-btn" data-name="Апероль Шприц">Заказать</button>
+          <button class="order-btn" data-name="Апероль Шприц"><i class="fas fa-glass-martini-alt"></i> Заказать</button>
         </div>
       </div>
 
       <div class="cocktail-card">
-        <img src="" alt="Hong Kong">
+        <div class="image-container">
+          <img src="https://i.pinimg.com/736x/5d/5d/5d/5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d.jpg" alt="Hong Kong">
+          <div class="price-tag">₽680</div>
+        </div>
         <div class="card-content">
           <h2>Hong Kong</h2>
           <p class="ingredients">Водка, сироп Блу Курасао, малина, сок лимона, содовая</p>
           <p class="mood">Яркий, фруктовый, с кислинкой и драйвом 🍒</p>
-          <button class="order-btn" data-name="Hong Kong">Заказать</button>
+          <button class="order-btn" data-name="Hong Kong"><i class="fas fa-glass-martini-alt"></i> Заказать</button>
         </div>
       </div>
 
       <div class="cocktail-card">
-        <img src="" alt="Angela Forever">
+        <div class="image-container">
+          <img src="https://i.pinimg.com/736x/5d/5d/5d/5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d.jpg" alt="Angela Forever">
+          <div class="price-tag">₽720</div>
+        </div>
         <div class="card-content">
           <h2>Angela Forever</h2>
           <p class="ingredients">Джин, водка, ликёр Трипл Сек, сок лимона, чёрная смородина, содовая</p>
           <p class="mood">Ягодно-цитрусовый, с глубоким вкусом и шипением 💫</p>
-          <button class="order-btn" data-name="Angela Forever">Заказать</button>
+          <button class="order-btn" data-name="Angela Forever"><i class="fas fa-glass-martini-alt"></i> Заказать</button>
         </div>
       </div>
 
       <div class="cocktail-card">
-        <img src="https://cortezworld.com/wp-content/uploads/2024/07/tequila-sunrise.jpg" alt="Текила Санрайз">
+        <div class="image-container">
+          <img src="https://cortezworld.com/wp-content/uploads/2024/07/tequila-sunrise.jpg" alt="Текила Санрайз">
+          <div class="price-tag">₽580</div>
+        </div>
         <div class="card-content">
           <h2>Текила Санрайз</h2>
           <p class="ingredients">Текила, апельсиновый сок, гренадин</p>
           <p class="mood">Солнечный, сладкий, как рассвет в Мексике 🌅</p>
-          <button class="order-btn" data-name="Текила Санрайз">Заказать</button>
+          <button class="order-btn" data-name="Текила Санрайз"><i class="fas fa-glass-martini-alt"></i> Заказать</button>
         </div>
       </div>
 
       <div class="cocktail-card">
-        <img src="" alt="Saint P">
+        <div class="image-container">
+          <img src="https://i.pinimg.com/736x/5d/5d/5d/5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d.jpg" alt="Saint P">
+          <div class="price-tag">₽750</div>
+        </div>
         <div class="card-content">
           <h2>Saint P</h2>
           <p class="ingredients">Водка, джин, ликёр Трипл Сек, сироп Блю Курасао, чёрная смородина, содовая</p>
           <p class="mood">Фруктовый микс с ягодной глубиной🍇</p>
-          <button class="order-btn" data-name="Saint P">Заказать</button>
+          <button class="order-btn" data-name="Saint P"><i class="fas fa-glass-martini-alt"></i> Заказать</button>
         </div>
       </div>
 
       <div class="cocktail-card">
-        <img src="" alt="LP">
+        <div class="image-container">
+          <img src="https://i.pinimg.com/736x/5d/5d/5d/5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d.jpg" alt="LP">
+          <div class="price-tag">₽690</div>
+        </div>
         <div class="card-content">
           <h2>LP</h2>
           <p class="ingredients">Водка, Апероль, сироп ванили, сок лимона, тоник, содовая</p>
           <p class="mood">Сложный, бархатистый, с ванилью и горчинкой 🍦</p>
-          <button class="order-btn" data-name="LP">Заказать</button>
+          <button class="order-btn" data-name="LP"><i class="fas fa-glass-martini-alt"></i> Заказать</button>
         </div>
       </div>
     </main>
+    
+    <footer class="footer">
+      <div class="footer-content">
+        <div class="footer-section">
+          <h3>Asafiev Bar</h3>
+          <p>Изысканные коктейли, созданные с любовью и мастерством.</p>
+        </div>
+        <div class="footer-section">
+          <h3>Контакты</h3>
+          <p><i class="fas fa-map-marker-alt"></i> г. Санкт-Петербург, ул. Примерная, 15</p>
+          <p><i class="fas fa-phone"></i> +7 (812) 123-45-67</p>
+          <p><i class="fas fa-clock"></i> Ежедневно с 18:00 до 02:00</p>
+        </div>
+        <div class="footer-section">
+          <h3>Социальные сети</h3>
+          <div class="social-icons">
+            <a href="#"><i class="fab fa-instagram"></i></a>
+            <a href="#"><i class="fab fa-telegram"></i></a>
+            <a href="#"><i class="fab fa-vk"></i></a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2023 Asafiev Bar. Все права защищены.</p>
+      </div>
+    </footer>
   </div>
 
   <!-- Модальное окно подтверждения заказа -->
   <div id="orderModal" class="modal">
     <div class="modal-content order-modal">
       <span class="close" id="closeOrderModal">&times;</span>
-      <h3>Подтвердите заказ</h3>
+      <h3><i class="fas fa-check-circle"></i> Подтвердите заказ</h3>
       <div class="order-image-container">
         <img id="orderImagePreview" src="" alt="Коктейль" class="order-image-preview">
       </div>
       <p id="orderSummary"></p>
-      <button id="confirmOrder">Подтвердить заказ</button>
+      <button id="confirmOrder"><i class="fas fa-check"></i> Подтвердить заказ</button>
     </div>
   </div>
   
