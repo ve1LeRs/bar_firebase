@@ -7,6 +7,14 @@
   box-sizing: border-box;
 }
 
+/* Унифицированные стили для предотвращения сдвигов при смене темы */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  transition: background-color 0.6s ease, color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
+}
+
 body {
   font-family: 'Cormorant Garamond', serif;
   background: linear-gradient(135deg, #f9f7f3 0%, #f0ece6 100%);
@@ -17,7 +25,7 @@ body {
   position: relative;
   min-height: 100vh;
   overflow-x: hidden;
-  transition: background-color 0.3s, color 0.3s;
+  transition: background 0.6s ease, color 0.6s ease;
 }
 
 /* Темная тема */
@@ -31,21 +39,48 @@ body.dark-theme .container {
   border-radius: 20px;
   padding: 2rem;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  transition: background-color 0.6s ease, box-shadow 0.6s ease;
+}
+
+/* Унифицированные размеры для предотвращения сдвигов */
+.container {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  position: relative;
+  z-index: 10;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  min-height: calc(100vh - 4rem);
+  box-sizing: border-box;
 }
 
 body.dark-theme header h1 {
   color: #f8f9fa;
   text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  transition: color 0.6s ease, text-shadow 0.6s ease;
+  /* Сохраняем те же размеры */
+  line-height: 1.1;
+  min-height: 6rem;
+  box-sizing: border-box;
 }
 
 body.dark-theme .subtitle {
   color: #a9b7c6;
+  transition: color 0.6s ease;
+  /* Сохраняем те же размеры */
+  min-height: 2rem;
+  line-height: 1.4;
+  box-sizing: border-box;
 }
 
 body.dark-theme .cocktail-card {
   background: rgba(40, 40, 55, 0.85);
   border: 1px solid rgba(100, 100, 150, 0.3);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  transition: background 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
+  /* Сохраняем те же размеры */
+  min-height: 600px;
+  box-sizing: border-box;
 }
 
 body.dark-theme .cocktail-card:hover {
@@ -54,24 +89,49 @@ body.dark-theme .cocktail-card:hover {
 
 body.dark-theme .card-content {
   background: rgba(30, 30, 45, 0.7);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  justify-content: space-between;
+  transition: background 0.6s ease;
+  /* Сохраняем те же размеры */
+  min-height: 200px;
+  box-sizing: border-box;
 }
 
 body.dark-theme .cocktail-card h2 {
   color: #f8f9fa;
+  transition: color 0.6s ease;
+  /* Сохраняем те же размеры */
+  min-height: 2.5rem;
+  box-sizing: border-box;
 }
 
 body.dark-theme .cocktail-card .ingredients {
   color: #b0b0c0;
+  transition: color 0.6s ease;
+  /* Сохраняем те же размеры */
+  min-height: 3rem;
+  box-sizing: border-box;
 }
 
 body.dark-theme .cocktail-card .mood {
   color: #d4af37;
+  transition: color 0.6s ease;
+  /* Сохраняем те же размеры */
+  min-height: 1.5rem;
+  box-sizing: border-box;
 }
 
 body.dark-theme .auth-buttons button {
   background: rgba(40, 40, 60, 0.9);
   color: #d4af37;
   border: 1px solid #d4af37;
+  transition: background 0.6s ease, color 0.6s ease, border-color 0.6s ease;
+  /* Сохраняем те же размеры */
+  min-height: 40px;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 body.dark-theme .auth-buttons button:hover {
@@ -112,12 +172,17 @@ body.dark-theme #adminBtn:hover {
 body.dark-theme .modal-content {
   background: #2a2a3a;
   color: #f0f0f0;
+  transition: background 0.6s ease, color 0.6s ease;
+  /* Сохраняем те же размеры */
+  box-sizing: border-box;
+  min-height: 300px;
 }
 
 body.dark-theme .modal input {
   background: #3a3a4a;
   border: 1px solid #555;
   color: #f0f0f0;
+  transition: background 0.6s ease, border-color 0.6s ease, color 0.6s ease;
 }
 
 body.dark-theme .modal input:focus {
@@ -127,6 +192,7 @@ body.dark-theme .modal input:focus {
 
 body.dark-theme .close {
   color: #aaa;
+  transition: color 0.6s ease;
 }
 
 body.dark-theme .close:hover {
@@ -136,52 +202,68 @@ body.dark-theme .close:hover {
 body.dark-theme .order-summary {
   background: rgba(40, 40, 60, 0.7);
   color: #f0f0f0;
+  transition: background 0.6s ease, color 0.6s ease;
 }
 
 body.dark-theme .notification-content h3 {
   color: #27ae60;
+  transition: color 0.6s ease;
 }
 
 body.dark-theme .notification-content p {
   color: #b0b0c0;
+  transition: color 0.6s ease;
 }
 
 body.dark-theme .order-item {
   background: #3a3a4a;
   color: #f0f0f0;
+  transition: background 0.6s ease, color 0.6s ease;
 }
 
 body.dark-theme .order-name {
   color: #f8f9fa;
+  transition: color 0.6s ease;
 }
 
 body.dark-theme .order-time {
   color: #a0a0b0;
   font-size: 1.05rem;
+  transition: color 0.6s ease;
 }
 
 body.dark-theme .no-orders,
 body.dark-theme .error {
   color: #b0b0c0;
+  transition: color 0.6s ease;
 }
 
 body.dark-theme .error {
   color: #e74c3c;
+  transition: color 0.6s ease;
 }
 
 body.dark-theme .user-name {
   color: #d4af37;
+  transition: color 0.6s ease;
 }
 
 body.dark-theme .copyright {
   border-top: 1px solid rgba(100, 100, 150, 0.3);
   color: #a0a0b0;
+  transition: border-color 0.6s ease, color 0.6s ease;
 }
 
 body.dark-theme .theme-toggle {
   background: rgba(40, 40, 60, 0.9);
   color: #d4af37;
   border: 1px solid #d4af37;
+  transition: background 0.6s ease, color 0.6s ease, border-color 0.6s ease;
+  /* Сохраняем те же размеры */
+  width: 50px;
+  height: 50px;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 body.dark-theme .theme-toggle:hover {
@@ -195,13 +277,7 @@ body.dark-theme .alcohol-indicator {
   border: 1px solid rgba(212, 175, 55, 0.9);
 }
 
-.container {
-  max-width: 1300px;
-  margin: 0 auto;
-  padding: 0 2rem;
-  position: relative;
-  z-index: 10;
-}
+/* Удалено дублирующееся определение - уже есть выше */
 
 header {
   text-align: center;
@@ -229,6 +305,8 @@ header {
   transition: transform 0.3s ease;
   flex-shrink: 0;
   border: 4px solid white;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  box-sizing: border-box;
 }
 
 .logo:hover {
@@ -249,6 +327,11 @@ header h1 {
   text-shadow: 0 2px 4px rgba(0,0,0,0.03);
   position: relative;
   display: inline-block;
+  transition: color 0.6s ease, text-shadow 0.6s ease;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  line-height: 1.1;
+  min-height: 6rem;
+  box-sizing: border-box;
 }
 
 header h1::after {
@@ -268,6 +351,11 @@ header h1::after {
   margin-top: 1.5rem;
   letter-spacing: 0.5px;
   text-align: center;
+  transition: color 0.6s ease;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  min-height: 2rem;
+  line-height: 1.4;
+  box-sizing: border-box;
 }
 
 .auth-buttons {
@@ -279,8 +367,7 @@ header h1::after {
   align-items: center;
 }
 
-.auth-buttons button,
-.theme-toggle {
+.auth-buttons button {
   padding: 0.6rem 1.4rem;
   border: 1px solid #c9a87c;
   background: white;
@@ -289,13 +376,23 @@ header h1::after {
   font-family: 'Inter', sans-serif;
   font-size: 0.95rem;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s ease, background 0.6s ease, color 0.6s ease, border-color 0.6s ease;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  min-height: 40px;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
-.auth-buttons button:hover,
+.auth-buttons button:hover {
+  background: #c9a87c;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(201, 168, 124, 0.3);
+}
+
 .theme-toggle:hover {
   background: #c9a87c;
   color: white;
@@ -304,13 +401,26 @@ header h1::after {
 }
 
 .theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
   width: 50px;
   height: 50px;
-  border-radius: 50%;
+  border: 1px solid #c9a87c;
+  background: white;
+  color: #c9a87c;
+  border-radius: 8px;
   padding: 0;
   justify-content: center;
   align-items: center;
   font-size: 1.2rem;
+  z-index: 1000;
+  cursor: pointer;
+  transition: all 0.3s ease, background 0.6s ease, color 0.6s ease, border-color 0.6s ease;
+  display: flex;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 #ordersBtn {
@@ -367,6 +477,9 @@ header h1::after {
   padding: 1rem 0 4rem;
   position: relative;
   z-index: 10;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  box-sizing: border-box;
+  min-height: 400px;
 }
 
 .cocktail-card {
@@ -375,7 +488,7 @@ header h1::after {
   border-radius: 24px;
   overflow: hidden;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
-  transition: all 0.5s cubic-bezier(0.165, 0.84, 0.44, 1);
+  transition: all 0.5s cubic-bezier(0.165, 0.84, 0.44, 1), background 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
   position: relative;
   border: 1px solid rgba(255,255,255,0.6);
   animation: fadeInUp 0.8s ease forwards;
@@ -383,6 +496,12 @@ header h1::after {
   transform: translateY(30px);
   user-select: none;
   touch-action: pan-y;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  min-height: 600px;
+  box-sizing: border-box;
 }
 
 .cocktail-card.swipe-active {
@@ -399,6 +518,9 @@ header h1::after {
   position: relative;
   overflow: hidden;
   height: 480px;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .image-container img {
@@ -438,6 +560,14 @@ header h1::after {
   position: relative;
   z-index: 2;
   background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  justify-content: space-between;
+  transition: background 0.6s ease;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  min-height: 200px;
+  box-sizing: border-box;
 }
 
 .cocktail-card h2 {
@@ -448,6 +578,10 @@ header h1::after {
   font-style: normal;
   letter-spacing: -0.5px;
   line-height: 1.2;
+  transition: color 0.6s ease;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  min-height: 2.5rem;
+  box-sizing: border-box;
 }
 
 .cocktail-card .ingredients {
@@ -457,6 +591,11 @@ header h1::after {
   color: #7d6e5d;
   line-height: 1.6;
   letter-spacing: 0.3px;
+  flex: 1;
+  transition: color 0.6s ease;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  min-height: 3rem;
+  box-sizing: border-box;
 }
 
 .cocktail-card .mood {
@@ -467,6 +606,10 @@ header h1::after {
   margin-top: 0.4rem;
   line-height: 1.5;
   letter-spacing: 0.5px;
+  transition: color 0.6s ease;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  min-height: 1.5rem;
+  box-sizing: border-box;
 }
 
 .order-btn {
@@ -486,6 +629,10 @@ header h1::after {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  flex-shrink: 0;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  min-height: 50px;
+  box-sizing: border-box;
 }
 
 .order-btn:hover {
@@ -541,6 +688,9 @@ header h1::after {
   box-shadow: 0 10px 40px rgba(0,0,0,0.2);
   text-align: center;
   animation: modalAppear 0.4s ease;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  box-sizing: border-box;
+  min-height: 300px;
 }
 
 @keyframes modalAppear {
@@ -653,6 +803,48 @@ header h1::after {
 .order-modal {
   max-width: 450px;
   padding: 2rem;
+}
+
+/* Заглушка для отсутствующего изображения в модальном окне заказа */
+.order-image-placeholder {
+  width: 150px;
+  height: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f9f7f3 0%, #f0ece6 100%);
+  color: #6b5c47;
+  text-align: center;
+  padding: 1rem;
+  border-radius: 16px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+  border: 3px solid #f0f0f0;
+  margin: 0 auto;
+}
+
+.order-image-placeholder i {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  color: #c9a87c;
+}
+
+.order-image-placeholder p {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  margin: 0;
+}
+
+/* Темная тема для заглушки */
+body.dark-theme .order-image-placeholder {
+  background: linear-gradient(135deg, #2a2a3a 0%, #1a1a2e 100%);
+  color: #a9b7c6;
+  border-color: #444;
+}
+
+body.dark-theme .order-image-placeholder i {
+  color: #d4af37;
 }
 
 .order-image-container {
@@ -1342,6 +1534,9 @@ header h1::after {
 .order-btn.disabled {
   background: #95a5a6;
   cursor: not-allowed;
+  /* Сохраняем те же размеры */
+  min-height: 50px;
+  box-sizing: border-box;
 }
 
 .order-btn.disabled:hover {
@@ -1432,8 +1627,7 @@ header h1::after {
     align-items: center;
   }
 
-  .auth-buttons button,
-  .theme-toggle {
+  .auth-buttons button {
     width: 100%;
     max-width: 250px;
   }
@@ -1515,6 +1709,12 @@ header h1::after {
     width: 45px;
     height: 45px;
     font-size: 1.1rem;
+    top: 15px;
+    right: 15px;
+    position: fixed;
+    /* Фиксированные размеры для предотвращения сдвигов */
+    box-sizing: border-box;
+    flex-shrink: 0;
   }
 }
 
@@ -1549,8 +1749,7 @@ header h1::after {
     height: 100px;
   }
 
-  .auth-buttons button,
-  .theme-toggle {
+  .auth-buttons button {
     font-size: 0.9rem;
     padding: 0.5rem 1rem;
   }
@@ -1563,6 +1762,12 @@ header h1::after {
   .theme-toggle {
     width: 40px;
     height: 40px;
+    top: 10px;
+    right: 10px;
+    position: fixed;
+    /* Фиксированные размеры для предотвращения сдвигов */
+    box-sizing: border-box;
+    flex-shrink: 0;
   }
 }
 
@@ -1583,6 +1788,8 @@ header h1::after {
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.4s ease, visibility 0.4s ease;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  box-sizing: border-box;
 }
 
 .loader-container.active {
@@ -1652,6 +1859,8 @@ header h1::after {
   pointer-events: none;
   z-index: 1;
   overflow: hidden;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  box-sizing: border-box;
 }
 
 .background-overlay {
@@ -1667,6 +1876,8 @@ header h1::after {
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  box-sizing: border-box;
 }
 
 /* Темный фон для темной темы */
@@ -1675,6 +1886,8 @@ body.dark-theme .background-overlay {
     radial-gradient(circle at 20% 30%, rgba(26, 26, 46, 0.5) 0%, transparent 40%),
     radial-gradient(circle at 80% 70%, rgba(22, 33, 62, 0.3) 0%, transparent 40%),
     linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(22, 33, 62, 0.98) 100%);
+  /* Сохраняем те же размеры */
+  box-sizing: border-box;
 }
 
 /* Мерцающие огоньки */
@@ -1686,6 +1899,8 @@ body.dark-theme .background-overlay {
   height: 100%;
   z-index: 2;
   pointer-events: none;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  box-sizing: border-box;
 }
 
 .sparkle {
@@ -1784,6 +1999,8 @@ body.dark-theme .background-overlay {
   pointer-events: none;
   z-index: 3000;
   overflow: hidden;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  box-sizing: border-box;
 }
 
 .champagne-bubble {
@@ -1844,10 +2061,6 @@ body.modal-open {
 }
 
 /* Убедимся, что модальные окна корректно перекрывают друг друга */
-.modal {
-  /* Уже есть z-index: 1000, увеличим для админ-панели и форм */
-}
-
 .admin-panel {
   z-index: 3000; /* Уже есть */
 }
@@ -1872,6 +2085,9 @@ body.modal-open {
   overflow-y: auto; /* Разрешаем вертикальную прокрутку внутри модального окна */
   display: flex;
   flex-direction: column;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  box-sizing: border-box;
+  min-height: 300px;
 }
 
 /* Убедимся, что содержимое модального окна корректно прокручивается */
@@ -1879,10 +2095,14 @@ body.modal-open {
 .admin-content > *,
 .form-modal > * {
   flex-shrink: 0;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  box-sizing: border-box;
 }
 
 .orders-list,
 .admin-list,
 .form-group {
   flex-shrink: 0;
+  /* Фиксированные размеры для предотвращения сдвигов */
+  box-sizing: border-box;
 }
