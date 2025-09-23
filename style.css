@@ -298,18 +298,6 @@ header h1::after {
   font-size: 1.2rem;
 }
 
-#logoutBtn {
-  background: #e74c3c;
-  color: white;
-  border-color: #e74c3c;
-}
-
-#logoutBtn:hover {
-  background: #c0392b;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
-}
-
 #ordersBtn {
   background: #3498db;
   color: white;
@@ -320,6 +308,18 @@ header h1::after {
   background: #2980b9;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+
+#logoutBtn {
+  background: #e74c3c;
+  color: white;
+  border-color: #e74c3c;
+}
+
+#logoutBtn:hover {
+  background: #c0392b;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
 }
 
 .user-name {
@@ -868,7 +868,7 @@ header h1::after {
     margin: 0.5rem 0 0.2rem;
   }
 
-  #logoutBtn {
+  #ordersBtn {
     margin-top: 0.5rem;
   }
 

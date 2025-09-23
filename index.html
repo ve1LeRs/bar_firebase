@@ -32,8 +32,8 @@
         </button>
         <button id="loginBtn"><i class="fas fa-sign-in-alt"></i> Войти</button>
         <button id="registerBtn"><i class="fas fa-user-plus"></i> Регистрация</button>
-        <button id="logoutBtn" style="display:none"><i class="fas fa-sign-out-alt"></i> Выйти</button>
         <button id="ordersBtn" style="display:none"><i class="fas fa-history"></i> Мои заказы</button>
+        <button id="logoutBtn" style="display:none"><i class="fas fa-sign-out-alt"></i> Выйти</button>
         <span id="userName" class="user-name"></span>
       </div>
     </header>
@@ -527,7 +527,7 @@
         if (diffX > 0) {
           // Свайп вправо - заказать
           const name = currentCard.getAttribute('data-name');
-          triggerOrder(name);
+          triggerDirectOrder(name);
         }
       }
       
@@ -569,7 +569,7 @@
         if (diffX > 0) {
           // Свайп вправо - заказать
           const name = currentCard.getAttribute('data-name');
-          triggerOrder(name);
+          triggerDirectOrder(name);
         }
       }
       
@@ -594,8 +594,8 @@
       }
     }
 
-    // Триггер заказа
-    function triggerOrder(name) {
+    // Прямой заказ без подтверждения
+    async function triggerDirectOrder(name) {
       const user = auth.currentUser;
       if (!user) {
         alert('🔒 Пожалуйста, войдите или зарегистрируйтесь для заказа.');
@@ -606,7 +606,7 @@
       if (!card) return;
       
       const imgSrc = card.querySelector('img').src;
-      currentOrder = { 
+      const order = { 
         name, 
         user: user.displayName || "Гость", 
         userId: user.uid,
@@ -615,15 +615,52 @@
         status: 'pending'
       };
       
-      orderSummary.innerHTML = `
-        <strong>🍸 Коктейль:</strong> ${name}<br>
-        <strong>📬 Ваше имя:</strong> ${currentOrder.user}
-      `;
-      
-      const orderImagePreview = document.getElementById('orderImagePreview');
-      orderImagePreview.src = imgSrc;
-      orderImagePreview.style.display = 'block';
-      orderModal.style.display = 'block';
+      try {
+        // Сохраняем заказ в Firestore
+        const docRef = await db.collection('orders').add(order);
+
+        const message = `
+🆕 *Новый заказ в Asafiev Bar!*
+🍸 *Коктейль:* ${order.name}
+👤 *Имя клиента:* ${order.user}
+🕒 *Время:* ${order.timestamp}
+        `.trim();
+
+        const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        await fetch(telegramUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: TELEGRAM_CHAT_ID,
+            text: message,
+            parse_mode: 'Markdown'
+          })
+        });
+
+        // Вибрация при успешном заказе (если поддерживается)
+        if (navigator.vibrate) {
+          navigator.vibrate([200, 100, 200]);
+        } else if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+          // Альтернативная вибрация для мобильных устройств
+          try {
+            if (window.Telegram && window.Telegram.WebApp) {
+              window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+            }
+          } catch (e) {
+            console.log('Haptic feedback not available');
+          }
+        }
+
+        // Анимация шампанского
+        createChampagneAnimation();
+
+        // Показываем уведомление
+        notificationModal.style.display = 'block';
+        
+      } catch (error) {
+        console.error("Ошибка:", error);
+        alert('❌ Не удалось отправить заказ.');
+      }
     }
 
     // Проверка состояния пользователя
@@ -631,8 +668,8 @@
       if (user) {
         loginBtn.style.display = 'none';
         registerBtn.style.display = 'none';
-        logoutBtn.style.display = 'inline-block';
         ordersBtn.style.display = 'inline-block';
+        logoutBtn.style.display = 'inline-block';
         // 👇 Если displayName пуст — пробуем обновить данные
         if (!user.displayName) {
           await user.reload();
@@ -642,8 +679,8 @@
       } else {
         loginBtn.style.display = 'inline-block';
         registerBtn.style.display = 'inline-block';
-        logoutBtn.style.display = 'none';
         ordersBtn.style.display = 'none';
+        logoutBtn.style.display = 'none';
         userName.textContent = '';
         userName.style.display = 'none';
       }
