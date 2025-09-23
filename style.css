@@ -429,7 +429,8 @@ header h1::after {
   align-items: center;
   gap: 0.5rem;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 2;
+  z-index: 40; /* Поверх любых подсказок/оверлеев */
+  pointer-events: none; /* Не мешает кликам по карточке */
 }
 
 .card-content {
@@ -1741,22 +1742,7 @@ body.dark-theme .background-overlay {
   }
 }
 
-/* Лёгкое авто-смещение вправо, чтобы подсказать про свайп */
-@keyframes swipeNudge {
-  0%, 70%, 100% { transform: translateX(0); }
-  35% { transform: translateX(8px); }
-}
-
-.cocktail-card.nudge-right {
-  /* Сохраняем появление и добавляем мягкий цикл подсказки */
-  animation: cardAppear 0.6s ease-out forwards, swipeNudge 4s ease-in-out 1.2s infinite;
-}
-
-/* Во время наведения или активного свайпа подсказку останавливаем */
-.cocktail-card.nudge-right:hover,
-.cocktail-card.nudge-right.swipe-active {
-  animation-play-state: paused;
-}
+/* Убрано авто-смещение карточек (nudge) */
 
 .cocktail-card:nth-child(1) { animation-delay: 0.1s; }
 .cocktail-card:nth-child(2) { animation-delay: 0.2s; }
