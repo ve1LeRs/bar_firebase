@@ -128,7 +128,7 @@ function initSwipe() {
     card.addEventListener('touchstart', handleTouchStart, false);
     card.addEventListener('touchmove', handleTouchMove, false);
     card.addEventListener('touchend', handleTouchEnd, false);
-
+    
     // Mouse события для десктопа
     card.addEventListener('mousedown', handleMouseDown, false);
     card.addEventListener('mousemove', handleMouseMove, false);
@@ -147,17 +147,17 @@ function handleTouchStart(e) {
 
 function handleTouchMove(e) {
   if (!startX || !currentCard) return;
-
+  
   const touch = e.touches[0];
   const diffX = touch.clientX - startX;
   const diffY = touch.clientY - startY;
-
+  
   // Только горизонтальный свайп
   if (Math.abs(diffX) > Math.abs(diffY)) {
     e.preventDefault();
     currentCard.style.transform = `translateX(${diffX}px)`;
     currentCard.style.opacity = 1 - Math.abs(diffX) / 300;
-
+    
     // Добавляем визуальный эффект свайпа
     if (diffX > 50) {
       currentCard.classList.add('swipe-right');
@@ -169,10 +169,10 @@ function handleTouchMove(e) {
 
 function handleTouchEnd(e) {
   if (!startX || !currentCard) return;
-
+  
   const touch = e.changedTouches[0];
   const diffX = touch.clientX - startX;
-
+  
   if (Math.abs(diffX) > 100) { // Минимальная дистанция для свайпа
     if (diffX > 0) {
       // Свайп вправо - заказать
@@ -180,7 +180,7 @@ function handleTouchEnd(e) {
       triggerDirectOrder(name);
     }
   }
-
+  
   // Сброс стилей
   currentCard.style.transform = '';
   currentCard.style.opacity = '';
@@ -199,15 +199,15 @@ function handleMouseDown(e) {
 
 function handleMouseMove(e) {
   if (!startX || !currentCard) return;
-
+  
   const diffX = e.clientX - startX;
   const diffY = e.clientY - startY;
-
+  
   // Только горизонтальный свайп
   if (Math.abs(diffX) > Math.abs(diffY)) {
     currentCard.style.transform = `translateX(${diffX}px)`;
     currentCard.style.opacity = 1 - Math.abs(diffX) / 300;
-
+    
     // Добавляем визуальный эффект свайпа
     if (diffX > 50) {
       currentCard.classList.add('swipe-right');
@@ -219,9 +219,9 @@ function handleMouseMove(e) {
 
 function handleMouseUp(e) {
   if (!startX || !currentCard) return;
-
+  
   const diffX = e.clientX - startX;
-
+  
   if (Math.abs(diffX) > 100) { // Минимальная дистанция для свайпа
     if (diffX > 0) {
       // Свайп вправо - заказать
@@ -229,7 +229,7 @@ function handleMouseUp(e) {
       triggerDirectOrder(name);
     }
   }
-
+  
   // Сброс стилей
   currentCard.style.transform = '';
   currentCard.style.opacity = '';
@@ -258,27 +258,27 @@ async function triggerDirectOrder(name) {
     showError('🔒 Пожалуйста, войдите или зарегистрируйтесь для заказа.');
     return;
   }
-
+  
   const card = document.querySelector(`.cocktail-card[data-name="${name}"]`);
   if (!card) return;
-
+  
   // Проверяем, не в стоп-листе ли коктейль
   const isInStoplist = stoplistData.some(item => item.cocktailName === name);
   if (isInStoplist) {
     showError(`❌ ${name} временно недоступен. Причина: ${stoplistData.find(item => item.cocktailName === name).reason}`);
     return;
   }
-
+  
   const imgSrc = card.querySelector('img').src;
-  const order = {
-    name,
-    user: user.displayName || "Гость",
+  const order = { 
+    name, 
+    user: user.displayName || "Гость", 
     userId: user.uid,
     timestamp: new Date().toLocaleString('ru-RU'),
     image: imgSrc,
     status: 'pending'
   };
-
+  
   try {
     // Сохраняем заказ в Firestore
     const docRef = await db.collection('orders').add(order);
@@ -322,7 +322,7 @@ async function triggerDirectOrder(name) {
     // Показываем уведомление
     notificationModal.style.display = 'block';
     currentOrder = null;
-
+    
   } catch (error) {
     console.error("Ошибка:", error);
     showError('❌ Не удалось отправить заказ.');
@@ -351,9 +351,6 @@ auth.onAuthStateChanged(async user => {
     }
     userName.textContent = user.displayName || "Гость";
     userName.style.display = 'block';
-    // Загружаем данные
-    await loadCocktails();
-    await loadStoplist();
   } else {
     loginBtn.style.display = 'inline-block';
     registerBtn.style.display = 'inline-block';
@@ -372,28 +369,28 @@ async function loadCocktails() {
     const cocktailsSnapshot = await db.collection('cocktails').get();
     cocktailsData = [];
     cocktailsGrid.innerHTML = '';
-
+    
     cocktailsSnapshot.forEach(doc => {
       const cocktail = { id: doc.id, ...doc.data() };
       cocktailsData.push(cocktail);
-
+      
       // Проверяем, не в стоп-листе ли коктейль
       const isInStoplist = stoplistData.some(item => item.cocktailName === cocktail.name);
-
+      
       const cocktailCard = document.createElement('div');
       cocktailCard.className = `cocktail-card ${isInStoplist ? 'stopped' : ''}`;
       cocktailCard.setAttribute('data-name', cocktail.name);
       cocktailCard.setAttribute('data-alcohol', cocktail.alcohol || 0);
-
+      
       // Проверяем наличие изображения
       const imageUrl = cocktail.image || 'https://i.pinimg.com/736x/5d/5d/5d/5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d.jpg';
       const hasImage = imageUrl && !imageUrl.includes('5d5d5d');
       const displayImage = hasImage ? imageUrl : '';
-
+      
       cocktailCard.innerHTML = `
         <div class="image-container">
-          ${displayImage ?
-            `<img src="${displayImage}" alt="${cocktail.name}">` :
+          ${displayImage ? 
+            `<img src="${displayImage}" alt="${cocktail.name}">` : 
             `<div class="no-image-placeholder">
               <i class="fas fa-camera"></i>
               <p>Коктейль уже делает селфи,<br>скоро выложит сюда</p>
@@ -419,7 +416,7 @@ async function loadCocktails() {
         </div>
         <div class="card-content">
           <h2>${cocktail.name}</h2>
-          <p class="ingredients">${cocktail.ingredients && cocktail.ingredients.trim() ? cocktail.ingredients : 'Состав не указан'}</p>
+          <p class="ingredients">${cocktail.ingredients || 'Состав не указан'}</p>
           <p class="mood">${cocktail.mood || ''}</p>
           ${!isInStoplist ? `
             <button class="order-btn" data-name="${cocktail.name}">
@@ -432,10 +429,10 @@ async function loadCocktails() {
           `}
         </div>
       `;
-
+      
       cocktailsGrid.appendChild(cocktailCard);
     });
-
+    
     // Добавляем обработчики событий для админских кнопок
     if (isAdmin) {
       document.querySelectorAll('.edit-btn').forEach(btn => {
@@ -445,7 +442,7 @@ async function loadCocktails() {
           editCocktail(id);
         });
       });
-
+      
       document.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -454,10 +451,10 @@ async function loadCocktails() {
         });
       });
     }
-
+    
     // Инициализируем свайп для новых карточек
     initSwipe();
-
+    
   } catch (error) {
     console.error('Ошибка загрузки коктейлей:', error);
     showError('Ошибка загрузки коктейлей');
@@ -470,11 +467,11 @@ async function loadStoplist() {
     const stoplistSnapshot = await db.collection('stoplist').get();
     stoplistData = [];
     currentStoplist.innerHTML = '';
-
+    
     stoplistSnapshot.forEach(doc => {
       const item = { id: doc.id, ...doc.data() };
       stoplistData.push(item);
-
+      
       const stoplistItem = document.createElement('div');
       stoplistItem.className = 'stoplist-item';
       stoplistItem.innerHTML = `
@@ -489,10 +486,10 @@ async function loadStoplist() {
           </button>
         ` : ''}
       `;
-
+      
       currentStoplist.appendChild(stoplistItem);
     });
-
+    
     // Добавляем обработчики для удаления из стоп-листа
     if (isAdmin) {
       document.querySelectorAll('.remove-from-stoplist').forEach(btn => {
@@ -502,141 +499,55 @@ async function loadStoplist() {
         });
       });
     }
-
+    
     // Перезагружаем коктейли, чтобы обновить статусы
     await loadCocktails();
-
+    
   } catch (error) {
     console.error('Ошибка загрузки стоп-листа:', error);
   }
 }
 
-// Загрузка истории заказов
+// Загрузка истории заказов (без индекса, используем фильтрацию на клиенте)
 async function loadOrderHistory(userId) {
-  // Добавим явную проверку аутентификации
-  const currentUser = auth.currentUser;
-  if (!currentUser || currentUser.uid !== userId) {
-    console.warn('Попытка загрузки заказов для неверного пользователя или неавторизованного юзера', { currentUserUid: currentUser?.uid, requestedUserId: userId });
-    ordersList.innerHTML = '<p class="error">Ошибка доступа. Пожалуйста, обновите страницу.</p>';
-    return;
-  }
-
   try {
-    console.log(`Запрашиваем заказы для userId: ${userId}`);
-    // Используем query с where для фильтрации на стороне сервера, если индекс создан
-    // const q = query(collection(db, "orders"), where("userId", "==", userId), orderBy("timestamp", "desc"));
-    // const ordersSnapshot = await getDocs(q);
-
-    // ИЛИ продолжаем использовать фильтрацию на клиенте, если индекса нет
-    const ordersSnapshot = await db.collection('orders').orderBy('timestamp', 'desc').get();
-    // const ordersSnapshot = await db.collection('orders').get(); // Если orderBy тоже вызывает проблему
-
+    const ordersSnapshot = await db.collection('orders')
+      .orderBy('timestamp', 'desc')
+      .get();
+    
     ordersList.innerHTML = '';
-
+    
     // Фильтруем заказы на клиенте
     const userOrders = [];
     ordersSnapshot.forEach(doc => {
-      const orderData = doc.data();
-      // console.log(`Проверка заказа ID ${doc.id}:`, orderData); // Раскомментируйте для отладки
-      if (orderData.userId === userId) {
-        userOrders.push({ id: doc.id, ...orderData });
+      const order = doc.data();
+      if (order.userId === userId) {
+        userOrders.push({ id: doc.id, ...order });
       }
     });
-
+    
     if (userOrders.length === 0) {
       ordersList.innerHTML = '<p class="no-orders">У вас пока нет заказов</p>';
       return;
     }
-
+    
     // Сортируем по времени (новые первыми)
-    userOrders.sort((a, b) => {
-        // Предполагаем, что timestamp - это строка. Если это объект Date или Timestamp, обработка будет другой.
-        const dateA = a.timestamp instanceof Date ? a.timestamp : new Date(a.timestamp);
-        const dateB = b.timestamp instanceof Date ? b.timestamp : new Date(b.timestamp);
-        // Для корректной сортировки строкового времени может потребоваться другой формат
-        return dateB - dateA; // Сортировка по убыванию
-    });
-
+    userOrders.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
     userOrders.forEach(order => {
       const orderElement = document.createElement('div');
       orderElement.className = 'order-item';
-      // Убедитесь, что getStatusText определена
-      const statusText = typeof getStatusText === 'function' ? getStatusText(order.status) : (order.status || 'В обработке');
       orderElement.innerHTML = `
         <div class="order-header">
           <span class="order-name">${order.name}</span>
-          <span class="order-status ${order.status || 'pending'}">${statusText}</span>
+          <span class="order-status ${order.status || 'pending'}">${getStatusText(order.status)}</span>
         </div>
-        <div class="order-time">${order.timestamp}</div>
+        <div class="order-time" style="font-size: 1.1rem;">${order.timestamp}</div>
       `;
       ordersList.appendChild(orderElement);
     });
   } catch (error) {
     console.error('Ошибка загрузки истории заказов:', error);
-    // Более конкретная обработка ошибок
-    if (error.code === 'permission-denied') {
-        showError('❌ Доступ к заказам запрещен. Пожалуйста, свяжитесь с администратором.');
-    } else if (error.code === 'failed-precondition') {
-         showError('❌ Ошибка базы данных. Возможно, требуется создать индекс.');
-    } else {
-        showError('❌ Ошибка загрузки заказов: ' + error.message);
-    }
-  }
-}
-
-// Загрузка заказов для админ-панели
-async function loadAdminOrders() {
-  try {
-    const ordersSnapshot = await db.collection('orders')
-      .orderBy('timestamp', 'desc')
-      .get();
-
-    adminOrdersList.innerHTML = '';
-
-    if (ordersSnapshot.empty) {
-      adminOrdersList.innerHTML = '<p class="no-orders">Нет активных заказов</p>';
-      return;
-    }
-
-    ordersSnapshot.forEach(doc => {
-      const order = { id: doc.id, ...doc.data() };
-
-      // Показываем только активные заказы
-      if (order.status !== 'completed' && order.status !== 'cancelled') {
-        const orderElement = document.createElement('div');
-        orderElement.className = 'admin-order-item';
-        orderElement.innerHTML = `
-          <div class="admin-order-header">
-            <div>
-              <strong>${order.name}</strong>
-              <div>${order.user}</div>
-              <small>${order.timestamp}</small>
-            </div>
-            <div class="admin-order-status ${order.status || 'pending'}">
-              ${getStatusText(order.status)}
-            </div>
-          </div>
-          <div class="admin-order-actions">
-            <button class="change-status-btn" data-id="${order.id}">
-              <i class="fas fa-sync-alt"></i> Изменить статус
-            </button>
-          </div>
-        `;
-
-        adminOrdersList.appendChild(orderElement);
-      }
-    });
-
-    // Добавляем обработчики для изменения статуса
-    document.querySelectorAll('.change-status-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.getAttribute('data-id');
-        openStatusModal(id);
-      });
-    });
-
-  } catch (error) {
-    console.error('Ошибка загрузки заказов:', error);
     showError('Ошибка загрузки заказов');
   }
 }
@@ -650,84 +561,6 @@ function getStatusText(status) {
     case 'completed': return 'Выполнен';
     case 'cancelled': return 'Отменён';
     default: return 'В обработке';
-  }
-}
-
-// Открытие модального окна изменения статуса
-function openStatusModal(orderId) {
-  currentOrderId = orderId;
-
-  // Находим заказ по ID
-  const orderElement = document.querySelector(`.change-status-btn[data-id="${orderId}"]`)
-    .closest('.admin-order-item');
-  const orderName = orderElement.querySelector('strong').textContent;
-  const orderUser = orderElement.querySelector('div div').textContent;
-
-  statusOrderInfo.innerHTML = `
-    <p><strong>Коктейль:</strong> ${orderName}</p>
-    <p><strong>Клиент:</strong> ${orderUser}</p>
-  `;
-
-  statusModal.style.display = 'block';
-}
-
-// Изменение статуса заказа
-async function changeOrderStatus(orderId, newStatus) {
-  try {
-    await db.collection('orders').doc(orderId).update({
-      status: newStatus
-    });
-
-    // Закрываем модальное окно
-    statusModal.style.display = 'none';
-
-    // Перезагружаем заказы
-    await loadAdminOrders();
-
-    // Отправляем уведомление в Telegram
-    const orderDoc = await db.collection('orders').doc(orderId).get();
-    const order = orderDoc.data();
-
-    let statusMessage = '';
-    switch(newStatus) {
-      case 'confirmed':
-        statusMessage = 'подтверждён';
-        break;
-      case 'preparing':
-        statusMessage = 'готовится';
-        break;
-      case 'ready':
-        statusMessage = 'готов';
-        break;
-      case 'completed':
-        statusMessage = 'выполнен';
-        break;
-      case 'cancelled':
-        statusMessage = 'отменён';
-        break;
-    }
-
-    const message = `
-🔄 *Статус заказа изменён!*
-🍸 *Коктейль:* ${order.name}
-👤 *Клиент:* ${order.user}
-📊 *Новый статус:* ${statusMessage}
-    `.trim();
-
-    const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    await fetch(telegramUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: message,
-        parse_mode: 'Markdown'
-      })
-    });
-
-  } catch (error) {
-    console.error('Ошибка изменения статуса:', error);
-    showError('Ошибка изменения статуса');
   }
 }
 
@@ -749,10 +582,9 @@ ordersBtn?.addEventListener('click', async () => {
   }
 });
 
-// Открытие админ-панели
+// Открытие модалки админ-панели
 adminBtn?.addEventListener('click', async () => {
   if (isAdmin) {
-    // Загружаем данные для админ-панели
     await loadCocktails();
     await loadAdminOrders();
     await loadStoplist();
@@ -767,7 +599,7 @@ tabBtns.forEach(btn => {
     tabBtns.forEach(b => b.classList.remove('active'));
     // Добавляем активный класс текущей кнопке
     btn.classList.add('active');
-
+    
     // Скрываем все вкладки
     tabContents.forEach(content => content.classList.remove('active'));
     // Показываем нужную вкладку
@@ -801,7 +633,7 @@ closeBtns.forEach(btn => {
   });
 });
 
-// Закрытие уведомлений
+// Закрытие уведомления
 closeNotification?.addEventListener('click', () => {
   notificationModal.style.display = 'none';
   champagneAnimation.innerHTML = '';
@@ -831,18 +663,18 @@ authForm?.addEventListener('submit', async (e) => {
     const userCredential = await auth.signInWithEmailAndPassword(email, password);
     await userCredential.user.reload();
     const updatedUser = auth.currentUser;
-
+    
     // Имитируем небольшую задержку для красивой анимации (300ms)
     await new Promise(resolve => setTimeout(resolve, 300));
-
+    
     userName.textContent = updatedUser.displayName || "Гость";
     authModal.style.display = 'none';
-
+    
     // Добавляем плавное появление контента
     document.querySelectorAll('.cocktail-card').forEach(card => {
       card.classList.add('fade-in-content');
     });
-
+    
   } catch (error) {
     showError('❌ Ошибка входа: ' + error.message);
   } finally {
@@ -866,7 +698,7 @@ registerForm?.addEventListener('submit', async (e) => {
     const email = `${phone.replace(/\D/g, '')}@asafievbar.com`;
     const userCredential = await auth.createUserWithEmailAndPassword(email, password);
     await userCredential.user.updateProfile({ displayName });
-
+    
     // Сохраняем пользователя в Firestore
     await db.collection('users').doc(userCredential.user.uid).set({
       displayName: displayName,
@@ -874,17 +706,17 @@ registerForm?.addEventListener('submit', async (e) => {
       role: 'user', // По умолчанию обычный пользователь
       createdAt: new Date()
     });
-
+    
     await new Promise(resolve => setTimeout(resolve, 300));
-
+    
     // Показываем модальное окно успеха
     registerModal.style.display = 'none';
     successModal.style.display = 'block';
-
+    
     document.querySelectorAll('.cocktail-card').forEach(card => {
       card.classList.add('fade-in-content');
     });
-
+    
   } catch (error) {
     showError('❌ Ошибка регистрации: ' + error.message);
   } finally {
@@ -920,14 +752,14 @@ function editCocktail(id) {
     document.getElementById('cocktailIngredients').value = cocktail.ingredients;
     document.getElementById('cocktailMood').value = cocktail.mood || '';
     document.getElementById('cocktailAlcohol').value = cocktail.alcohol || '';
-
+    
     if (cocktail.image) {
       document.getElementById('previewImage').src = cocktail.image;
       document.getElementById('previewImage').style.display = 'block';
     } else {
       document.getElementById('previewImage').style.display = 'none';
     }
-
+    
     cocktailFormModal.style.display = 'block';
   }
 }
@@ -949,17 +781,17 @@ async function deleteCocktail(id) {
 // Обработка формы коктейля
 cocktailForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
-
+  
   const id = document.getElementById('cocktailId').value;
   const name = document.getElementById('cocktailName').value;
   const ingredients = document.getElementById('cocktailIngredients').value;
   const mood = document.getElementById('cocktailMood').value;
   const alcohol = document.getElementById('cocktailAlcohol').value;
   const imageFile = document.getElementById('cocktailImage').files[0];
-
+  
   try {
     let imageUrl = '';
-
+    
     // Если выбран файл изображения, загружаем его
     if (imageFile) {
       const storageRef = storage.ref();
@@ -967,7 +799,7 @@ cocktailForm?.addEventListener('submit', async (e) => {
       const snapshot = await imageRef.put(imageFile);
       imageUrl = await snapshot.ref.getDownloadURL();
     }
-
+    
     const cocktailData = {
       name: name,
       ingredients: ingredients,
@@ -975,7 +807,7 @@ cocktailForm?.addEventListener('submit', async (e) => {
       alcohol: alcohol ? parseInt(alcohol) : null,
       updatedAt: new Date()
     };
-
+    
     // Если есть новое изображение, добавляем его
     if (imageUrl) {
       cocktailData.image = imageUrl;
@@ -983,7 +815,7 @@ cocktailForm?.addEventListener('submit', async (e) => {
       // Если новый коктейль и нет изображения, ставим заглушку
       cocktailData.image = 'https://i.pinimg.com/736x/5d/5d/5d/5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d.jpg';
     }
-
+    
     if (id) {
       // Обновление существующего коктейля
       await db.collection('cocktails').doc(id).update(cocktailData);
@@ -992,11 +824,11 @@ cocktailForm?.addEventListener('submit', async (e) => {
       cocktailData.createdAt = new Date();
       await db.collection('cocktails').add(cocktailData);
     }
-
+    
     cocktailFormModal.style.display = 'none';
     await loadCocktails();
     showSuccess(id ? 'Коктейль успешно обновлён' : 'Коктейль успешно добавлен');
-
+    
   } catch (error) {
     console.error('Ошибка сохранения коктейля:', error);
     showError('Ошибка сохранения коктейля');
@@ -1021,19 +853,19 @@ document.getElementById('cocktailImage')?.addEventListener('change', function(e)
 addToStoplist?.addEventListener('click', async () => {
   const cocktailName = stoplistCocktails.value;
   const reason = stopReason.value;
-
+  
   if (!cocktailName || !reason) {
     showError('Заполните все поля');
     return;
   }
-
+  
   try {
     await db.collection('stoplist').add({
       cocktailName: cocktailName,
       reason: reason,
       timestamp: new Date().toLocaleString('ru-RU')
     });
-
+    
     stopReason.value = '';
     await loadStoplist();
     showSuccess('Коктейль добавлен в стоп-лист');
@@ -1074,9 +906,9 @@ document.addEventListener('click', (e) => {
     const name = e.target.getAttribute('data-name');
     // 👇 Получаем изображение коктейля из родительской карточки
     const imgSrc = e.target.closest('.cocktail-card').querySelector('img').src;
-    currentOrder = {
-      name,
-      user: user.displayName || "Гость",
+    currentOrder = { 
+      name, 
+      user: user.displayName || "Гость", 
       userId: user.uid,
       timestamp: new Date().toLocaleString('ru-RU'),
       image: imgSrc,
@@ -1107,7 +939,8 @@ confirmOrderBtn?.addEventListener('click', async () => {
 🍸 *Коктейль:* ${currentOrder.name}
 👤 *Имя клиента:* ${currentOrder.user}
 🕒 *Время:* ${currentOrder.timestamp}
-    `.trim();
+🆔 *ID заказа:* ${docRef.id}
+        `.trim();
 
     const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
     await fetch(telegramUrl, {
@@ -1141,7 +974,7 @@ confirmOrderBtn?.addEventListener('click', async () => {
     orderModal.style.display = 'none';
     notificationModal.style.display = 'block';
     currentOrder = null;
-
+    
   } catch (error) {
     console.error("Ошибка:", error);
     showError('❌ Не удалось отправить заказ.');
@@ -1160,7 +993,7 @@ function createChampagneAnimation() {
     bubble.style.height = bubble.style.width;
     champagneAnimation.appendChild(bubble);
   }
-
+  
   // Удаляем анимацию через 3 секунды
   setTimeout(() => {
     champagneAnimation.innerHTML = '';
