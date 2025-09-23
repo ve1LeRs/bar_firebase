@@ -461,7 +461,7 @@ async function loadCocktails() {
       const isInStoplist = stoplistData.some(item => item.cocktailName === cocktail.name);
       
       const cocktailCard = document.createElement('div');
-      cocktailCard.className = `cocktail-card ${isInStoplist ? 'stopped' : ''}`;
+      cocktailCard.className = `cocktail-card nudge-right ${isInStoplist ? 'stopped' : ''}`;
       cocktailCard.setAttribute('data-name', cocktail.name);
       cocktailCard.setAttribute('data-alcohol', cocktail.alcohol || 0);
       
