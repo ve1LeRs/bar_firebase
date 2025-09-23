@@ -452,7 +452,7 @@ async function loadCocktails() {
         <div class="card-content">
           <h2>${cocktail.name}</h2>
           <!-- ИСПРАВЛЕНО: Улучшена проверка на "Состав не указан" -->
-          <p class="ingredients">${cocktail.ingredients && cocktail.ingredients.toString().trim() !== '' ? cocktail.ingredients : 'Состав не указан'}</p>
+          <p class="ingredients">${(typeof cocktail.ingredients === 'string' && cocktail.ingredients.trim()) || 'Состав не указан'}</p>
           <p class="mood">${cocktail.mood || ''}</p>
           ${!isInStoplist ? `
             <button class="order-btn" data-name="${cocktail.name}">
