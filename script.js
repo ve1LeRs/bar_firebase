@@ -3,7 +3,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyB4bD8UAu0Aj5IRK5H-uZg6kxNAIbkZc9k",
   authDomain: "bar-menu-6145c.firebaseapp.com",
   projectId: "bar-menu-6145c",
-  storageBucket: "bar-menu-6145c.firebasestorage.app",
+  storageBucket: "bar-menu-6145c.appspot.com",
   messagingSenderId: "493608422842",
   appId: "1:493608422842:web:3b4b6bd8a4cb681c436183"
 };
@@ -189,6 +189,8 @@ function handleTouchMove(e) {
   // Только горизонтальный свайп
   if (Math.abs(diffX) > Math.abs(diffY)) {
     e.preventDefault();
+    const progress = Math.min(1, Math.max(0, diffX / 150));
+    currentCard.style.setProperty('--swipe-progress', progress);
     currentCard.style.transform = `translateX(${diffX}px)`;
     currentCard.style.opacity = 1 - Math.abs(diffX) / 300;
     
@@ -211,7 +213,28 @@ function handleTouchEnd(e) {
     if (diffX > 0) {
       // Свайп вправо - заказать
       const name = currentCard.getAttribute('data-name');
+      // Анимация коммита свайпа
+      currentCard.dataset.committing = '1';
+      currentCard.classList.add('swipe-commit');
+      currentCard.style.transition = 'transform 0.35s ease, opacity 0.35s ease';
+      currentCard.style.transform = 'translateX(120%)';
+      currentCard.style.opacity = '0';
+      // Триггерим заказ
       triggerDirectOrder(name);
+      // Сбросим карточку после анимации
+      setTimeout(() => {
+        if (!currentCard) return;
+        currentCard.style.transition = '';
+        currentCard.style.transform = '';
+        currentCard.style.opacity = '';
+        currentCard.classList.remove('swipe-active', 'swipe-right', 'swipe-commit');
+        currentCard.style.removeProperty('--swipe-progress');
+        delete currentCard.dataset.committing;
+        currentCard = null;
+        startX = 0;
+        startY = 0;
+      }, 380);
+      return;
     }
   }
   
@@ -219,6 +242,7 @@ function handleTouchEnd(e) {
   currentCard.style.transform = '';
   currentCard.style.opacity = '';
   currentCard.classList.remove('swipe-active', 'swipe-right');
+  currentCard.style.removeProperty('--swipe-progress');
   currentCard = null;
   startX = 0;
   startY = 0;
@@ -239,6 +263,8 @@ function handleMouseMove(e) {
   
   // Только горизонтальный свайп
   if (Math.abs(diffX) > Math.abs(diffY)) {
+    const progress = Math.min(1, Math.max(0, diffX / 150));
+    currentCard.style.setProperty('--swipe-progress', progress);
     currentCard.style.transform = `translateX(${diffX}px)`;
     currentCard.style.opacity = 1 - Math.abs(diffX) / 300;
     
@@ -260,7 +286,26 @@ function handleMouseUp(e) {
     if (diffX > 0) {
       // Свайп вправо - заказать
       const name = currentCard.getAttribute('data-name');
+      // Анимация коммита свайпа
+      currentCard.dataset.committing = '1';
+      currentCard.classList.add('swipe-commit');
+      currentCard.style.transition = 'transform 0.35s ease, opacity 0.35s ease';
+      currentCard.style.transform = 'translateX(120%)';
+      currentCard.style.opacity = '0';
       triggerDirectOrder(name);
+      setTimeout(() => {
+        if (!currentCard) return;
+        currentCard.style.transition = '';
+        currentCard.style.transform = '';
+        currentCard.style.opacity = '';
+        currentCard.classList.remove('swipe-active', 'swipe-right', 'swipe-commit');
+        currentCard.style.removeProperty('--swipe-progress');
+        delete currentCard.dataset.committing;
+        currentCard = null;
+        startX = 0;
+        startY = 0;
+      }, 380);
+      return;
     }
   }
   
@@ -268,6 +313,7 @@ function handleMouseUp(e) {
   currentCard.style.transform = '';
   currentCard.style.opacity = '';
   currentCard.classList.remove('swipe-active', 'swipe-right');
+  currentCard.style.removeProperty('--swipe-progress');
   currentCard = null;
   startX = 0;
   startY = 0;
@@ -279,6 +325,7 @@ function handleMouseLeave(e) {
     currentCard.style.transform = '';
     currentCard.style.opacity = '';
     currentCard.classList.remove('swipe-active', 'swipe-right');
+    currentCard.style.removeProperty('--swipe-progress');
     currentCard = null;
     startX = 0;
     startY = 0;
@@ -304,11 +351,12 @@ async function triggerDirectOrder(name) {
   }
   
   const imgSrc = card.querySelector('img').src;
-  const order = { 
-    name, 
-    user: user.displayName || "Гость", 
+  const order = {
+    name,
+    user: user.displayName || "Гость",
     userId: user.uid,
-    timestamp: new Date().toLocaleString('ru-RU'),
+    displayTime: new Date().toLocaleString('ru-RU'),
+    createdAt: firebase.firestore.FieldValue.serverTimestamp ? firebase.firestore.FieldValue.serverTimestamp() : new Date(),
     image: imgSrc,
     status: 'pending'
   };
@@ -548,7 +596,7 @@ async function loadStoplist() {
 async function loadOrderHistory(userId) {
   try {
     const ordersSnapshot = await db.collection('orders')
-      .orderBy('timestamp', 'desc')
+      .orderBy('createdAt', 'desc')
       .get();
     
     ordersList.innerHTML = '';
@@ -568,7 +616,11 @@ async function loadOrderHistory(userId) {
     }
     
     // Сортируем по времени (новые первыми)
-    userOrders.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    userOrders.sort((a, b) => {
+      const aTime = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.displayTime ? Date.parse(a.displayTime) : 0);
+      const bTime = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.displayTime ? Date.parse(b.displayTime) : 0);
+      return bTime - aTime;
+    });
     
     userOrders.forEach(order => {
       const orderElement = document.createElement('div');
@@ -578,7 +630,7 @@ async function loadOrderHistory(userId) {
           <span class="order-name">${order.name}</span>
           <span class="order-status ${order.status || 'pending'}">${getStatusText(order.status)}</span>
         </div>
-        <div class="order-time" style="font-size: 1.1rem;">${order.timestamp}</div>
+        <div class="order-time" style="font-size: 1.1rem;">${order.displayTime || (order.createdAt?.toDate ? order.createdAt.toDate().toLocaleString('ru-RU') : '')}</div>
       `;
       ordersList.appendChild(orderElement);
     });
@@ -595,7 +647,7 @@ async function loadAdminOrders() {
   try {
     // Получаем все заказы, отсортированные по времени (новые первыми)
     const ordersSnapshot = await db.collection('orders')
-      .orderBy('timestamp', 'desc')
+      .orderBy('createdAt', 'desc')
       .get();
 
     // Проверяем, существует ли элемент adminOrdersList
@@ -1134,20 +1186,21 @@ statusButtons.forEach(btn => {
 
 // Заказ (кнопка)
 document.addEventListener('click', (e) => {
-  if (e.target.classList.contains('order-btn') && !e.target.disabled) {
+  const btn = e.target.closest('.order-btn');
+  if (btn && !btn.disabled) {
     const user = auth.currentUser;
     if (!user) {
       showError('🔒 Пожалуйста, войдите или зарегистрируйтесь для заказа.');
       return;
     }
-    const name = e.target.getAttribute('data-name');
+    const name = btn.getAttribute('data-name');
     // 👇 Получаем изображение коктейля из родительской карточки
-    const imgSrc = e.target.closest('.cocktail-card')?.querySelector('img')?.src;
+    const imgSrc = btn.closest('.cocktail-card')?.querySelector('img')?.src;
     currentOrder = { 
       name, 
       user: user.displayName || "Гость", 
       userId: user.uid,
-      timestamp: new Date().toLocaleString('ru-RU'),
+      displayTime: new Date().toLocaleString('ru-RU'),
       image: imgSrc,
       status: 'pending' // Статус по умолчанию
     };
@@ -1172,8 +1225,14 @@ confirmOrderBtn?.addEventListener('click', async () => {
   if (!currentOrder) return;
 
   try {
-    // Сохраняем заказ в Firestore
-    const docRef = await db.collection('orders').add(currentOrder);
+    // Сохраняем заказ в Firestore с корректными полями времени
+    const now = new Date();
+    const orderData = {
+      ...currentOrder,
+      displayTime: now.toLocaleString('ru-RU'),
+      createdAt: firebase.firestore.FieldValue.serverTimestamp ? firebase.firestore.FieldValue.serverTimestamp() : now
+    };
+    const docRef = await db.collection('orders').add(orderData);
 
     const message = `
 🆕 *Новый заказ в Asafiev Bar!*
@@ -1260,6 +1319,8 @@ function showSuccess(message) {
 initThemeToggle();
 initSwipe();
 
-// Загружаем начальные данные
-loadCocktails();
-loadStoplist();
+// Загружаем начальные данные последовательно, чтобы статусы стоп-листа применились к карточкам
+(async () => {
+  await loadStoplist();
+  await loadCocktails();
+})();
