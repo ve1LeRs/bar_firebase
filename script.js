@@ -531,12 +531,33 @@ async function loadOrderHistory(userId) {
       return;
     }
     
-    // Загрузка заказов для админ-панели (все заказы или с фильтрацией)
+    // Сортируем по времени (новые первыми)
+    userOrders.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    userOrders.forEach(order => {
+      const orderElement = document.createElement('div');
+      orderElement.className = 'order-item';
+      orderElement.innerHTML = `
+        <div class="order-header">
+          <span class="order-name">${order.name}</span>
+          <span class="order-status ${order.status || 'pending'}">${getStatusText(order.status)}</span>
+        </div>
+        <div class="order-time" style="font-size: 1.1rem;">${order.timestamp}</div>
+      `;
+      ordersList.appendChild(orderElement);
+    });
+  } catch (error) {
+    console.error('Ошибка загрузки истории заказов:', error);
+    showError('Ошибка загрузки заказов');
+  }
+}
+
+// Загрузка заказов для админ-панели
 async function loadAdminOrders() {
   try {
     // Получаем все заказы, отсортированные по времени (новые первыми)
     const ordersSnapshot = await db.collection('orders')
-      .orderBy('timestamp', 'desc') // Убедитесь, что в Firestore есть индекс для этого поля
+      .orderBy('timestamp', 'desc')
       .get();
 
     const adminOrdersList = document.getElementById('adminOrdersList');
@@ -590,16 +611,17 @@ async function loadAdminOrders() {
     if (adminOrdersList) {
       adminOrdersList.innerHTML = '<p class="error">Ошибка загрузки заказов</p>';
     }
-    // showError('Ошибка загрузки заказов для админ-панели'); // Можно также показать модальное окно ошибки
   }
 }
 
 // Функция для открытия модального окна изменения статуса
 function openStatusModal(orderId) {
   currentOrderId = orderId;
-  const orderElement = document.querySelector(`.change-status-btn[data-id="${orderId}"]`).closest('.admin-order-item');
-  const orderName = orderElement.querySelector('strong').textContent;
-  const orderUser = orderElement.querySelector('div > div:nth-child(2)').textContent;
+  const orderElement = document.querySelector(`.change-status-btn[data-id="${orderId}"]`)?.closest('.admin-order-item');
+  if (!orderElement) return;
+  
+  const orderName = orderElement.querySelector('strong')?.textContent || 'Неизвестный заказ';
+  const orderUser = orderElement.querySelector('div > div:nth-child(2)')?.textContent || 'Неизвестный клиент';
   
   statusOrderInfo.innerHTML = `
     <p><strong>Коктейль:</strong> ${orderName}</p>
@@ -610,7 +632,7 @@ function openStatusModal(orderId) {
   statusModal.style.display = 'block';
 }
 
-// Функция для изменения статуса заказа (уже есть, но добавлю для полноты)
+// Функция для изменения статуса заказа
 async function changeOrderStatus(orderId, newStatus) {
   if (!orderId) return;
 
