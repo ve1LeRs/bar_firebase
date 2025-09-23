@@ -350,14 +350,20 @@ async function triggerDirectOrder(name) {
     return;
   }
   
-  const imgSrc = card.querySelector('img').src;
+  // Безопасное получение изображения
+  const imgElement = card.querySelector('img');
+  const imgSrc = imgElement ? imgElement.src : '';
+  
+  // Проверяем, есть ли реальное изображение или это заглушка
+  const hasRealImage = imgSrc && !imgSrc.includes('5d5d5d') && !imgSrc.includes('placeholder');
+  
   const order = {
     name,
     user: user.displayName || "Гость",
     userId: user.uid,
     displayTime: new Date().toLocaleString('ru-RU'),
     createdAt: firebase.firestore.FieldValue.serverTimestamp ? firebase.firestore.FieldValue.serverTimestamp() : new Date(),
-    image: imgSrc,
+    image: hasRealImage ? imgSrc : '',
     status: 'pending'
   };
   
@@ -369,7 +375,7 @@ async function triggerDirectOrder(name) {
 🆕 *Новый заказ в Asafiev Bar!*
 🍸 *Коктейль:* ${order.name}
 👤 *Имя клиента:* ${order.user}
-🕒 *Время:* ${order.timestamp}
+🕒 *Время:* ${order.displayTime}
 🆔 *ID заказа:* ${docRef.id}
         `.trim();
 
@@ -890,6 +896,11 @@ closeError?.addEventListener('click', () => {
 
 // Закрытие модального окна подтверждения заказа
 document.getElementById('closeOrderModal')?.addEventListener('click', () => {
+  // Очищаем заглушку при закрытии
+  const placeholder = document.querySelector('.order-image-placeholder');
+  if (placeholder) {
+    placeholder.style.display = 'none';
+  }
   closeModal(orderModal);
 });
 
@@ -1194,14 +1205,20 @@ document.addEventListener('click', (e) => {
       return;
     }
     const name = btn.getAttribute('data-name');
-    // 👇 Получаем изображение коктейля из родительской карточки
-    const imgSrc = btn.closest('.cocktail-card')?.querySelector('img')?.src;
+    // 👇 Безопасное получение изображения коктейля из родительской карточки
+    const card = btn.closest('.cocktail-card');
+    const imgElement = card?.querySelector('img');
+    const imgSrc = imgElement ? imgElement.src : '';
+    
+    // Проверяем, есть ли реальное изображение или это заглушка
+    const hasRealImage = imgSrc && !imgSrc.includes('5d5d5d') && !imgSrc.includes('placeholder');
+    
     currentOrder = { 
       name, 
       user: user.displayName || "Гость", 
       userId: user.uid,
       displayTime: new Date().toLocaleString('ru-RU'),
-      image: imgSrc,
+      image: hasRealImage ? imgSrc : '',
       status: 'pending' // Статус по умолчанию
     };
     if (orderSummary) {
@@ -1210,11 +1227,29 @@ document.addEventListener('click', (e) => {
         <strong>📬 Ваше имя:</strong> ${currentOrder.user}
         `;
     }
-    // 👇 Показываем и подставляем изображение
+    // 👇 Показываем и подставляем изображение или заглушку
     const orderImagePreview = document.getElementById('orderImagePreview');
-    if (orderImagePreview && imgSrc) {
-        orderImagePreview.src = imgSrc;
-        orderImagePreview.style.display = 'block';
+    if (orderImagePreview) {
+        if (hasRealImage && imgSrc) {
+            orderImagePreview.src = imgSrc;
+            orderImagePreview.style.display = 'block';
+            orderImagePreview.alt = name;
+        } else {
+            // Показываем заглушку для коктейлей без фото
+            orderImagePreview.style.display = 'none';
+            // Создаем заглушку, если её нет
+            let placeholder = document.querySelector('.order-image-placeholder');
+            if (!placeholder) {
+                placeholder = document.createElement('div');
+                placeholder.className = 'order-image-placeholder';
+                placeholder.innerHTML = `
+                    <i class="fas fa-camera"></i>
+                    <p>Коктейль уже делает селфи,<br>скоро выложит сюда</p>
+                `;
+                orderImagePreview.parentNode.appendChild(placeholder);
+            }
+            placeholder.style.display = 'block';
+        }
     }
     openModal(orderModal); // Используем новую функцию
   }
@@ -1238,7 +1273,7 @@ confirmOrderBtn?.addEventListener('click', async () => {
 🆕 *Новый заказ в Asafiev Bar!*
 🍸 *Коктейль:* ${currentOrder.name}
 👤 *Имя клиента:* ${currentOrder.user}
-🕒 *Время:* ${currentOrder.timestamp}
+🕒 *Время:* ${currentOrder.displayTime}
 🆔 *ID заказа:* ${docRef.id}
         `.trim();
 
@@ -1271,6 +1306,12 @@ confirmOrderBtn?.addEventListener('click', async () => {
     // Анимация шампанского
     createChampagneAnimation();
 
+    // Очищаем заглушку при успешном заказе
+    const placeholder = document.querySelector('.order-image-placeholder');
+    if (placeholder) {
+      placeholder.style.display = 'none';
+    }
+    
     // Показываем уведомление
     closeModal(orderModal); // Используем новую функцию
     openModal(notificationModal); // Используем новую функцию
