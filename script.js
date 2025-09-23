@@ -419,7 +419,7 @@ async function loadCocktails() {
         </div>
         <div class="card-content">
           <h2>${cocktail.name}</h2>
-          <p class="ingredients">${cocktail.ingredients}</p>
+          <p class="ingredients">${cocktail.ingredients && cocktail.ingredients.trim() ? cocktail.ingredients : 'Состав не указан'}</p>
           <p class="mood">${cocktail.mood || ''}</p>
           ${!isInStoplist ? `
             <button class="order-btn" data-name="${cocktail.name}">
