@@ -416,7 +416,7 @@ async function loadCocktails() {
         </div>
         <div class="card-content">
           <h2>${cocktail.name}</h2>
-          <p class="ingredients">${cocktail.ingredients || 'Состав не указан'}</p>
+          <p class="ingredients">${cocktail.ingredients && cocktail.ingredients.trim() !== '' ? cocktail.ingredients : 'Состав не указан'}</p>
           <p class="mood">${cocktail.mood || ''}</p>
           ${!isInStoplist ? `
             <button class="order-btn" data-name="${cocktail.name}">
@@ -531,6 +531,109 @@ async function loadOrderHistory(userId) {
       return;
     }
     
+    // Загрузка заказов для админ-панели (все заказы или с фильтрацией)
+async function loadAdminOrders() {
+  try {
+    // Получаем все заказы, отсортированные по времени (новые первыми)
+    const ordersSnapshot = await db.collection('orders')
+      .orderBy('timestamp', 'desc') // Убедитесь, что в Firestore есть индекс для этого поля
+      .get();
+
+    const adminOrdersList = document.getElementById('adminOrdersList');
+    if (!adminOrdersList) {
+      console.error('Элемент adminOrdersList не найден в DOM');
+      return;
+    }
+
+    adminOrdersList.innerHTML = '';
+
+    if (ordersSnapshot.empty) {
+      adminOrdersList.innerHTML = '<p class="no-orders">Заказов пока нет</p>';
+      return;
+    }
+
+    ordersSnapshot.forEach(doc => {
+      const order = { id: doc.id, ...doc.data() };
+      const orderElement = document.createElement('div');
+      orderElement.className = 'admin-order-item';
+      orderElement.innerHTML = `
+        <div class="admin-order-header">
+          <div>
+            <strong>${order.name}</strong>
+            <div>Клиент: ${order.user || 'Гость'}</div>
+            <small>ID: ${order.id}</small>
+            <small>${order.timestamp}</small>
+          </div>
+          <div>
+            <div class="admin-order-status ${order.status || 'pending'}">${getStatusText(order.status)}</div>
+            <button class="change-status-btn" data-id="${order.id}">
+              <i class="fas fa-edit"></i> Статус
+            </button>
+          </div>
+        </div>
+      `;
+      adminOrdersList.appendChild(orderElement);
+    });
+
+    // Добавляем обработчики событий для кнопок изменения статуса
+    document.querySelectorAll('.change-status-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const orderId = btn.getAttribute('data-id');
+        openStatusModal(orderId);
+      });
+    });
+
+  } catch (error) {
+    console.error('Ошибка загрузки заказов для админ-панели:', error);
+    const adminOrdersList = document.getElementById('adminOrdersList');
+    if (adminOrdersList) {
+      adminOrdersList.innerHTML = '<p class="error">Ошибка загрузки заказов</p>';
+    }
+    // showError('Ошибка загрузки заказов для админ-панели'); // Можно также показать модальное окно ошибки
+  }
+}
+
+// Функция для открытия модального окна изменения статуса
+function openStatusModal(orderId) {
+  currentOrderId = orderId;
+  const orderElement = document.querySelector(`.change-status-btn[data-id="${orderId}"]`).closest('.admin-order-item');
+  const orderName = orderElement.querySelector('strong').textContent;
+  const orderUser = orderElement.querySelector('div > div:nth-child(2)').textContent;
+  
+  statusOrderInfo.innerHTML = `
+    <p><strong>Коктейль:</strong> ${orderName}</p>
+    <p><strong>Клиент:</strong> ${orderUser}</p>
+    <p><strong>ID заказа:</strong> ${orderId}</p>
+  `;
+  
+  statusModal.style.display = 'block';
+}
+
+// Функция для изменения статуса заказа (уже есть, но добавлю для полноты)
+async function changeOrderStatus(orderId, newStatus) {
+  if (!orderId) return;
+
+  try {
+    await db.collection('orders').doc(orderId).update({
+      status: newStatus,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp ? firebase.firestore.FieldValue.serverTimestamp() : new Date()
+    });
+
+    statusModal.style.display = 'none';
+    
+    // Перезагрузить список заказов в админке
+    if (adminPanel.style.display === 'block') {
+      await loadAdminOrders();
+    }
+    
+    showSuccess('Статус заказа успешно обновлён');
+  } catch (error) {
+    console.error('Ошибка обновления статуса:', error);
+    showError('Ошибка обновления статуса заказа');
+  }
+}
+
     // Сортируем по времени (новые первыми)
     userOrders.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     
