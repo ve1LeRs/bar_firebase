@@ -63,28 +63,21 @@ const tabBtns = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
 const statusButtons = document.querySelectorAll('.status-btn');
 const statusOrderInfo = document.getElementById('statusOrderInfo');
-
-let currentOrder = null;
-let startX = 0;
-let startY = 0;
-let currentCard = null;
-let currentOrderId = null;
-let isAdmin = false;
-let cocktailsData = [];
-let stoplistData = [];
+const currentOrderId = null;
+const isAdmin = false;
+const cocktailsData = [];
+const stoplistData = [];
 
 // Переменная для хранения позиции прокрутки
 let scrollY = 0;
 
 // === ФУНКЦИИ УПРАВЛЕНИЯ МОДАЛЬНЫМИ ОКНАМИ ===
-
 // Функция для открытия модального окна с блокировкой фона
 function openModal(modalElement) {
   if (!modalElement) {
     console.warn('Попытка открыть несуществующее модальное окно');
     return;
   }
-  
   // Сохраняем текущую позицию прокрутки
   scrollY = window.scrollY;
   document.body.style.setProperty('--scroll-y', `${scrollY}px`);
@@ -98,7 +91,6 @@ function closeModal(modalElement) {
     console.warn('Попытка закрыть несуществующее модальное окно');
     return;
   }
-  
   modalElement.style.display = 'none';
   document.body.classList.remove('modal-open');
   // Восстанавливаем позицию прокрутки
@@ -325,7 +317,6 @@ async function triggerDirectOrder(name) {
 🆔 *ID заказа:* ${docRef.id}
         `.trim();
 
-    // ИСПРАВЛЕНО: Убран лишний пробел в URL Telegram API
     const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
     await fetch(telegramUrl, {
       method: 'POST',
@@ -355,7 +346,7 @@ async function triggerDirectOrder(name) {
     createChampagneAnimation();
 
     // Показываем уведомление
-    openModal(notificationModal); // Используем новую функцию
+    openModal(notificationModal);
     currentOrder = null;
     
   } catch (error) {
@@ -371,6 +362,7 @@ auth.onAuthStateChanged(async user => {
     registerBtn.style.display = 'none';
     ordersBtn.style.display = 'inline-block';
     logoutBtn.style.display = 'inline-block';
+    
     // Проверяем, является ли пользователь администратором
     const userDoc = await db.collection('users').doc(user.uid).get();
     if (userDoc.exists) {
@@ -380,6 +372,7 @@ auth.onAuthStateChanged(async user => {
         adminBtn.style.display = 'inline-block';
       }
     }
+    
     // 👇 Если displayName пуст — пробуем обновить данные
     if (!user.displayName) {
       await user.reload();
@@ -451,8 +444,7 @@ async function loadCocktails() {
         </div>
         <div class="card-content">
           <h2>${cocktail.name}</h2>
-          <!-- ИСПРАВЛЕНО: Улучшена проверка на "Состав не указан" -->
-          <p class="ingredients">${(typeof cocktail.ingredients === 'string' && cocktail.ingredients.trim()) || 'Состав не указан'}</p>
+          <p class="ingredients">${cocktail.ingredients || 'Состав не указан'}</p>
           <p class="mood">${cocktail.mood || ''}</p>
           ${!isInStoplist ? `
             <button class="order-btn" data-name="${cocktail.name}">
@@ -588,123 +580,6 @@ async function loadOrderHistory(userId) {
   }
 }
 
-// === НОВЫЕ ФУНКЦИИ ДЛЯ АДМИН-ПАНЕЛИ ===
-
-// Загрузка заказов для админ-панели
-async function loadAdminOrders() {
-  try {
-    // Получаем все заказы, отсортированные по времени (новые первыми)
-    const ordersSnapshot = await db.collection('orders')
-      .orderBy('timestamp', 'desc')
-      .get();
-
-    // Проверяем, существует ли элемент adminOrdersList
-    if (!adminOrdersList) {
-      console.error('Элемент adminOrdersList не найден в DOM');
-      return;
-    }
-
-    adminOrdersList.innerHTML = '';
-
-    if (ordersSnapshot.empty) {
-      adminOrdersList.innerHTML = '<p class="no-orders">Заказов пока нет</p>';
-      return;
-    }
-
-    ordersSnapshot.forEach(doc => {
-      const order = { id: doc.id, ...doc.data() };
-      const orderElement = document.createElement('div');
-      orderElement.className = 'admin-order-item';
-      orderElement.innerHTML = `
-        <div class="admin-order-header">
-          <div>
-            <strong>${order.name}</strong>
-            <div>Клиент: ${order.user || 'Гость'}</div>
-            <small>ID: ${order.id}</small>
-            <small>${order.timestamp}</small>
-          </div>
-          <div>
-            <div class="admin-order-status ${order.status || 'pending'}">${getStatusText(order.status)}</div>
-            <button class="change-status-btn" data-id="${order.id}">
-              <i class="fas fa-edit"></i> Статус
-            </button>
-          </div>
-        </div>
-      `;
-      adminOrdersList.appendChild(orderElement);
-    });
-
-    // Добавляем обработчики событий для кнопок изменения статуса
-    document.querySelectorAll('.change-status-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const orderId = btn.getAttribute('data-id');
-        openStatusModal(orderId);
-      });
-    });
-
-  } catch (error) {
-    console.error('Ошибка загрузки заказов для админ-панели:', error);
-    // Проверяем, существует ли элемент adminOrdersList перед использованием
-    if (adminOrdersList) {
-      adminOrdersList.innerHTML = '<p class="error">Ошибка загрузки заказов</p>';
-    }
-  }
-}
-
-// Функция для открытия модального окна изменения статуса
-function openStatusModal(orderId) {
-  currentOrderId = orderId;
-  // Безопасно ищем элемент заказа
-  const orderElement = document.querySelector(`.change-status-btn[data-id="${orderId}"]`)?.closest('.admin-order-item');
-  if (!orderElement) {
-    console.error(`Элемент заказа с ID ${orderId} не найден`);
-    return;
-  }
-  
-  const orderName = orderElement.querySelector('strong')?.textContent || 'Неизвестный заказ';
-  const orderUser = orderElement.querySelector('div > div:nth-child(2)')?.textContent || 'Неизвестный клиент';
-  
-  // Проверяем, существует ли statusOrderInfo перед использованием
-  if (statusOrderInfo) {
-    statusOrderInfo.innerHTML = `
-      <p><strong>Коктейль:</strong> ${orderName}</p>
-      <p><strong>Клиент:</strong> ${orderUser}</p>
-      <p><strong>ID заказа:</strong> ${orderId}</p>
-    `;
-  }
-  
-  // Проверяем, существует ли statusModal перед использованием
-  openModal(statusModal); // Используем новую функцию
-}
-
-// Функция для изменения статуса заказа
-async function changeOrderStatus(orderId, newStatus) {
-  if (!orderId) return;
-
-  try {
-    await db.collection('orders').doc(orderId).update({
-      status: newStatus,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp ? firebase.firestore.FieldValue.serverTimestamp() : new Date()
-    });
-
-    // Закрываем модальное окно статуса
-    closeModal(statusModal); // Используем новую функцию
-    
-    // Перезагрузить список заказов в админке
-    if (adminPanel && adminPanel.style.display === 'block') {
-      await loadAdminOrders();
-    }
-    
-    showSuccess('Статус заказа успешно обновлён');
-  } catch (error) {
-    console.error('Ошибка обновления статуса:', error);
-    showError('Ошибка обновления статуса заказа');
-  }
-}
-
-// === КОНЕЦ НОВЫХ ФУНКЦИЙ ===
-
 // Получение текста статуса
 function getStatusText(status) {
   switch(status) {
@@ -716,8 +591,6 @@ function getStatusText(status) {
     default: return 'В обработке';
   }
 }
-
-// === ОБНОВЛЕННЫЕ ОБРАБОТЧИКИ ОТКРЫТИЯ МОДАЛЬНЫХ ОКОН ===
 
 // Открытие модалки входа
 loginBtn?.addEventListener('click', () => {
@@ -740,36 +613,12 @@ ordersBtn?.addEventListener('click', async () => {
 // Открытие модалки админ-панели
 adminBtn?.addEventListener('click', async () => {
   if (isAdmin) {
+    // Загружаем данные для админ-панели
     await loadCocktails();
-    await loadAdminOrders(); // Теперь эта функция существует
+    await loadAdminOrders();
     await loadStoplist();
     openModal(adminPanel);
   }
-});
-
-// Добавление коктейля (открывает модальное окно поверх админ-панели)
-addCocktailBtn?.addEventListener('click', () => {
-  // Сброс формы (как у вас было)
-  const formTitle = document.getElementById('formTitle');
-  const cocktailId = document.getElementById('cocktailId');
-  const cocktailName = document.getElementById('cocktailName');
-  const cocktailIngredients = document.getElementById('cocktailIngredients');
-  const cocktailMood = document.getElementById('cocktailMood');
-  const cocktailAlcohol = document.getElementById('cocktailAlcohol');
-  const previewImage = document.getElementById('previewImage');
-
-  if (formTitle) formTitle.innerHTML = '<i class="fas fa-cocktail"></i> Добавить коктейль';
-  if (cocktailId) cocktailId.value = '';
-  if (cocktailName) cocktailName.value = '';
-  if (cocktailIngredients) cocktailIngredients.value = '';
-  if (cocktailMood) cocktailMood.value = '';
-  if (cocktailAlcohol) cocktailAlcohol.value = '';
-  if (previewImage) {
-    previewImage.style.display = 'none';
-    previewImage.src = '';
-  }
-  // Открываем модальное окно формы коктейля
-  openModal(cocktailFormModal); 
 });
 
 // Переключение вкладок админ-панели
@@ -784,48 +633,39 @@ tabBtns.forEach(btn => {
     tabContents.forEach(content => content.classList.remove('active'));
     // Показываем нужную вкладку
     const tabId = btn.getAttribute('data-tab');
-    const tabElement = document.getElementById(`${tabId}-tab`);
-    if (tabElement) {
-        tabElement.classList.add('active');
-    }
+    document.getElementById(`${tabId}-tab`).classList.add('active');
   });
 });
 
 // Переключение на регистрацию
 toggleForm?.addEventListener('click', (e) => {
   if (e.target.id === 'switchToRegister') {
-    closeModal(authModal); // Закрываем окно входа
-    openModal(registerModal); // Открываем окно регистрации
+    closeModal(authModal);
+    openModal(registerModal);
     e.preventDefault();
   }
 });
 
-// === ОБНОВЛЕННЫЕ ОБРАБОТЧИКИ ЗАКРЫТИЯ МОДАЛЬНЫХ ОКОН ===
-
-// Закрытие модалок по кнопке закрытия (X)
+// Закрытие модалок
 closeBtns.forEach(btn => {
-  btn?.addEventListener('click', (e) => {
-    // Определяем, какое модальное окно нужно закрыть, по родительскому элементу кнопки
-    const modalContent = e.target.closest('.modal-content');
-    if (modalContent) {
-      const modal = modalContent.parentElement;
-      closeModal(modal);
-    }
+  btn?.addEventListener('click', () => {
+    closeModal(authModal);
+    closeModal(registerModal);
+    closeModal(orderModal);
+    closeModal(ordersModal);
+    closeModal(notificationModal);
+    closeModal(successModal);
+    closeModal(errorModal);
+    closeModal(adminPanel);
+    closeModal(cocktailFormModal);
+    closeModal(statusModal);
   });
 });
 
-// Закрытие по клику вне модального окна
-window.addEventListener('click', (e) => {
-  // Проверяем, кликнули ли мы вне содержимого модального окна
-  if (e.target.classList.contains('modal')) {
-    closeModal(e.target);
-  }
-});
-
-// Закрытие специфичных модальных окон по отдельным кнопкам
+// Закрытие уведомлений
 closeNotification?.addEventListener('click', () => {
   closeModal(notificationModal);
-  if (champagneAnimation) champagneAnimation.innerHTML = '';
+  champagneAnimation.innerHTML = '';
 });
 
 closeSuccess?.addEventListener('click', () => {
@@ -836,29 +676,14 @@ closeError?.addEventListener('click', () => {
   closeModal(errorModal);
 });
 
-// Закрытие модального окна подтверждения заказа
-document.getElementById('closeOrderModal')?.addEventListener('click', () => {
-  closeModal(orderModal);
-});
-
-// === ОСТАЛЬНОЙ КОД (без изменений, кроме использования openModal/closeModal где нужно) ===
-
 // Обработка входа
 authForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const phoneInput = document.getElementById('phone');
-  const passwordInput = document.getElementById('password');
-
-  if (!phoneInput || !passwordInput) {
-    showError('❌ Ошибка: поля ввода не найдены.');
-    return;
-  }
-
-  const phone = phoneInput.value;
-  const password = passwordInput.value;
+  const phone = document.getElementById('phone').value;
+  const password = document.getElementById('password').value;
 
   const loader = document.getElementById('loader');
-  if (loader) loader.classList.add('active');
+  loader.classList.add('active');
 
   try {
     // Здесь должна быть логика входа по телефону
@@ -871,11 +696,8 @@ authForm?.addEventListener('submit', async (e) => {
     // Имитируем небольшую задержку для красивой анимации (300ms)
     await new Promise(resolve => setTimeout(resolve, 300));
     
-    if (userName) {
-        userName.textContent = updatedUser.displayName || "Гость";
-        userName.style.display = 'block';
-    }
-    closeModal(authModal); // Используем новую функцию
+    userName.textContent = updatedUser.displayName || "Гость";
+    closeModal(authModal);
     
     // Добавляем плавное появление контента
     document.querySelectorAll('.cocktail-card').forEach(card => {
@@ -885,28 +707,19 @@ authForm?.addEventListener('submit', async (e) => {
   } catch (error) {
     showError('❌ Ошибка входа: ' + error.message);
   } finally {
-    if (loader) loader.classList.remove('active');
+    loader.classList.remove('active');
   }
 });
 
 // Обработка регистрации
 registerForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const displayNameInput = document.getElementById('displayName');
-  const regPhoneInput = document.getElementById('regPhone');
-  const regPasswordInput = document.getElementById('regPassword');
-
-  if (!displayNameInput || !regPhoneInput || !regPasswordInput) {
-    showError('❌ Ошибка: поля ввода не найдены.');
-    return;
-  }
-
-  const displayName = displayNameInput.value;
-  const phone = regPhoneInput.value;
-  const password = regPasswordInput.value;
+  const displayName = document.getElementById('displayName').value;
+  const phone = document.getElementById('regPhone').value;
+  const password = document.getElementById('regPassword').value;
 
   const loader = document.getElementById('loader');
-  if (loader) loader.classList.add('active');
+  loader.classList.add('active');
 
   try {
     // Здесь должна быть логика регистрации по телефону
@@ -926,8 +739,8 @@ registerForm?.addEventListener('submit', async (e) => {
     await new Promise(resolve => setTimeout(resolve, 300));
     
     // Показываем модальное окно успеха
-    closeModal(registerModal); // Используем новую функцию
-    openModal(successModal); // Используем новую функцию
+    closeModal(registerModal);
+    openModal(successModal);
     
     document.querySelectorAll('.cocktail-card').forEach(card => {
       card.classList.add('fade-in-content');
@@ -936,7 +749,7 @@ registerForm?.addEventListener('submit', async (e) => {
   } catch (error) {
     showError('❌ Ошибка регистрации: ' + error.message);
   } finally {
-    if (loader) loader.classList.remove('active');
+    loader.classList.remove('active');
   }
 });
 
@@ -945,37 +758,38 @@ logoutBtn?.addEventListener('click', async () => {
   await auth.signOut();
 });
 
+// Добавление коктейля
+addCocktailBtn?.addEventListener('click', () => {
+  document.getElementById('formTitle').innerHTML = '<i class="fas fa-cocktail"></i> Добавить коктейль';
+  document.getElementById('cocktailId').value = '';
+  document.getElementById('cocktailName').value = '';
+  document.getElementById('cocktailIngredients').value = '';
+  document.getElementById('cocktailMood').value = '';
+  document.getElementById('cocktailAlcohol').value = '';
+  document.getElementById('previewImage').style.display = 'none';
+  document.getElementById('previewImage').src = '';
+  openModal(cocktailFormModal);
+});
+
 // Редактирование коктейля
 function editCocktail(id) {
   const cocktail = cocktailsData.find(c => c.id === id);
   if (cocktail) {
-    const formTitle = document.getElementById('formTitle');
-    const cocktailId = document.getElementById('cocktailId');
-    const cocktailName = document.getElementById('cocktailName');
-    const cocktailIngredients = document.getElementById('cocktailIngredients');
-    const cocktailMood = document.getElementById('cocktailMood');
-    const cocktailAlcohol = document.getElementById('cocktailAlcohol');
-    const previewImage = document.getElementById('previewImage');
-
-    if (formTitle) formTitle.innerHTML = '<i class="fas fa-edit"></i> Редактировать коктейль';
-    if (cocktailId) cocktailId.value = cocktail.id;
-    if (cocktailName) cocktailName.value = cocktail.name;
-    if (cocktailIngredients) cocktailIngredients.value = cocktail.ingredients || '';
-    if (cocktailMood) cocktailMood.value = cocktail.mood || '';
-    if (cocktailAlcohol) cocktailAlcohol.value = cocktail.alcohol || '';
-
+    document.getElementById('formTitle').innerHTML = '<i class="fas fa-edit"></i> Редактировать коктейль';
+    document.getElementById('cocktailId').value = cocktail.id;
+    document.getElementById('cocktailName').value = cocktail.name;
+    document.getElementById('cocktailIngredients').value = cocktail.ingredients || '';
+    document.getElementById('cocktailMood').value = cocktail.mood || '';
+    document.getElementById('cocktailAlcohol').value = cocktail.alcohol || '';
+    
     if (cocktail.image) {
-      if (previewImage) {
-        previewImage.src = cocktail.image;
-        previewImage.style.display = 'block';
-      }
+      document.getElementById('previewImage').src = cocktail.image;
+      document.getElementById('previewImage').style.display = 'block';
     } else {
-      if (previewImage) {
-        previewImage.style.display = 'none';
-      }
+      document.getElementById('previewImage').style.display = 'none';
     }
     
-    openModal(cocktailFormModal); // Используем новую функцию
+    openModal(cocktailFormModal);
   }
 }
 
@@ -997,24 +811,12 @@ async function deleteCocktail(id) {
 cocktailForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
   
-  const cocktailId = document.getElementById('cocktailId');
-  const cocktailName = document.getElementById('cocktailName');
-  const cocktailIngredients = document.getElementById('cocktailIngredients');
-  const cocktailMood = document.getElementById('cocktailMood');
-  const cocktailAlcohol = document.getElementById('cocktailAlcohol');
-  const cocktailImage = document.getElementById('cocktailImage');
-
-  if (!cocktailName || !cocktailIngredients) {
-    showError('❌ Ошибка: обязательные поля не найдены.');
-    return;
-  }
-
-  const id = cocktailId ? cocktailId.value : '';
-  const name = cocktailName.value;
-  const ingredients = cocktailIngredients.value;
-  const mood = cocktailMood ? cocktailMood.value : '';
-  const alcohol = cocktailAlcohol ? cocktailAlcohol.value : '';
-  const imageFile = cocktailImage ? cocktailImage.files[0] : null;
+  const id = document.getElementById('cocktailId').value;
+  const name = document.getElementById('cocktailName').value;
+  const ingredients = document.getElementById('cocktailIngredients').value;
+  const mood = document.getElementById('cocktailMood').value;
+  const alcohol = document.getElementById('cocktailAlcohol').value;
+  const imageFile = document.getElementById('cocktailImage').files[0];
   
   try {
     let imageUrl = '';
@@ -1052,7 +854,7 @@ cocktailForm?.addEventListener('submit', async (e) => {
       await db.collection('cocktails').add(cocktailData);
     }
     
-    closeModal(cocktailFormModal); // Используем новую функцию
+    closeModal(cocktailFormModal);
     await loadCocktails();
     showSuccess(id ? 'Коктейль успешно обновлён' : 'Коктейль успешно добавлен');
     
@@ -1063,31 +865,21 @@ cocktailForm?.addEventListener('submit', async (e) => {
 });
 
 // Предпросмотр изображения
-const cocktailImageInput = document.getElementById('cocktailImage');
-if (cocktailImageInput) {
-    cocktailImageInput.addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-        const preview = document.getElementById('previewImage');
-        if (preview) {
-            preview.src = e.target.result;
-            preview.style.display = 'block';
-        }
-        };
-        reader.readAsDataURL(file);
-    }
-    });
-}
+document.getElementById('cocktailImage')?.addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const preview = document.getElementById('previewImage');
+      preview.src = e.target.result;
+      preview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  }
+});
 
 // Добавление в стоп-лист
 addToStoplist?.addEventListener('click', async () => {
-  if (!stoplistCocktails || !stopReason) {
-    showError('❌ Ошибка: поля ввода не найдены.');
-    return;
-  }
-
   const cocktailName = stoplistCocktails.value;
   const reason = stopReason.value;
   
@@ -1142,7 +934,7 @@ document.addEventListener('click', (e) => {
     }
     const name = e.target.getAttribute('data-name');
     // 👇 Получаем изображение коктейля из родительской карточки
-    const imgSrc = e.target.closest('.cocktail-card')?.querySelector('img')?.src;
+    const imgSrc = e.target.closest('.cocktail-card').querySelector('img').src;
     currentOrder = { 
       name, 
       user: user.displayName || "Гость", 
@@ -1151,19 +943,15 @@ document.addEventListener('click', (e) => {
       image: imgSrc,
       status: 'pending' // Статус по умолчанию
     };
-    if (orderSummary) {
-        orderSummary.innerHTML = `
-        <strong>🍸 Коктейль:</strong> ${name}<br>
-        <strong>📬 Ваше имя:</strong> ${currentOrder.user}
-        `;
-    }
+    orderSummary.innerHTML = `
+      <strong>🍸 Коктейль:</strong> ${name}<br>
+      <strong>📬 Ваше имя:</strong> ${currentOrder.user}
+    `;
     // 👇 Показываем и подставляем изображение
     const orderImagePreview = document.getElementById('orderImagePreview');
-    if (orderImagePreview && imgSrc) {
-        orderImagePreview.src = imgSrc;
-        orderImagePreview.style.display = 'block';
-    }
-    openModal(orderModal); // Используем новую функцию
+    orderImagePreview.src = imgSrc;
+    orderImagePreview.style.display = 'block';
+    openModal(orderModal);
   }
 });
 
@@ -1183,7 +971,6 @@ confirmOrderBtn?.addEventListener('click', async () => {
 🆔 *ID заказа:* ${docRef.id}
         `.trim();
 
-    // ИСПРАВЛЕНО: Убран лишний пробел в URL Telegram API
     const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
     await fetch(telegramUrl, {
       method: 'POST',
@@ -1213,8 +1000,8 @@ confirmOrderBtn?.addEventListener('click', async () => {
     createChampagneAnimation();
 
     // Показываем уведомление
-    closeModal(orderModal); // Используем новую функцию
-    openModal(notificationModal); // Используем новую функцию
+    closeModal(orderModal);
+    openModal(notificationModal);
     currentOrder = null;
     
   } catch (error) {
@@ -1225,7 +1012,6 @@ confirmOrderBtn?.addEventListener('click', async () => {
 
 // Создание анимации шампанского
 function createChampagneAnimation() {
-  if (!champagneAnimation) return;
   champagneAnimation.innerHTML = '';
   for (let i = 0; i < 50; i++) {
     const bubble = document.createElement('div');
@@ -1239,22 +1025,35 @@ function createChampagneAnimation() {
   
   // Удаляем анимацию через 3 секунды
   setTimeout(() => {
-    if (champagneAnimation) champagneAnimation.innerHTML = '';
+    champagneAnimation.innerHTML = '';
   }, 3000);
 }
 
 // Показ ошибки
 function showError(message) {
-  if (errorMessage) errorMessage.textContent = message;
-  openModal(errorModal); // Используем новую функцию
+  errorMessage.textContent = message;
+  openModal(errorModal);
 }
 
 // Показ успеха
 function showSuccess(message) {
-  const successContent = document.querySelector('.success-content p');
-  if (successContent) successContent.textContent = message;
-  openModal(successModal); // Используем новую функцию
+  document.querySelector('.success-content p').textContent = message;
+  openModal(successModal);
 }
+
+// Закрытие по клику вне
+window.addEventListener('click', (e) => {
+  if (e.target === authModal) closeModal(authModal);
+  if (e.target === registerModal) closeModal(registerModal);
+  if (e.target === orderModal) closeModal(orderModal);
+  if (e.target === ordersModal) closeModal(ordersModal);
+  if (e.target === notificationModal) closeModal(notificationModal);
+  if (e.target === successModal) closeModal(successModal);
+  if (e.target === errorModal) closeModal(errorModal);
+  if (e.target === adminPanel) closeModal(adminPanel);
+  if (e.target === cocktailFormModal) closeModal(cocktailFormModal);
+  if (e.target === statusModal) closeModal(statusModal);
+});
 
 // Инициализация функций
 initThemeToggle();
