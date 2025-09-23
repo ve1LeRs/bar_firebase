@@ -402,7 +402,7 @@ auth.onAuthStateChanged(async user => {
 async function loadCocktails() {
   try {
     const cocktailsSnapshot = await db.collection('cocktails').get();
-    cocktailsData = [];
+    cocktailsData.length = 0;
     cocktailsGrid.innerHTML = '';
     
     cocktailsSnapshot.forEach(doc => {
@@ -501,7 +501,7 @@ async function loadCocktails() {
 async function loadStoplist() {
   try {
     const stoplistSnapshot = await db.collection('stoplist').get();
-    stoplistData = [];
+    stoplistData.length = 0; // <-- ИСПРАВЛЕНО: Очищаем содержимое массива
     currentStoplist.innerHTML = '';
     
     stoplistSnapshot.forEach(doc => {
