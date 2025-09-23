@@ -461,7 +461,7 @@ async function loadCocktails() {
       const isInStoplist = stoplistData.some(item => item.cocktailName === cocktail.name);
       
       const cocktailCard = document.createElement('div');
-      cocktailCard.className = `cocktail-card nudge-right ${isInStoplist ? 'stopped' : ''}`;
+      cocktailCard.className = `cocktail-card ${isInStoplist ? 'stopped' : ''}`;
       cocktailCard.setAttribute('data-name', cocktail.name);
       cocktailCard.setAttribute('data-alcohol', cocktail.alcohol || 0);
       
@@ -479,7 +479,7 @@ async function loadCocktails() {
               <p>Коктейль уже делает селфи,<br>скоро выложит сюда</p>
             </div>`
           }
-          ${cocktail.alcohol ? `
+          ${(cocktail.alcohol !== undefined && cocktail.alcohol !== null) ? `
             <div class="alcohol-indicator">
               <i class="fas fa-wine-bottle"></i>
               <span class="alcohol-percent">${cocktail.alcohol}%</span>
