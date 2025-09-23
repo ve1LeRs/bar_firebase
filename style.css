@@ -1875,3 +1875,23 @@ body.modal-open {
 .form-group {
   flex-shrink: 0;
 }
+
+/* Стили для свайпа */
+.cocktail-card.swipe-active {
+  transition: transform 0.1s, opacity 0.1s;
+  z-index: 100;
+}
+
+/* Добавляем класс для визуального эффекта свайпа вправо */
+.cocktail-card.swipe-right {
+  /* Можно добавить тень, поворот или изменение фона */
+  box-shadow: 0 15px 40px rgba(46, 204, 113, 0.4); /* Зеленоватая тень при свайпе вправо */
+  /* transform: rotate(5deg); */ /* Опционально: лёгкий поворот */
+}
+
+/* Сброс стилей при отжатии */
+.cocktail-card:not(.swipe-active) {
+  transition: transform 0.5s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.3s ease; /* Возвращаем основную анимацию */
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04); /* Возвращаем стандартную тень */
+  /* transform: rotate(0); */ /* Если использовали поворот */
+}
