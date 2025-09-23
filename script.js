@@ -511,21 +511,35 @@ async function loadStoplist() {
   }
 }
 
-// Загрузка истории заказов (без индекса, используем фильтрацию на клиенте)
+// Загрузка истории заказов
 async function loadOrderHistory(userId) {
+  // Добавим явную проверку аутентификации
+  const currentUser = auth.currentUser;
+  if (!currentUser || currentUser.uid !== userId) {
+    console.warn('Попытка загрузки заказов для неверного пользователя или неавторизованного юзера', { currentUserUid: currentUser?.uid, requestedUserId: userId });
+    ordersList.innerHTML = '<p class="error">Ошибка доступа. Пожалуйста, обновите страницу.</p>';
+    return;
+  }
+
   try {
-    const ordersSnapshot = await db.collection('orders')
-      .orderBy('timestamp', 'desc')
-      .get();
+    console.log(`Запрашиваем заказы для userId: ${userId}`);
+    // Используем query с where для фильтрации на стороне сервера, если индекс создан
+    // const q = query(collection(db, "orders"), where("userId", "==", userId), orderBy("timestamp", "desc"));
+    // const ordersSnapshot = await getDocs(q);
+
+    // ИЛИ продолжаем использовать фильтрацию на клиенте, если индекса нет
+    const ordersSnapshot = await db.collection('orders').orderBy('timestamp', 'desc').get();
+    // const ordersSnapshot = await db.collection('orders').get(); // Если orderBy тоже вызывает проблему
 
     ordersList.innerHTML = '';
 
     // Фильтруем заказы на клиенте
     const userOrders = [];
     ordersSnapshot.forEach(doc => {
-      const order = doc.data();
-      if (order.userId === userId) {
-        userOrders.push({ id: doc.id, ...order });
+      const orderData = doc.data();
+      // console.log(`Проверка заказа ID ${doc.id}:`, orderData); // Раскомментируйте для отладки
+      if (orderData.userId === userId) {
+        userOrders.push({ id: doc.id, ...orderData });
       }
     });
 
@@ -535,15 +549,23 @@ async function loadOrderHistory(userId) {
     }
 
     // Сортируем по времени (новые первыми)
-    userOrders.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    userOrders.sort((a, b) => {
+        // Предполагаем, что timestamp - это строка. Если это объект Date или Timestamp, обработка будет другой.
+        const dateA = a.timestamp instanceof Date ? a.timestamp : new Date(a.timestamp);
+        const dateB = b.timestamp instanceof Date ? b.timestamp : new Date(b.timestamp);
+        // Для корректной сортировки строкового времени может потребоваться другой формат
+        return dateB - dateA; // Сортировка по убыванию
+    });
 
     userOrders.forEach(order => {
       const orderElement = document.createElement('div');
       orderElement.className = 'order-item';
+      // Убедитесь, что getStatusText определена
+      const statusText = typeof getStatusText === 'function' ? getStatusText(order.status) : (order.status || 'В обработке');
       orderElement.innerHTML = `
         <div class="order-header">
           <span class="order-name">${order.name}</span>
-          <span class="order-status ${order.status || 'pending'}">${getStatusText(order.status)}</span>
+          <span class="order-status ${order.status || 'pending'}">${statusText}</span>
         </div>
         <div class="order-time">${order.timestamp}</div>
       `;
@@ -551,7 +573,14 @@ async function loadOrderHistory(userId) {
     });
   } catch (error) {
     console.error('Ошибка загрузки истории заказов:', error);
-    showError('Ошибка загрузки заказов');
+    // Более конкретная обработка ошибок
+    if (error.code === 'permission-denied') {
+        showError('❌ Доступ к заказам запрещен. Пожалуйста, свяжитесь с администратором.');
+    } else if (error.code === 'failed-precondition') {
+         showError('❌ Ошибка базы данных. Возможно, требуется создать индекс.');
+    } else {
+        showError('❌ Ошибка загрузки заказов: ' + error.message);
+    }
   }
 }
 
