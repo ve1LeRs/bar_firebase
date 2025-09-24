@@ -2248,6 +2248,61 @@ body.dark-theme .telegram-info code {
   color: #f0f0f0;
 }
 
+/* ============= Анимации для уведомлений ============= */
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* Стили для уведомлений об обновлении статуса */
+.status-update-notification,
+.admin-status-update-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  animation: slideInRight 0.3s ease;
+}
+
+.status-update-notification {
+  background: #27ae60;
+  color: white;
+}
+
+.admin-status-update-notification {
+  background: #3498db;
+  color: white;
+}
+
+/* Темная тема для уведомлений */
+body.dark-theme .status-update-notification {
+  background: #2ecc71;
+  color: white;
+}
+
+body.dark-theme .admin-status-update-notification {
+  background: #5dade2;
+  color: white;
+}
+
 /* ============= Управление модальными окнами ============= */
 
 /* Класс для блокировки прокрутки основного контента */

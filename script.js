@@ -650,48 +650,68 @@ async function loadStoplist() {
   }
 }
 
-// Загрузка истории заказов (без индекса, используем фильтрацию на клиенте)
+// Real-time listener для заказов пользователя
+let userOrdersListener = null;
+
+// Загрузка истории заказов с real-time обновлениями
 async function loadOrderHistory(userId) {
   try {
-    const ordersSnapshot = await db.collection('orders')
-      .orderBy('createdAt', 'desc')
-      .get();
+    // Отключаем предыдущий listener, если он есть
+    if (userOrdersListener) {
+      userOrdersListener();
+      userOrdersListener = null;
+    }
     
     ordersList.innerHTML = '';
     
-    // Фильтруем заказы на клиенте
-    const userOrders = [];
-    ordersSnapshot.forEach(doc => {
-      const order = doc.data();
-      if (order.userId === userId) {
-        userOrders.push({ id: doc.id, ...order });
-      }
-    });
-    
-    if (userOrders.length === 0) {
-      ordersList.innerHTML = '<p class="no-orders">У вас пока нет заказов</p>';
-      return;
-    }
-    
-    // Сортируем по времени (новые первыми)
-    userOrders.sort((a, b) => {
-      const aTime = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.displayTime ? Date.parse(a.displayTime) : 0);
-      const bTime = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.displayTime ? Date.parse(b.displayTime) : 0);
-      return bTime - aTime;
-    });
-    
-    userOrders.forEach(order => {
-      const orderElement = document.createElement('div');
-      orderElement.className = 'order-item';
-      orderElement.innerHTML = `
-        <div class="order-header">
-          <span class="order-name">${order.name}</span>
-          <span class="order-status ${order.status || 'pending'}">${getStatusText(order.status)}</span>
-        </div>
-        <div class="order-time" style="font-size: 1.1rem;">${order.displayTime || (order.createdAt?.toDate ? order.createdAt.toDate().toLocaleString('ru-RU') : '')}</div>
-      `;
-      ordersList.appendChild(orderElement);
-    });
+    // Устанавливаем real-time listener для заказов пользователя
+    userOrdersListener = db.collection('orders')
+      .where('userId', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .onSnapshot((snapshot) => {
+        ordersList.innerHTML = '';
+        
+        if (snapshot.empty) {
+          ordersList.innerHTML = '<p class="no-orders">У вас пока нет заказов</p>';
+          return;
+        }
+        
+        const userOrders = [];
+        snapshot.forEach(doc => {
+          const order = doc.data();
+          userOrders.push({ id: doc.id, ...order });
+        });
+        
+        // Сортируем по времени (новые первыми)
+        userOrders.sort((a, b) => {
+          const aTime = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.displayTime ? Date.parse(a.displayTime) : 0);
+          const bTime = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.displayTime ? Date.parse(b.displayTime) : 0);
+          return bTime - aTime;
+        });
+        
+        userOrders.forEach(order => {
+          const orderElement = document.createElement('div');
+          orderElement.className = 'order-item';
+          orderElement.setAttribute('data-order-id', order.id);
+          orderElement.innerHTML = `
+            <div class="order-header">
+              <span class="order-name">${order.name}</span>
+              <span class="order-status ${order.status || 'pending'}">${getStatusText(order.status)}</span>
+            </div>
+            <div class="order-time" style="font-size: 1.1rem;">${order.displayTime || (order.createdAt?.toDate ? order.createdAt.toDate().toLocaleString('ru-RU') : '')}</div>
+          `;
+          ordersList.appendChild(orderElement);
+        });
+        
+        // Показываем уведомление о обновлении статуса, если модальное окно открыто
+        if (ordersModal && ordersModal.style.display === 'block') {
+          showStatusUpdateNotification();
+        }
+      }, (error) => {
+        console.error('Ошибка real-time listener для заказов:', error);
+        showError('Ошибка загрузки заказов');
+      });
+      
   } catch (error) {
     console.error('Ошибка загрузки истории заказов:', error);
     showError('Ошибка загрузки заказов');
@@ -700,13 +720,17 @@ async function loadOrderHistory(userId) {
 
 // === НОВЫЕ ФУНКЦИИ ДЛЯ АДМИН-ПАНЕЛИ ===
 
-// Загрузка заказов для админ-панели
+// Real-time listener для админских заказов
+let adminOrdersListener = null;
+
+// Загрузка заказов для админ-панели с real-time обновлениями
 async function loadAdminOrders() {
   try {
-    // Получаем все заказы, отсортированные по времени (новые первыми)
-    const ordersSnapshot = await db.collection('orders')
-      .orderBy('createdAt', 'desc')
-      .get();
+    // Отключаем предыдущий listener, если он есть
+    if (adminOrdersListener) {
+      adminOrdersListener();
+      adminOrdersListener = null;
+    }
 
     // Проверяем, существует ли элемент adminOrdersList
     if (!adminOrdersList) {
@@ -716,42 +740,60 @@ async function loadAdminOrders() {
 
     adminOrdersList.innerHTML = '';
 
-    if (ordersSnapshot.empty) {
-      adminOrdersList.innerHTML = '<p class="no-orders">Заказов пока нет</p>';
-      return;
-    }
+    // Устанавливаем real-time listener для всех заказов
+    adminOrdersListener = db.collection('orders')
+      .orderBy('createdAt', 'desc')
+      .onSnapshot((snapshot) => {
+        adminOrdersList.innerHTML = '';
 
-    ordersSnapshot.forEach(doc => {
-      const order = { id: doc.id, ...doc.data() };
-      const orderElement = document.createElement('div');
-      orderElement.className = 'admin-order-item';
-      orderElement.innerHTML = `
-        <div class="admin-order-header">
-          <div>
-            <strong>${order.name}</strong>
-            <div>Клиент: ${order.user || 'Гость'}</div>
-            <small>ID: ${order.id}</small>
-            <small>${order.timestamp}</small>
-          </div>
-          <div>
-            <div class="admin-order-status ${order.status || 'pending'}">${getStatusText(order.status)}</div>
-            <button class="change-status-btn" data-id="${order.id}">
-              <i class="fas fa-edit"></i> Статус
-            </button>
-          </div>
-        </div>
-      `;
-      adminOrdersList.appendChild(orderElement);
-    });
+        if (snapshot.empty) {
+          adminOrdersList.innerHTML = '<p class="no-orders">Заказов пока нет</p>';
+          return;
+        }
 
-    // Добавляем обработчики событий для кнопок изменения статуса
-    document.querySelectorAll('.change-status-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const orderId = btn.getAttribute('data-id');
-        openStatusModal(orderId);
+        snapshot.forEach(doc => {
+          const order = { id: doc.id, ...doc.data() };
+          const orderElement = document.createElement('div');
+          orderElement.className = 'admin-order-item';
+          orderElement.setAttribute('data-order-id', order.id);
+          orderElement.innerHTML = `
+            <div class="admin-order-header">
+              <div>
+                <strong>${order.name}</strong>
+                <div>Клиент: ${order.user || 'Гость'}</div>
+                <small>ID: ${order.id}</small>
+                <small>${order.displayTime || (order.createdAt?.toDate ? order.createdAt.toDate().toLocaleString('ru-RU') : '')}</small>
+              </div>
+              <div>
+                <div class="admin-order-status ${order.status || 'pending'}">${getStatusText(order.status)}</div>
+                <button class="change-status-btn" data-id="${order.id}">
+                  <i class="fas fa-edit"></i> Статус
+                </button>
+              </div>
+            </div>
+          `;
+          adminOrdersList.appendChild(orderElement);
+        });
+
+        // Добавляем обработчики событий для кнопок изменения статуса
+        document.querySelectorAll('.change-status-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const orderId = btn.getAttribute('data-id');
+            openStatusModal(orderId);
+          });
+        });
+
+        // Показываем уведомление о обновлении, если админ-панель открыта
+        if (adminPanel && adminPanel.style.display === 'block') {
+          showAdminStatusUpdateNotification();
+        }
+      }, (error) => {
+        console.error('Ошибка real-time listener для админских заказов:', error);
+        if (adminOrdersList) {
+          adminOrdersList.innerHTML = '<p class="error">Ошибка загрузки заказов</p>';
+        }
       });
-    });
 
   } catch (error) {
     console.error('Ошибка загрузки заказов для админ-панели:', error);
@@ -1088,6 +1130,16 @@ registerForm?.addEventListener('submit', async (e) => {
 
 // Выход
 logoutBtn?.addEventListener('click', async () => {
+  // Отключаем real-time listeners перед выходом
+  if (userOrdersListener) {
+    userOrdersListener();
+    userOrdersListener = null;
+  }
+  if (adminOrdersListener) {
+    adminOrdersListener();
+    adminOrdersListener = null;
+  }
+  
   await auth.signOut();
 });
 
@@ -1501,6 +1553,94 @@ function showSuccess(message) {
   const successContent = document.querySelector('.success-content p');
   if (successContent) successContent.textContent = message;
   openModal(successModal); // Используем новую функцию
+}
+
+// Уведомление об обновлении статуса заказа для пользователей
+function showStatusUpdateNotification() {
+  // Создаем временное уведомление
+  const notification = document.createElement('div');
+  notification.className = 'status-update-notification';
+  notification.innerHTML = `
+    <div class="notification-content">
+      <i class="fas fa-sync-alt"></i>
+      <span>Статус заказа обновлен!</span>
+    </div>
+  `;
+  
+  // Добавляем стили для уведомления
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #27ae60;
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 10000;
+    animation: slideInRight 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+  `;
+  
+  document.body.appendChild(notification);
+  
+  // Удаляем уведомление через 3 секунды
+  setTimeout(() => {
+    notification.style.animation = 'slideOutRight 0.3s ease';
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 3000);
+}
+
+// Уведомление об обновлении статуса для админов
+function showAdminStatusUpdateNotification() {
+  // Создаем временное уведомление для админа
+  const notification = document.createElement('div');
+  notification.className = 'admin-status-update-notification';
+  notification.innerHTML = `
+    <div class="notification-content">
+      <i class="fas fa-bell"></i>
+      <span>Заказ обновлен через Telegram!</span>
+    </div>
+  `;
+  
+  // Добавляем стили для уведомления
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #3498db;
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 10000;
+    animation: slideInRight 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+  `;
+  
+  document.body.appendChild(notification);
+  
+  // Удаляем уведомление через 4 секунды
+  setTimeout(() => {
+    notification.style.animation = 'slideOutRight 0.3s ease';
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 4000);
 }
 
 // === ФУНКЦИИ МОНИТОРИНГА WEBHOOK СЕРВЕРА ===
