@@ -43,7 +43,6 @@ const notificationModal = document.getElementById('notificationModal');
 const adminPanel = document.getElementById('adminPanel');
 const cocktailFormModal = document.getElementById('cocktailFormModal');
 const statusModal = document.getElementById('statusModal');
-const modalTitle = document.getElementById('modalTitle');
 const authForm = document.getElementById('authForm');
 const registerForm = document.getElementById('registerForm');
 const toggleForm = document.getElementById('toggleForm');
@@ -88,13 +87,12 @@ console.log('- loginBtn:', loginBtn ? '✅ найден' : '❌ не найде�
 console.log('- registerBtn:', registerBtn ? '✅ найден' : '❌ не найден');
 
 let currentOrder = null;
-let startX = 0;
-let startY = 0;
-let currentCard = null;
 let currentOrderId = null;
 let isAdmin = false;
 let cocktailsData = [];
 let stoplistData = [];
+let currentCategory = 'classic'; // Текущая выбранная категория
+let currentAdminFilter = 'classic'; // Текущий фильтр в админке
 
 // Переменная для хранения позиции прокрутки
 let scrollY = 0;
@@ -113,6 +111,9 @@ function openModal(modalElement) {
   document.body.style.setProperty('--scroll-y', `${scrollY}px`);
   document.body.classList.add('modal-open');
   modalElement.style.display = 'block';
+  
+  // Добавляем логирование для отладки
+  console.log('🔍 Открыто модальное окно:', modalElement.id || 'без ID');
 }
 
 // Функция для закрытия модального окна
@@ -177,310 +178,7 @@ function initThemeToggle() {
   });
 }
 
-// Инициализация свайпа
-function initSwipe() {
-  const cocktailCards = document.querySelectorAll('.cocktail-card');
-  cocktailCards.forEach(card => {
-    // Touch события для мобильных
-    card.addEventListener('touchstart', handleTouchStart, false);
-    card.addEventListener('touchmove', handleTouchMove, false);
-    card.addEventListener('touchend', handleTouchEnd, false);
-    
-    // Mouse события для десктопа
-    card.addEventListener('mousedown', handleMouseDown, false);
-    card.addEventListener('mousemove', handleMouseMove, false);
-    card.addEventListener('mouseup', handleMouseUp, false);
-    card.addEventListener('mouseleave', handleMouseLeave, false);
-  });
-}
 
-function handleTouchStart(e) {
-  const touch = e.touches[0];
-  startX = touch.clientX;
-  startY = touch.clientY;
-  currentCard = e.currentTarget;
-  currentCard.classList.add('swipe-active');
-}
-
-function handleTouchMove(e) {
-  if (!startX || !currentCard) return;
-  
-  const touch = e.touches[0];
-  const diffX = touch.clientX - startX;
-  const diffY = touch.clientY - startY;
-  
-  // Только горизонтальный свайп
-  if (Math.abs(diffX) > Math.abs(diffY)) {
-    e.preventDefault();
-    const progress = Math.min(1, Math.max(0, diffX / 150));
-    currentCard.style.setProperty('--swipe-progress', progress);
-    currentCard.style.transform = `translateX(${diffX}px)`;
-    currentCard.style.opacity = 1 - Math.abs(diffX) / 300;
-    
-    // Добавляем визуальный эффект свайпа
-    if (diffX > 50) {
-      currentCard.classList.add('swipe-right');
-    } else {
-      currentCard.classList.remove('swipe-right');
-    }
-  }
-}
-
-function handleTouchEnd(e) {
-  if (!startX || !currentCard) return;
-  
-  const touch = e.changedTouches[0];
-  const diffX = touch.clientX - startX;
-  
-  if (Math.abs(diffX) > 100) { // Минимальная дистанция для свайпа
-    if (diffX > 0) {
-      // Свайп вправо - заказать
-      const name = currentCard.getAttribute('data-name');
-      // Анимация коммита свайпа
-      currentCard.dataset.committing = '1';
-      currentCard.classList.add('swipe-commit');
-      currentCard.style.transition = 'transform 0.35s ease, opacity 0.35s ease';
-      currentCard.style.transform = 'translateX(120%)';
-      currentCard.style.opacity = '0';
-      // Триггерим заказ
-      triggerDirectOrder(name);
-      // Сбросим карточку после анимации
-      setTimeout(() => {
-        if (!currentCard) return;
-        currentCard.style.transition = '';
-        currentCard.style.transform = '';
-        currentCard.style.opacity = '';
-        currentCard.classList.remove('swipe-active', 'swipe-right', 'swipe-commit');
-        currentCard.style.removeProperty('--swipe-progress');
-        delete currentCard.dataset.committing;
-        currentCard = null;
-        startX = 0;
-        startY = 0;
-      }, 380);
-      return;
-    }
-  }
-  
-  // Сброс стилей
-  currentCard.style.transform = '';
-  currentCard.style.opacity = '';
-  currentCard.classList.remove('swipe-active', 'swipe-right');
-  currentCard.style.removeProperty('--swipe-progress');
-  currentCard = null;
-  startX = 0;
-  startY = 0;
-}
-
-function handleMouseDown(e) {
-  startX = e.clientX;
-  startY = e.clientY;
-  currentCard = e.currentTarget;
-  currentCard.classList.add('swipe-active');
-}
-
-function handleMouseMove(e) {
-  if (!startX || !currentCard) return;
-  
-  const diffX = e.clientX - startX;
-  const diffY = e.clientY - startY;
-  
-  // Только горизонтальный свайп
-  if (Math.abs(diffX) > Math.abs(diffY)) {
-    const progress = Math.min(1, Math.max(0, diffX / 150));
-    currentCard.style.setProperty('--swipe-progress', progress);
-    currentCard.style.transform = `translateX(${diffX}px)`;
-    currentCard.style.opacity = 1 - Math.abs(diffX) / 300;
-    
-    // Добавляем визуальный эффект свайпа
-    if (diffX > 50) {
-      currentCard.classList.add('swipe-right');
-    } else {
-      currentCard.classList.remove('swipe-right');
-    }
-  }
-}
-
-function handleMouseUp(e) {
-  if (!startX || !currentCard) return;
-  
-  const diffX = e.clientX - startX;
-  
-  if (Math.abs(diffX) > 100) { // Минимальная дистанция для свайпа
-    if (diffX > 0) {
-      // Свайп вправо - заказать
-      const name = currentCard.getAttribute('data-name');
-      // Анимация коммита свайпа
-      currentCard.dataset.committing = '1';
-      currentCard.classList.add('swipe-commit');
-      currentCard.style.transition = 'transform 0.35s ease, opacity 0.35s ease';
-      currentCard.style.transform = 'translateX(120%)';
-      currentCard.style.opacity = '0';
-      triggerDirectOrder(name);
-      setTimeout(() => {
-        if (!currentCard) return;
-        currentCard.style.transition = '';
-        currentCard.style.transform = '';
-        currentCard.style.opacity = '';
-        currentCard.classList.remove('swipe-active', 'swipe-right', 'swipe-commit');
-        currentCard.style.removeProperty('--swipe-progress');
-        delete currentCard.dataset.committing;
-        currentCard = null;
-        startX = 0;
-        startY = 0;
-      }, 380);
-      return;
-    }
-  }
-  
-  // Сброс стилей
-  currentCard.style.transform = '';
-  currentCard.style.opacity = '';
-  currentCard.classList.remove('swipe-active', 'swipe-right');
-  currentCard.style.removeProperty('--swipe-progress');
-  currentCard = null;
-  startX = 0;
-  startY = 0;
-}
-
-function handleMouseLeave(e) {
-  if (currentCard) {
-    // Сброс стилей
-    currentCard.style.transform = '';
-    currentCard.style.opacity = '';
-    currentCard.classList.remove('swipe-active', 'swipe-right');
-    currentCard.style.removeProperty('--swipe-progress');
-    currentCard = null;
-    startX = 0;
-    startY = 0;
-  }
-}
-
-// Прямой заказ без подтверждения
-async function triggerDirectOrder(name) {
-  const user = auth.currentUser;
-  if (!user) {
-    showError('🔒 Пожалуйста, войдите или зарегистрируйтесь для заказа.');
-    return;
-  }
-  
-  const card = document.querySelector(`.cocktail-card[data-name="${name}"]`);
-  if (!card) return;
-  
-  // Находим кнопку заказа в карточке
-  const orderBtn = card.querySelector('.order-btn');
-  if (!orderBtn || orderBtn.disabled || orderBtn.classList.contains('loading')) {
-    return; // Предотвращаем множественные клики
-  }
-  
-  // Проверяем, не в стоп-листе ли коктейль
-  const isInStoplist = stoplistData.some(item => item.cocktailName === name);
-  if (isInStoplist) {
-    showError(`❌ ${name} временно недоступен. Причина: ${stoplistData.find(item => item.cocktailName === name).reason}`);
-    return;
-  }
-  
-  // Устанавливаем состояние загрузки
-  orderBtn.classList.add('loading');
-  orderBtn.disabled = true;
-  const originalText = orderBtn.innerHTML;
-  orderBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Заказываем...';
-  
-  // Безопасное получение изображения
-  const imgElement = card.querySelector('img');
-  const imgSrc = imgElement ? imgElement.src : '';
-  
-  // Проверяем, есть ли реальное изображение или это заглушка
-  const hasRealImage = imgSrc && !imgSrc.includes('5d5d5d') && !imgSrc.includes('placeholder');
-  
-  const order = {
-    name,
-    user: user.displayName || "Гость",
-    userId: user.uid,
-    displayTime: new Date().toLocaleString('ru-RU'),
-    createdAt: firebase.firestore.FieldValue.serverTimestamp ? firebase.firestore.FieldValue.serverTimestamp() : new Date(),
-    image: hasRealImage ? imgSrc : '',
-    status: 'pending'
-  };
-  
-  try {
-    // Сохраняем заказ в Firestore
-    const docRef = await db.collection('orders').add(order);
-
-    const message = `
-🆕 *Новый заказ в Asafiev Bar!*
-🍸 *Коктейль:* ${order.name}
-👤 *Имя клиента:* ${order.user}
-🕒 *Время:* ${order.displayTime}
-🆔 *ID заказа:* ${docRef.id}
-        `.trim();
-
-    // Создаем inline-кнопки для управления заказом
-    const inlineKeyboard = {
-      inline_keyboard: [
-        [
-          { text: "✅ Подтвердить", callback_data: `confirmed_${docRef.id}` },
-          { text: "❌ Отменить", callback_data: `cancelled_${docRef.id}` }
-        ],
-        [
-          { text: "👨‍🍳 Готовится", callback_data: `preparing_${docRef.id}` },
-          { text: "🍸 Готов", callback_data: `ready_${docRef.id}` }
-        ],
-        [
-          { text: "✅ Выполнен", callback_data: `completed_${docRef.id}` }
-        ]
-      ]
-    };
-
-    // ИСПРАВЛЕНО: Убран лишний пробел в URL Telegram API
-    const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    const response = await fetch(telegramUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: message,
-        parse_mode: 'Markdown',
-        reply_markup: inlineKeyboard
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Telegram API error: ${response.status}`);
-    }
-
-    // Вибрация при успешном заказе (если поддерживается)
-    if (navigator.vibrate) {
-      navigator.vibrate([200, 100, 200]);
-    } else if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-      // Альтернативная вибрация для мобильных устройств
-      try {
-        if (window.Telegram && window.Telegram.WebApp) {
-          window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
-        }
-      } catch (e) {
-        console.log('Haptic feedback not available');
-      }
-    }
-
-    // Анимация шампанского
-    createChampagneAnimation();
-
-    // Показываем уведомление
-    openModal(notificationModal); // Используем новую функцию
-    currentOrder = null;
-    
-  } catch (error) {
-    console.error("Ошибка:", error);
-    showError('❌ Не удалось отправить заказ.');
-  } finally {
-    // Восстанавливаем состояние кнопки
-    if (orderBtn) {
-      orderBtn.classList.remove('loading');
-      orderBtn.disabled = false;
-      orderBtn.innerHTML = originalText;
-    }
-  }
-}
 
 // Проверка состояния пользователя
 auth.onAuthStateChanged(async user => {
@@ -639,8 +337,14 @@ async function loadCocktails() {
       });
     }
     
-    // Инициализируем свайп для новых карточек
-    initSwipe();
+    
+    // Применяем фильтрацию по текущей категории
+    filterCocktailsByCategory();
+    
+    // Обновляем админский список коктейлей
+    if (isAdmin) {
+      updateAdminCocktailsList();
+    }
     
     console.log('✅ Коктейли успешно загружены:', cocktailsData.length);
     
@@ -664,13 +368,18 @@ async function loadStoplist() {
       const stoplistItem = document.createElement('div');
       stoplistItem.className = 'stoplist-item';
       stoplistItem.innerHTML = `
-        <div class="stoplist-info">
+        ${isAdmin ? `<input type="checkbox" class="stoplist-checkbox" data-id="${item.id}">` : ''}
+        <div class="stoplist-info" style="${isAdmin ? 'margin-left: 2rem;' : ''}">
           <strong>${item.cocktailName}</strong>
           <span>${item.reason}</span>
-          <small>${item.timestamp}</small>
+          <small>
+            <i class="fas fa-clock"></i>
+            ${item.timestamp}
+            ${item.addedBy ? `<i class="fas fa-user"></i> ${item.addedBy === 'admin' ? 'Администратор' : 'Пользователь'}` : ''}
+          </small>
         </div>
         ${isAdmin ? `
-          <button class="remove-from-stoplist" data-id="${item.id}">
+          <button class="remove-from-stoplist" data-id="${item.id}" title="Удалить из стоп-листа">
             <i class="fas fa-times"></i>
           </button>
         ` : ''}
@@ -678,6 +387,15 @@ async function loadStoplist() {
       
       currentStoplist.appendChild(stoplistItem);
     });
+    
+    // Обновляем статистику
+    updateStoplistStats();
+    
+    // Инициализируем фильтры
+    initStoplistFilters();
+    
+    // Инициализируем массовые операции
+    initBulkActions();
     
     // Добавляем обработчики для удаления из стоп-листа
     if (isAdmin) {
@@ -689,11 +407,291 @@ async function loadStoplist() {
       });
     }
     
+    // Заполняем селект коктейлей для стоп-листа
+    await populateStoplistCocktailsSelect();
+    
     // Перезагружаем коктейли, чтобы обновить статусы
     await loadCocktails();
     
   } catch (error) {
     console.error('Ошибка загрузки стоп-листа:', error);
+  }
+}
+
+// Заполнение селекта коктейлей для стоп-листа
+async function populateStoplistCocktailsSelect() {
+  if (!stoplistCocktails) return;
+  
+  try {
+    // Очищаем селект
+    stoplistCocktails.innerHTML = '<option value="">Выберите коктейль</option>';
+    
+    // Получаем все коктейли
+    const cocktailsSnapshot = await db.collection('cocktails').get();
+    
+    // Сортируем коктейли по алфавиту
+    const cocktails = [];
+    cocktailsSnapshot.forEach(doc => {
+      const cocktail = { id: doc.id, ...doc.data() };
+      cocktails.push(cocktail);
+    });
+    
+    cocktails.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    
+    // Добавляем опции в селект, исключая уже находящиеся в стоп-листе
+    cocktails.forEach(cocktail => {
+      const isInStoplist = stoplistData.some(item => item.cocktailName === cocktail.name);
+      
+      if (!isInStoplist) {
+        const option = document.createElement('option');
+        option.value = cocktail.name;
+        option.textContent = cocktail.name;
+        option.setAttribute('data-alcohol', cocktail.alcohol || 0);
+        stoplistCocktails.appendChild(option);
+      }
+    });
+    
+    // Если нет доступных коктейлей для добавления в стоп-лист
+    if (stoplistCocktails.children.length === 1) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'Все коктейли уже в стоп-листе';
+      option.disabled = true;
+      stoplistCocktails.appendChild(option);
+    }
+    
+  } catch (error) {
+    console.error('Ошибка заполнения селекта коктейлей:', error);
+  }
+}
+
+// Обновление статистики стоп-листа
+function updateStoplistStats() {
+  const stoplistStats = document.getElementById('stoplistStats');
+  if (!stoplistStats) return;
+  
+  const totalCocktails = cocktailsData.length;
+  const stoplistCount = stoplistData.length;
+  const availableCount = totalCocktails - stoplistCount;
+  
+  stoplistStats.innerHTML = `
+    <div class="stat-item">
+      <i class="fas fa-ban"></i>
+      <span>В стоп-листе: ${stoplistCount}</span>
+    </div>
+    <div class="stat-item">
+      <i class="fas fa-check-circle"></i>
+      <span>Доступно: ${availableCount}</span>
+    </div>
+    <div class="stat-item">
+      <i class="fas fa-cocktail"></i>
+      <span>Всего: ${totalCocktails}</span>
+    </div>
+  `;
+}
+
+// Переменные для фильтрации
+let currentFilter = 'all';
+let currentSearchTerm = '';
+
+// Инициализация поиска и фильтров стоп-листа
+function initStoplistFilters() {
+  const searchInput = document.getElementById('stoplistSearch');
+  const filterButtons = document.querySelectorAll('.filter-btn');
+  
+  // Обработчик поиска
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      currentSearchTerm = e.target.value.toLowerCase();
+      filterStoplistItems();
+    });
+  }
+  
+  // Обработчики фильтров
+  filterButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      // Убираем активный класс со всех кнопок
+      filterButtons.forEach(b => b.classList.remove('active'));
+      // Добавляем активный класс к нажатой кнопке
+      btn.classList.add('active');
+      // Устанавливаем текущий фильтр
+      currentFilter = btn.getAttribute('data-filter');
+      filterStoplistItems();
+    });
+  });
+}
+
+// Фильтрация элементов стоп-листа
+function filterStoplistItems() {
+  const stoplistItems = document.querySelectorAll('.stoplist-item');
+  let visibleCount = 0;
+  
+  stoplistItems.forEach(item => {
+    const cocktailName = item.querySelector('strong').textContent.toLowerCase();
+    const reason = item.querySelector('span').textContent.toLowerCase();
+    const addedBy = item.querySelector('small').textContent.toLowerCase();
+    
+    // Проверяем поиск
+    const matchesSearch = !currentSearchTerm || 
+      cocktailName.includes(currentSearchTerm) || 
+      reason.includes(currentSearchTerm);
+    
+    // Проверяем фильтр
+    let matchesFilter = true;
+    if (currentFilter === 'admin') {
+      matchesFilter = addedBy.includes('администратор');
+    } else if (currentFilter === 'user') {
+      matchesFilter = addedBy.includes('пользователь');
+    }
+    
+    // Показываем или скрываем элемент
+    if (matchesSearch && matchesFilter) {
+      item.style.display = 'flex';
+      visibleCount++;
+    } else {
+      item.style.display = 'none';
+    }
+  });
+  
+  // Обновляем статистику с учетом фильтров
+  updateFilteredStats(visibleCount);
+}
+
+// Обновление статистики с учетом фильтров
+function updateFilteredStats(visibleCount) {
+  const stoplistStats = document.getElementById('stoplistStats');
+  if (!stoplistStats) return;
+  
+  const totalCocktails = cocktailsData.length;
+  const stoplistCount = stoplistData.length;
+  const availableCount = totalCocktails - stoplistCount;
+  
+  let filterText = '';
+  if (currentFilter !== 'all' || currentSearchTerm) {
+    filterText = ` (показано: ${visibleCount})`;
+  }
+  
+  stoplistStats.innerHTML = `
+    <div class="stat-item">
+      <i class="fas fa-ban"></i>
+      <span>В стоп-листе: ${stoplistCount}${filterText}</span>
+    </div>
+    <div class="stat-item">
+      <i class="fas fa-check-circle"></i>
+      <span>Доступно: ${availableCount}</span>
+    </div>
+    <div class="stat-item">
+      <i class="fas fa-cocktail"></i>
+      <span>Всего: ${totalCocktails}</span>
+    </div>
+  `;
+}
+
+// Инициализация массовых операций
+function initBulkActions() {
+  const bulkActions = document.getElementById('bulkActions');
+  const bulkRemoveBtn = document.getElementById('bulkRemoveBtn');
+  const selectAllBtn = document.getElementById('selectAllBtn');
+  const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+  
+  if (!isAdmin || !bulkActions) return;
+  
+  // Показываем кнопки массовых операций
+  bulkActions.style.display = 'flex';
+  
+  // Обработчик для чекбоксов
+  document.addEventListener('change', (e) => {
+    if (e.target.classList.contains('stoplist-checkbox')) {
+      const item = e.target.closest('.stoplist-item');
+      if (e.target.checked) {
+        item.classList.add('selected');
+      } else {
+        item.classList.remove('selected');
+      }
+      updateBulkActionsVisibility();
+    }
+  });
+  
+  // Выбрать все
+  if (selectAllBtn) {
+    selectAllBtn.addEventListener('click', () => {
+      const checkboxes = document.querySelectorAll('.stoplist-checkbox');
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+        checkbox.closest('.stoplist-item').classList.add('selected');
+      });
+      updateBulkActionsVisibility();
+    });
+  }
+  
+  // Снять выбор
+  if (clearSelectionBtn) {
+    clearSelectionBtn.addEventListener('click', () => {
+      const checkboxes = document.querySelectorAll('.stoplist-checkbox');
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+        checkbox.closest('.stoplist-item').classList.remove('selected');
+      });
+      updateBulkActionsVisibility();
+    });
+  }
+  
+  // Массовое удаление
+  if (bulkRemoveBtn) {
+    bulkRemoveBtn.addEventListener('click', () => {
+      const selectedIds = getSelectedStoplistItems();
+      if (selectedIds.length === 0) {
+        showError('Выберите элементы для удаления');
+        return;
+      }
+      
+      const confirmed = confirm(
+        `Вы уверены, что хотите удалить ${selectedIds.length} коктейлей из стоп-листа?\n\n` +
+        `Это действие нельзя отменить.`
+      );
+      
+      if (confirmed) {
+        bulkRemoveFromStoplist(selectedIds);
+      }
+    });
+  }
+}
+
+// Получение выбранных элементов стоп-листа
+function getSelectedStoplistItems() {
+  const checkboxes = document.querySelectorAll('.stoplist-checkbox:checked');
+  return Array.from(checkboxes).map(checkbox => checkbox.getAttribute('data-id'));
+}
+
+// Обновление видимости кнопок массовых операций
+function updateBulkActionsVisibility() {
+  const selectedCount = getSelectedStoplistItems().length;
+  const bulkRemoveBtn = document.getElementById('bulkRemoveBtn');
+  
+  if (bulkRemoveBtn) {
+    bulkRemoveBtn.innerHTML = `<i class="fas fa-trash"></i> Удалить выбранные (${selectedCount})`;
+    bulkRemoveBtn.disabled = selectedCount === 0;
+  }
+}
+
+// Массовое удаление из стоп-листа
+async function bulkRemoveFromStoplist(ids) {
+  try {
+    const batch = db.batch();
+    
+    ids.forEach(id => {
+      const docRef = db.collection('stoplist').doc(id);
+      batch.delete(docRef);
+    });
+    
+    await batch.commit();
+    
+    // Перезагружаем стоп-лист
+    await loadStoplist();
+    showSuccess(`Удалено ${ids.length} коктейлей из стоп-листа`);
+  } catch (error) {
+    console.error('Ошибка массового удаления из стоп-листа:', error);
+    showError('Ошибка массового удаления из стоп-листа');
   }
 }
 
@@ -1059,24 +1057,31 @@ adminBtn?.addEventListener('click', async () => {
 addCocktailBtn?.addEventListener('click', () => {
   // Сброс формы (как у вас было)
   const formTitle = document.getElementById('formTitle');
+  console.log('🔍 При добавлении коктейля - элемент formTitle найден:', !!formTitle, formTitle ? formTitle.textContent : 'не найден');
   const cocktailId = document.getElementById('cocktailId');
   const cocktailName = document.getElementById('cocktailName');
   const cocktailIngredients = document.getElementById('cocktailIngredients');
   const cocktailMood = document.getElementById('cocktailMood');
   const cocktailAlcohol = document.getElementById('cocktailAlcohol');
+  const cocktailCategory = document.getElementById('cocktailCategory');
   const previewImage = document.getElementById('previewImage');
 
-  if (formTitle) formTitle.innerHTML = '<i class="fas fa-cocktail"></i> Добавить коктейль';
+  if (formTitle) {
+    formTitle.innerHTML = '<i class="fas fa-cocktail"></i> Добавить коктейль';
+    console.log('✅ Установлен заголовок: Добавить коктейль');
+  }
   if (cocktailId) cocktailId.value = '';
   if (cocktailName) cocktailName.value = '';
   if (cocktailIngredients) cocktailIngredients.value = '';
   if (cocktailMood) cocktailMood.value = '';
   if (cocktailAlcohol) cocktailAlcohol.value = '';
+  if (cocktailCategory) cocktailCategory.value = '';
   if (previewImage) {
     previewImage.style.display = 'none';
     previewImage.src = '';
   }
   // Открываем модальное окно формы коктейля
+  console.log('🔍 Перед открытием формы коктейля - заголовок:', formTitle ? formTitle.innerHTML : 'formTitle не найден');
   openModal(cocktailFormModal); 
 });
 
@@ -1278,19 +1283,25 @@ function editCocktail(id) {
   const cocktail = cocktailsData.find(c => c.id === id);
   if (cocktail) {
     const formTitle = document.getElementById('formTitle');
+    console.log('🔍 При редактировании коктейля - элемент formTitle найден:', !!formTitle, formTitle ? formTitle.textContent : 'не найден');
     const cocktailId = document.getElementById('cocktailId');
     const cocktailName = document.getElementById('cocktailName');
     const cocktailIngredients = document.getElementById('cocktailIngredients');
     const cocktailMood = document.getElementById('cocktailMood');
     const cocktailAlcohol = document.getElementById('cocktailAlcohol');
+    const cocktailCategory = document.getElementById('cocktailCategory');
     const previewImage = document.getElementById('previewImage');
 
-    if (formTitle) formTitle.innerHTML = '<i class="fas fa-edit"></i> Редактировать коктейль';
+    if (formTitle) {
+      formTitle.innerHTML = '<i class="fas fa-edit"></i> Редактировать коктейль';
+      console.log('✅ Установлен заголовок: Редактировать коктейль');
+    }
     if (cocktailId) cocktailId.value = cocktail.id;
     if (cocktailName) cocktailName.value = cocktail.name;
     if (cocktailIngredients) cocktailIngredients.value = cocktail.ingredients || '';
     if (cocktailMood) cocktailMood.value = cocktail.mood || '';
     if (cocktailAlcohol) cocktailAlcohol.value = cocktail.alcohol || '';
+    if (cocktailCategory) cocktailCategory.value = cocktail.category || 'signature';
 
     if (cocktail.image) {
       if (previewImage) {
@@ -1303,6 +1314,7 @@ function editCocktail(id) {
       }
     }
     
+    console.log('🔍 Перед открытием формы редактирования - заголовок:', formTitle ? formTitle.innerHTML : 'formTitle не найден');
     openModal(cocktailFormModal); // Используем новую функцию
   }
 }
@@ -1313,6 +1325,12 @@ async function deleteCocktail(id) {
     try {
       await db.collection('cocktails').doc(id).delete();
       await loadCocktails();
+      
+      // Обновляем админский список после удаления
+      if (isAdmin) {
+        updateAdminCocktailsList();
+      }
+      
       showSuccess('Коктейль успешно удалён');
     } catch (error) {
       console.error('Ошибка удаления коктейля:', error);
@@ -1330,6 +1348,7 @@ cocktailForm?.addEventListener('submit', async (e) => {
   const cocktailIngredients = document.getElementById('cocktailIngredients');
   const cocktailMood = document.getElementById('cocktailMood');
   const cocktailAlcohol = document.getElementById('cocktailAlcohol');
+  const cocktailCategory = document.getElementById('cocktailCategory');
   const cocktailImage = document.getElementById('cocktailImage');
 
   if (!cocktailName || !cocktailIngredients) {
@@ -1342,6 +1361,7 @@ cocktailForm?.addEventListener('submit', async (e) => {
   const ingredients = cocktailIngredients.value;
   const mood = cocktailMood ? cocktailMood.value : '';
   const alcohol = cocktailAlcohol ? cocktailAlcohol.value : '';
+  const category = cocktailCategory ? cocktailCategory.value : '';
   const imageFile = cocktailImage ? cocktailImage.files[0] : null;
   
   try {
@@ -1360,6 +1380,7 @@ cocktailForm?.addEventListener('submit', async (e) => {
       ingredients: ingredients,
       mood: mood,
       alcohol: alcohol ? parseInt(alcohol) : null,
+      category: category || 'signature', // По умолчанию авторский, если не выбрано
       updatedAt: new Date()
     };
     
@@ -1382,6 +1403,11 @@ cocktailForm?.addEventListener('submit', async (e) => {
     
     closeModal(cocktailFormModal); // Используем новую функцию
     await loadCocktails();
+    
+    // Обновляем админский список после изменения
+    if (isAdmin) {
+      updateAdminCocktailsList();
+    }
     showSuccess(id ? 'Коктейль успешно обновлён' : 'Коктейль успешно добавлен');
     
   } catch (error) {
@@ -1424,16 +1450,39 @@ addToStoplist?.addEventListener('click', async () => {
     return;
   }
   
+  // Проверяем, не добавлен ли уже этот коктейль в стоп-лист
+  const alreadyInStoplist = stoplistData.some(item => item.cocktailName === cocktailName);
+  if (alreadyInStoplist) {
+    showError('Этот коктейль уже в стоп-листе');
+    return;
+  }
+  
+  // Показываем подтверждение
+  const confirmed = confirm(
+    `Вы уверены, что хотите добавить коктейль "${cocktailName}" в стоп-лист?\n\n` +
+    `Причина: ${reason}\n\n` +
+    `Это действие сделает коктейль недоступным для заказа.`
+  );
+  
+  if (!confirmed) {
+    return;
+  }
+  
   try {
     await db.collection('stoplist').add({
       cocktailName: cocktailName,
       reason: reason,
-      timestamp: new Date().toLocaleString('ru-RU')
+      timestamp: new Date().toLocaleString('ru-RU'),
+      addedBy: isAdmin ? 'admin' : 'user'
     });
     
+    // Очищаем поля
     stopReason.value = '';
+    stoplistCocktails.value = '';
+    
+    // Перезагружаем стоп-лист и обновляем селект
     await loadStoplist();
-    showSuccess('Коктейль добавлен в стоп-лист');
+    showSuccess(`Коктейль "${cocktailName}" добавлен в стоп-лист`);
   } catch (error) {
     console.error('Ошибка добавления в стоп-лист:', error);
     showError('Ошибка добавления в стоп-лист');
@@ -1443,9 +1492,25 @@ addToStoplist?.addEventListener('click', async () => {
 // Удаление из стоп-листа
 async function removeFromStoplist(id) {
   try {
+    // Получаем информацию о коктейле перед удалением
+    const stoplistItem = stoplistData.find(item => item.id === id);
+    const cocktailName = stoplistItem ? stoplistItem.cocktailName : 'коктейль';
+    const reason = stoplistItem ? stoplistItem.reason : '';
+    
+    // Показываем подтверждение
+    const confirmed = confirm(
+      `Вы уверены, что хотите удалить коктейль "${cocktailName}" из стоп-листа?\n\n` +
+      `Причина добавления: ${reason}\n\n` +
+      `Это действие сделает коктейль снова доступным для заказа.`
+    );
+    
+    if (!confirmed) {
+      return;
+    }
+    
     await db.collection('stoplist').doc(id).delete();
     await loadStoplist();
-    showSuccess('Коктейль удалён из стоп-листа');
+    showSuccess(`Коктейль "${cocktailName}" удалён из стоп-листа`);
   } catch (error) {
     console.error('Ошибка удаления из стоп-листа:', error);
     showError('Ошибка удаления из стоп-листа');
@@ -1719,15 +1784,16 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
     };
     
     const statusTexts = {
-      'confirmed': 'Подтвержден',
-      'preparing': 'Готовится',
-      'ready': 'Готов',
-      'completed': 'Выполнен',
-      'cancelled': 'Отменен'
+      'confirmed': 'подтвержден',
+      'preparing': 'готовится',
+      'ready': 'готов',
+      'completed': 'выполнен',
+      'cancelled': 'отменен'
     };
     
     const emoji = statusEmojis[newStatus] || '📝';
     const statusText = statusTexts[newStatus] || newStatus;
+    const cocktailName = orderData.name || 'Неизвестный коктейль';
     
     // Настраиваем цвета и иконки в зависимости от статуса
     switch(newStatus) {
@@ -1753,9 +1819,9 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
         break;
     }
     
-    // Показываем только статус заказа
-    message = `${emoji} ${statusText}`;
-    duration = 4000;
+    // Новый формат сообщения: "Ваш заказ [коктейль] [статус]"
+    message = `Ваш заказ "${cocktailName}" ${statusText}`;
+    duration = 5000; // Увеличиваем время показа для лучшего восприятия
   }
   
   // Создаем красивое уведомление
@@ -1763,13 +1829,25 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
   
   const notification = document.createElement('div');
   notification.className = 'status-update-notification';
+  
+  // Разбиваем сообщение на части для лучшего отображения
+  const cocktailName = orderData?.name || 'Неизвестный коктейль';
+  const statusText = orderData && newStatus ? 
+    (newStatus === 'confirmed' ? 'подтвержден' :
+     newStatus === 'preparing' ? 'готовится' :
+     newStatus === 'ready' ? 'готов' :
+     newStatus === 'completed' ? 'выполнен' :
+     newStatus === 'cancelled' ? 'отменен' : newStatus) : 'обновлен';
+  
   notification.innerHTML = `
     <div class="notification-content">
       <div class="notification-icon">
         <i class="${icon}"></i>
       </div>
       <div class="notification-text">
-        <div class="notification-title">${message}</div>
+        <div class="notification-title">Ваш заказ</div>
+        <div class="notification-cocktail">"${cocktailName}"</div>
+        <div class="notification-status">${statusText}</div>
       </div>
       <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
         <i class="fas fa-times"></i>
@@ -1795,8 +1873,8 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
     flex-direction: column !important;
     font-family: 'Inter', sans-serif !important;
     font-weight: 500 !important;
-    min-width: 280px !important;
-    max-width: 350px !important;
+    min-width: 320px !important;
+    max-width: 400px !important;
     backdrop-filter: blur(20px) !important;
     border: 1px solid rgba(255,255,255,0.2) !important;
     overflow: hidden !important;
@@ -1849,6 +1927,31 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
   
   const title = notification.querySelector('.notification-title');
   title.style.cssText = `
+    font-weight: 500 !important;
+    font-size: 0.9rem !important;
+    line-height: 1.2 !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+    visibility: visible !important;
+    opacity: 0.9 !important;
+    color: white !important;
+    margin-bottom: 2px !important;
+  `;
+  
+  const cocktail = notification.querySelector('.notification-cocktail');
+  cocktail.style.cssText = `
+    font-weight: 700 !important;
+    font-size: 1.1rem !important;
+    line-height: 1.3 !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    color: white !important;
+    margin-bottom: 2px !important;
+    font-style: italic !important;
+  `;
+  
+  const status = notification.querySelector('.notification-status');
+  status.style.cssText = `
     font-weight: 600 !important;
     font-size: 1rem !important;
     line-height: 1.3 !important;
@@ -1856,6 +1959,7 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
     visibility: visible !important;
     opacity: 1 !important;
     color: white !important;
+    text-transform: capitalize !important;
   `;
   
   const closeBtn = notification.querySelector('.notification-close');
@@ -2888,14 +2992,28 @@ function testSingleNotification(status = 'confirmed') {
     return;
   }
   
+  // Список реальных коктейлей для тестирования
+  const testCocktails = [
+    'Мохито',
+    'Космополитен', 
+    'Маргарита',
+    'Пина Колада',
+    'Дайкири',
+    'Мартини',
+    'Лонг Айленд',
+    'Б-52'
+  ];
+  
+  const randomCocktail = testCocktails[Math.floor(Math.random() * testCocktails.length)];
+  
   const testOrder = {
     id: 'test-single',
-    name: 'Тестовый коктейль',
+    name: randomCocktail,
     status: status,
     userId: currentUser.uid
   };
   
-  console.log('🧪 Тестирование одного уведомления:', status);
+  console.log('🧪 Тестирование уведомления:', randomCocktail, '-', status);
   showStatusUpdateNotification(testOrder, status);
 }
 
@@ -2925,12 +3043,17 @@ function checkListenerStatus() {
 function forceShowNotification(status = 'confirmed') {
   console.log('🔧 Принудительный показ уведомления:', status);
   
+  const testCocktails = ['Мохито', 'Космополитен', 'Маргарита', 'Пина Колада'];
+  const randomCocktail = testCocktails[Math.floor(Math.random() * testCocktails.length)];
+  
   // Создаем простое уведомление для тестирования
   const notification = document.createElement('div');
   notification.id = 'force-notification-test';
   notification.innerHTML = `
-    <div style="padding: 20px; background: red; color: white; font-size: 20px; font-weight: bold;">
-      ТЕСТ УВЕДОМЛЕНИЯ: ${status}
+    <div style="padding: 20px; background: red; color: white; font-size: 18px; font-weight: bold; text-align: center;">
+      <div style="font-size: 16px; margin-bottom: 5px;">Ваш заказ</div>
+      <div style="font-size: 20px; font-style: italic; margin-bottom: 5px;">"${randomCocktail}"</div>
+      <div style="font-size: 18px; text-transform: capitalize;">${status}</div>
     </div>
   `;
   
@@ -2951,7 +3074,7 @@ function forceShowNotification(status = 'confirmed') {
     visibility: visible !important;
     opacity: 1 !important;
     pointer-events: auto !important;
-    width: 300px !important;
+    width: 350px !important;
     height: auto !important;
   `;
   
@@ -3013,6 +3136,7 @@ async function addTestCocktails() {
         ingredients: "Белый ром, свежая мята, лайм, сахар, содовая",
         mood: "Освежающий и бодрящий",
         alcohol: 15,
+        category: "classic",
         createdAt: new Date()
       },
       {
@@ -3020,6 +3144,7 @@ async function addTestCocktails() {
         ingredients: "Текила, лаймовый сок, трипл-сек, соль",
         mood: "Классический и элегантный",
         alcohol: 20,
+        category: "classic",
         createdAt: new Date()
       },
       {
@@ -3027,6 +3152,7 @@ async function addTestCocktails() {
         ingredients: "Водка, клюквенный сок, лайм, трипл-сек",
         mood: "Современный и стильный",
         alcohol: 18,
+        category: "classic",
         createdAt: new Date()
       },
       {
@@ -3034,6 +3160,7 @@ async function addTestCocktails() {
         ingredients: "Белый ром, кокосовое молоко, ананасовый сок",
         mood: "Тропический и расслабляющий",
         alcohol: 12,
+        category: "classic",
         createdAt: new Date()
       },
       {
@@ -3041,6 +3168,7 @@ async function addTestCocktails() {
         ingredients: "Водка, кофейный ликер, сливки",
         mood: "Кремовый и уютный",
         alcohol: 16,
+        category: "classic",
         createdAt: new Date()
       },
       {
@@ -3048,6 +3176,39 @@ async function addTestCocktails() {
         ingredients: "Белый ром, лаймовый сок, сахар",
         mood: "Простой и изысканный",
         alcohol: 22,
+        category: "classic",
+        createdAt: new Date()
+      },
+      {
+        name: "Огненный Шот",
+        ingredients: "Текила, табаско, соль",
+        mood: "Острый и бодрящий",
+        alcohol: 40,
+        category: "shots",
+        createdAt: new Date()
+      },
+      {
+        name: "Б-52",
+        ingredients: "Кофейный ликер, ирландский крем, тройной сек",
+        mood: "Слоистый и сладкий",
+        alcohol: 25,
+        category: "shots",
+        createdAt: new Date()
+      },
+      {
+        name: "Асафьев Спешл",
+        ingredients: "Джин, лимонный сок, мед, розмарин",
+        mood: "Авторский и уникальный",
+        alcohol: 18,
+        category: "signature",
+        createdAt: new Date()
+      },
+      {
+        name: "Золотой Закат",
+        ingredients: "Водка, апельсиновый сок, гренадин, золотая пыльца",
+        mood: "Роскошный и загадочный",
+        alcohol: 16,
+        category: "signature",
         createdAt: new Date()
       }
     ];
@@ -3069,7 +3230,388 @@ async function addTestCocktails() {
 
 // Инициализация функций
 initThemeToggle();
-initSwipe();
+
+// Инициализация вкладок категорий
+function initCategoryTabs() {
+  const categoryTabs = document.querySelectorAll('.category-tab');
+  
+  categoryTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const category = tab.getAttribute('data-category');
+      switchCategory(category);
+      
+      // Обновляем активную вкладку
+      categoryTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+    });
+  });
+}
+
+// Переключение категории
+function switchCategory(category) {
+  currentCategory = category;
+  filterCocktailsByCategory();
+}
+
+// Фильтрация коктейлей по категории
+function filterCocktailsByCategory() {
+  const cards = document.querySelectorAll('.cocktail-card');
+  
+  cards.forEach(card => {
+    const cocktailName = card.getAttribute('data-name');
+    const cocktail = cocktailsData.find(c => c.name === cocktailName);
+    
+    if (!cocktail) return;
+    
+    const shouldShow = shouldShowCocktail(cocktail, currentCategory);
+    
+    if (shouldShow) {
+      card.style.display = 'block';
+      card.style.animation = 'fadeInUp 0.6s ease forwards';
+    } else {
+      card.style.display = 'none';
+    }
+  });
+}
+
+// Определение, должен ли коктейль отображаться в данной категории
+function shouldShowCocktail(cocktail, category) {
+  // Определяем категорию коктейля на основе его характеристик
+  const cocktailCategory = getCocktailCategory(cocktail);
+  return cocktailCategory === category;
+}
+
+// Определение категории коктейля
+function getCocktailCategory(cocktail) {
+  // Если категория уже задана в базе данных, используем её
+  if (cocktail.category) {
+    return cocktail.category;
+  }
+  
+  const name = cocktail.name.toLowerCase();
+  const ingredients = (cocktail.ingredients || '').toLowerCase();
+  const alcohol = cocktail.alcohol || 0;
+  
+  // Шоты - крепкие коктейли (обычно 25%+ алкоголя)
+  if (alcohol >= 25) {
+    return 'shots';
+  }
+  
+  // Классические коктейли - известные традиционные рецепты
+  const classicCocktails = [
+    'мохито', 'маргарита', 'космополитен', 'пина колада', 'джин тоник',
+    'виски сауэр', 'май тай', 'лонг айленд', 'секс на пляже', 'кровавая мэри',
+    'негрони', 'апероль шприц', 'джин физз', 'том коллинз', 'виски кола',
+    'ром кола', 'водка с тоником', 'джин с тоником', 'текила санрайз',
+    'белый русский', 'черный русский', 'мартини', 'манихаттен', 'дайкири'
+  ];
+  
+  if (classicCocktails.some(classic => name.includes(classic))) {
+    return 'classic';
+  }
+  
+  // Авторские коктейли - все остальные
+  return 'signature';
+}
+
+// Инициализация фильтров админки
+function initAdminFilters() {
+  const adminFilterBtns = document.querySelectorAll('.admin-filter-btn');
+  
+  adminFilterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const filter = btn.getAttribute('data-admin-filter');
+      switchAdminFilter(filter);
+      
+      // Обновляем активную кнопку
+      adminFilterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+}
+
+// Переключение фильтра админки
+function switchAdminFilter(filter) {
+  currentAdminFilter = filter;
+  filterAdminCocktails();
+}
+
+// Фильтрация коктейлей в админке
+function filterAdminCocktails() {
+  const adminCocktailItems = document.querySelectorAll('.admin-cocktail-item');
+  
+  adminCocktailItems.forEach(item => {
+    const cocktailName = item.getAttribute('data-name');
+    const cocktail = cocktailsData.find(c => c.name === cocktailName);
+    
+    if (!cocktail) return;
+    
+    const shouldShow = shouldShowCocktail(cocktail, currentAdminFilter);
+    
+    if (shouldShow) {
+      item.style.display = 'block';
+    } else {
+      item.style.display = 'none';
+    }
+  });
+}
+
+// Обновление списка коктейлей в админке
+function updateAdminCocktailsList() {
+  const cocktailsList = document.getElementById('cocktailsList');
+  if (!cocktailsList) return;
+  
+  cocktailsList.innerHTML = '';
+  
+  cocktailsData.forEach(cocktail => {
+    const category = getCocktailCategory(cocktail);
+    const categoryName = getCategoryDisplayName(category);
+    const categoryIcon = getCategoryIcon(category);
+    
+    const adminCocktailItem = document.createElement('div');
+    adminCocktailItem.className = 'admin-cocktail-item';
+    adminCocktailItem.setAttribute('data-name', cocktail.name);
+    adminCocktailItem.setAttribute('data-category', category);
+    
+    adminCocktailItem.innerHTML = `
+      <div class="admin-cocktail-info">
+        <div class="admin-cocktail-header">
+          <h5>${cocktail.name}</h5>
+          <div class="admin-cocktail-category">
+            <div class="category-badge category-badge-${category}">
+              <i class="${categoryIcon}"></i>
+              <span>${categoryName}</span>
+            </div>
+            <button class="change-category-btn" data-id="${cocktail.id}" data-current="${category}" title="Изменить категорию">
+              <i class="fas fa-exchange-alt"></i>
+            </button>
+          </div>
+        </div>
+        <div class="admin-cocktail-details">
+          <p><strong>Состав:</strong> ${cocktail.ingredients || 'Не указан'}</p>
+          <p><strong>Настроение:</strong> ${cocktail.mood || 'Не указано'}</p>
+          <p><strong>Крепость:</strong> ${cocktail.alcohol ? cocktail.alcohol + '%' : 'Не указана'}</p>
+        </div>
+      </div>
+      <div class="admin-cocktail-actions">
+        <button class="edit-btn" data-id="${cocktail.id}" title="Редактировать">
+          <i class="fas fa-edit"></i>
+        </button>
+        <button class="delete-btn" data-id="${cocktail.id}" title="Удалить">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    `;
+    
+    cocktailsList.appendChild(adminCocktailItem);
+  });
+  
+  // Добавляем обработчики для кнопок редактирования и удаления
+  document.querySelectorAll('.admin-cocktail-item .edit-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      editCocktail(id);
+    });
+  });
+  
+  document.querySelectorAll('.admin-cocktail-item .delete-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      deleteCocktail(id);
+    });
+  });
+  
+  // Добавляем обработчики для кнопок изменения категории
+  document.querySelectorAll('.admin-cocktail-item .change-category-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      const currentCategory = btn.getAttribute('data-current');
+      showCategoryChangeModal(id, currentCategory);
+    });
+  });
+  
+}
+
+
+
+
+// Применяем текущий фильтр
+filterAdminCocktails();
+
+// Показать модальное окно изменения категории
+function showCategoryChangeModal(cocktailId, currentCategory) {
+  const cocktail = cocktailsData.find(c => c.id === cocktailId);
+  if (!cocktail) return;
+  
+  // Создаем модальное окно
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-content category-change-modal">
+      <div class="modal-header">
+        <h3>Изменить категорию коктейля</h3>
+        <button class="modal-close" type="button">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="cocktail-info">
+          <h4>${cocktail.name}</h4>
+          <p>Текущая категория: <span class="current-category">${getCategoryDisplayName(currentCategory)}</span></p>
+        </div>
+        <div class="category-options">
+          <h5>Выберите новую категорию:</h5>
+          <div class="category-options-list">
+            <div class="category-option-item ${currentCategory === 'classic' ? 'current' : ''}" data-category="classic">
+              <div class="category-option-badge category-badge-classic">
+                <i class="fas fa-crown"></i>
+              </div>
+              <div class="category-option-content">
+                <span class="category-option-name">Классические</span>
+                <span class="category-option-desc">Традиционные рецепты</span>
+              </div>
+              ${currentCategory === 'classic' ? '<div class="current-indicator">Текущая</div>' : ''}
+            </div>
+            <div class="category-option-item ${currentCategory === 'signature' ? 'current' : ''}" data-category="signature">
+              <div class="category-option-badge category-badge-signature">
+                <i class="fas fa-star"></i>
+              </div>
+              <div class="category-option-content">
+                <span class="category-option-name">Авторские</span>
+                <span class="category-option-desc">Уникальные коктейли</span>
+              </div>
+              ${currentCategory === 'signature' ? '<div class="current-indicator">Текущая</div>' : ''}
+            </div>
+            <div class="category-option-item ${currentCategory === 'shots' ? 'current' : ''}" data-category="shots">
+              <div class="category-option-badge category-badge-shots">
+                <i class="fas fa-bolt"></i>
+              </div>
+              <div class="category-option-content">
+                <span class="category-option-name">Шоты</span>
+                <span class="category-option-desc">Крепкие коктейли</span>
+              </div>
+              ${currentCategory === 'shots' ? '<div class="current-indicator">Текущая</div>' : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" type="button" data-action="cancel">Отмена</button>
+        <button class="btn btn-primary" type="button" data-action="save" disabled>Сохранить</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Добавляем обработчики событий
+  const closeBtn = modal.querySelector('.modal-close');
+  const cancelBtn = modal.querySelector('[data-action="cancel"]');
+  const saveBtn = modal.querySelector('[data-action="save"]');
+  const categoryOptions = modal.querySelectorAll('.category-option-item');
+  
+  let selectedCategory = null;
+  
+  // Обработчик закрытия модального окна
+  const closeModal = () => {
+    document.body.removeChild(modal);
+  };
+  
+  closeBtn.addEventListener('click', closeModal);
+  cancelBtn.addEventListener('click', closeModal);
+  
+  // Обработчик клика вне модального окна
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closeModal();
+    }
+  });
+  
+  // Обработчики выбора категории
+  categoryOptions.forEach(option => {
+    option.addEventListener('click', () => {
+      const category = option.getAttribute('data-category');
+      
+      // Убираем выделение с других опций
+      categoryOptions.forEach(opt => opt.classList.remove('selected'));
+      
+      // Выделяем выбранную опцию
+      option.classList.add('selected');
+      selectedCategory = category;
+      
+      // Активируем кнопку сохранения
+      saveBtn.disabled = false;
+    });
+  });
+  
+  // Обработчик сохранения
+  saveBtn.addEventListener('click', async () => {
+    if (!selectedCategory || selectedCategory === currentCategory) {
+      return;
+    }
+    
+    try {
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Сохранение...';
+      
+      // Обновляем категорию в базе данных
+      await db.collection('cocktails').doc(cocktailId).update({
+        category: selectedCategory,
+        updatedAt: new Date()
+      });
+      
+      // Обновляем локальные данные
+      cocktail.category = selectedCategory;
+      
+      // Обновляем отображение
+      await loadCocktails();
+      updateAdminCocktailsList();
+      
+      // Показываем уведомление об успехе
+      showSuccess(`Категория коктейля "${cocktail.name}" изменена на "${getCategoryDisplayName(selectedCategory)}"`);
+      
+      // Закрываем модальное окно
+      closeModal();
+      
+    } catch (error) {
+      console.error('Ошибка изменения категории:', error);
+      showError('Ошибка изменения категории коктейля');
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = 'Сохранить';
+    }
+  });
+  
+  // Показываем модальное окно
+  setTimeout(() => {
+    modal.classList.add('show');
+  }, 10);
+}
+
+// Получение отображаемого названия категории
+function getCategoryDisplayName(category) {
+  const names = {
+    'classic': 'Классические',
+    'signature': 'Авторские',
+    'shots': 'Шоты'
+  };
+  return names[category] || 'Неизвестно';
+}
+
+// Получение иконки категории
+function getCategoryIcon(category) {
+  const icons = {
+    'classic': 'fas fa-crown',
+    'signature': 'fas fa-star',
+    'shots': 'fas fa-bolt'
+  };
+  return icons[category] || 'fas fa-question';
+}
+
+
+
 
 // Загружаем начальные данные последовательно, чтобы статусы стоп-листа применились к карточкам
 (async () => {
@@ -3085,6 +3627,12 @@ initSwipe();
     console.log('🔍 Проверяем статус системы...');
     await monitorSystem();
     
+    console.log('🏷️ Инициализируем вкладки категорий...');
+    initCategoryTabs();
+    
+    console.log('🔧 Инициализируем фильтры админки...');
+    initAdminFilters();
+    
     console.log('✅ Инициализация завершена');
   } catch (error) {
     console.error('❌ Ошибка инициализации:', error);
@@ -3093,3 +3641,6 @@ initSwipe();
   // Периодическая проверка системы каждые 5 минут
   setInterval(monitorSystem, 5 * 60 * 1000);
 })();
+
+// Глобальная функция для тестирования селектора категорий (доступна в консоли)
+window.testCategorySelector = testCategorySelector;

@@ -126,6 +126,23 @@
         <div class="tab-content active" id="cocktails-tab">
           <h4>Управление коктейлями</h4>
           <button id="addCocktailBtn" class="admin-btn"><i class="fas fa-plus"></i> Добавить коктейль</button>
+          
+          <!-- Фильтры категорий для админки -->
+          <div class="admin-category-filters">
+            <h5><i class="fas fa-filter"></i> Фильтр по категориям</h5>
+        <div class="admin-filter-buttons">
+          <button class="admin-filter-btn active" data-admin-filter="classic">
+            <i class="fas fa-crown"></i> Классические
+          </button>
+          <button class="admin-filter-btn" data-admin-filter="signature">
+            <i class="fas fa-star"></i> Авторские
+          </button>
+          <button class="admin-filter-btn" data-admin-filter="shots">
+            <i class="fas fa-bolt"></i> Шоты
+          </button>
+        </div>
+          </div>
+          
           <div id="cocktailsList" class="admin-list">
             <!-- Список коктейлей будет загружен сюда -->
           </div>
@@ -137,16 +154,72 @@
           </div>
         </div>
         <div class="tab-content" id="stoplist-tab">
-          <h4>Стоп-лист</h4>
-          <div id="stoplistContent">
-            <input type="text" id="stopReason" placeholder="Причина добавления в стоп-лист">
-            <select id="stoplistCocktails">
-              <!-- Опции будут загружены динамически -->
-            </select>
-            <button id="addToStoplist" class="admin-btn"><i class="fas fa-ban"></i> Добавить в стоп-лист</button>
+          <h4><i class="fas fa-ban"></i> Управление стоп-листом</h4>
+          
+          <!-- Форма добавления в стоп-лист -->
+          <div class="stoplist-add-section">
+            <h5><i class="fas fa-plus-circle"></i> Добавить коктейль в стоп-лист</h5>
+            <div class="stoplist-form">
+              <div class="form-group">
+                <label for="stoplistCocktails">Выберите коктейль:</label>
+                <select id="stoplistCocktails" class="form-select">
+                  <!-- Опции будут загружены динамически -->
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="stopReason">Причина добавления:</label>
+                <input type="text" id="stopReason" placeholder="Укажите причину добавления в стоп-лист" class="form-input">
+              </div>
+              <button id="addToStoplist" class="admin-btn primary">
+                <i class="fas fa-ban"></i> Добавить в стоп-лист
+              </button>
+            </div>
           </div>
-          <div id="currentStoplist" class="admin-list">
-            <!-- Текущий стоп-лист будет загружен сюда -->
+
+          <!-- Текущий стоп-лист -->
+          <div class="stoplist-current-section">
+            <div class="section-header">
+              <h5><i class="fas fa-list"></i> Текущий стоп-лист</h5>
+              <div class="stoplist-controls">
+                <div class="stoplist-stats" id="stoplistStats">
+                  <!-- Статистика будет загружена сюда -->
+                </div>
+                <div class="bulk-actions" id="bulkActions" style="display: none;">
+                  <button class="admin-btn danger" id="bulkRemoveBtn">
+                    <i class="fas fa-trash"></i> Удалить выбранные
+                  </button>
+                  <button class="admin-btn secondary" id="selectAllBtn">
+                    <i class="fas fa-check-square"></i> Выбрать все
+                  </button>
+                  <button class="admin-btn secondary" id="clearSelectionBtn">
+                    <i class="fas fa-square"></i> Снять выбор
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Поиск и фильтры -->
+            <div class="stoplist-filters">
+              <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="stoplistSearch" placeholder="Поиск по названию или причине..." class="form-input">
+              </div>
+              <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">
+                  <i class="fas fa-list"></i> Все
+                </button>
+                <button class="filter-btn" data-filter="admin">
+                  <i class="fas fa-user-shield"></i> Админ
+                </button>
+                <button class="filter-btn" data-filter="user">
+                  <i class="fas fa-user"></i> Пользователь
+                </button>
+              </div>
+            </div>
+            
+            <div id="currentStoplist" class="admin-list">
+              <!-- Текущий стоп-лист будет загружен сюда -->
+            </div>
           </div>
         </div>
         <div class="tab-content" id="monitoring-tab">
@@ -196,6 +269,15 @@
             <input type="number" id="cocktailAlcohol" min="0" max="100">
           </div>
           <div class="form-group">
+            <label>Категория:</label>
+            <select id="cocktailCategory" required>
+              <option value="">Выберите категорию</option>
+              <option value="classic">Классические</option>
+              <option value="signature">Авторские</option>
+              <option value="shots">Шоты</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label>Изображение:</label>
             <input type="file" id="cocktailImage" accept="image/*">
             <img id="previewImage" src="" alt="Предпросмотр" style="display:none; max-width: 200px; margin-top: 10px;">
@@ -219,6 +301,24 @@
         </div>
       </div>
     </div>
+    <!-- Вкладки категорий коктейлей -->
+    <div class="cocktails-categories">
+        <div class="categories-tabs">
+          <button class="category-tab active" data-category="classic">
+            <i class="fas fa-crown"></i>
+            <span>Классические</span>
+          </button>
+          <button class="category-tab" data-category="signature">
+            <i class="fas fa-star"></i>
+            <span>Авторские</span>
+          </button>
+          <button class="category-tab" data-category="shots">
+            <i class="fas fa-bolt"></i>
+            <span>Шоты</span>
+          </button>
+        </div>
+    </div>
+    
     <main class="cocktails-grid">
       <!-- Коктейли будут загружены сюда -->
     </main>
