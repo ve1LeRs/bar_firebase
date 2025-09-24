@@ -12,7 +12,7 @@ const TELEGRAM_BOT_TOKEN = "8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo";
 const TELEGRAM_CHAT_ID = "1743362083";
 
 // 🌐 WEBHOOK SERVER
-const WEBHOOK_SERVER_URL = "https://barwebhook-production.up.railway.app";
+const WEBHOOK_SERVER_URL = "https://web-production-72014.up.railway.app";
 
 // Инициализация Firebase
 const app = firebase.initializeApp(firebaseConfig);
@@ -492,6 +492,9 @@ auth.onAuthStateChanged(async user => {
     }
     userName.textContent = user.displayName || "Гость";
     userName.style.display = 'block';
+    
+    // Инициализируем глобальный listener для отслеживания изменений статусов
+    initGlobalOrderStatusListener();
   } else {
     loginBtn.style.display = 'inline-block';
     registerBtn.style.display = 'inline-block';
@@ -501,6 +504,13 @@ auth.onAuthStateChanged(async user => {
     userName.textContent = '';
     userName.style.display = 'none';
     isAdmin = false;
+    
+    // Отключаем глобальный listener при выходе
+    if (globalOrdersListener) {
+      globalOrdersListener();
+      globalOrdersListener = null;
+    }
+    lastOrderStatuses.clear();
   }
 });
 
@@ -653,6 +663,51 @@ async function loadStoplist() {
 // Real-time listener для заказов пользователя
 let userOrdersListener = null;
 
+// Глобальный listener для отслеживания изменений статусов заказов
+let globalOrdersListener = null;
+let lastOrderStatuses = new Map(); // Храним последние статусы заказов
+
+// Инициализация глобального listener'а для отслеживания изменений статусов
+function initGlobalOrderStatusListener() {
+  const currentUser = auth.currentUser;
+  if (!currentUser) return;
+  
+  // Отключаем предыдущий listener, если он есть
+  if (globalOrdersListener) {
+    globalOrdersListener();
+    globalOrdersListener = null;
+  }
+  
+  // Инициализируем listener для заказов текущего пользователя
+  globalOrdersListener = db.collection('orders')
+    .where('userId', '==', currentUser.uid)
+    .onSnapshot((snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'modified') {
+          const orderData = { id: change.doc.id, ...change.doc.data() };
+          const orderId = orderData.id;
+          const newStatus = orderData.status;
+          
+          // Проверяем, изменился ли статус
+          const lastStatus = lastOrderStatuses.get(orderId);
+          if (lastStatus && lastStatus !== newStatus) {
+            // Статус изменился, показываем уведомление
+            showStatusUpdateNotification(orderData, newStatus);
+          }
+          
+          // Обновляем последний статус
+          lastOrderStatuses.set(orderId, newStatus);
+        } else if (change.type === 'added') {
+          // Новый заказ - сохраняем его статус
+          const orderData = { id: change.doc.id, ...change.doc.data() };
+          lastOrderStatuses.set(orderData.id, orderData.status);
+        }
+      });
+    }, (error) => {
+      console.error('Ошибка глобального listener для заказов:', error);
+    });
+}
+
 // Загрузка истории заказов с real-time обновлениями
 async function loadOrderHistory(userId) {
   try {
@@ -703,9 +758,27 @@ async function loadOrderHistory(userId) {
           ordersList.appendChild(orderElement);
         });
         
-        // Показываем уведомление о обновлении статуса, если модальное окно открыто
-        if (ordersModal && ordersModal.style.display === 'block') {
-          showStatusUpdateNotification();
+        // Показываем уведомление о обновлении статуса для всех пользователей
+        // Проверяем, есть ли изменения в статусах заказов
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          // Находим заказы с обновленными статусами
+          userOrders.forEach(order => {
+            // Проверяем, изменился ли статус заказа
+            const orderElement = document.querySelector(`[data-order-id="${order.id}"]`);
+            if (orderElement) {
+              const currentStatusElement = orderElement.querySelector('.order-status');
+              if (currentStatusElement) {
+                const currentStatus = currentStatusElement.textContent;
+                const newStatus = getStatusText(order.status);
+                
+                // Если статус изменился, показываем уведомление
+                if (currentStatus !== newStatus) {
+                  showStatusUpdateNotification(order, order.status);
+                }
+              }
+            }
+          });
         }
       }, (error) => {
         console.error('Ошибка real-time listener для заказов:', error);
@@ -1139,6 +1212,11 @@ logoutBtn?.addEventListener('click', async () => {
     adminOrdersListener();
     adminOrdersListener = null;
   }
+  if (globalOrdersListener) {
+    globalOrdersListener();
+    globalOrdersListener = null;
+  }
+  lastOrderStatuses.clear();
   
   await auth.signOut();
 });
@@ -1556,14 +1634,74 @@ function showSuccess(message) {
 }
 
 // Уведомление об обновлении статуса заказа для пользователей
-function showStatusUpdateNotification() {
+function showStatusUpdateNotification(orderData = null, newStatus = null) {
+  // Определяем тип уведомления и иконку
+  let icon = 'fas fa-sync-alt';
+  let message = 'Статус заказа обновлен!';
+  let backgroundColor = '#27ae60';
+  let duration = 3000;
+  
+  if (orderData && newStatus) {
+    const statusEmojis = {
+      'confirmed': '✅',
+      'preparing': '👨‍🍳',
+      'ready': '🍸',
+      'completed': '🎉',
+      'cancelled': '❌'
+    };
+    
+    const statusTexts = {
+      'confirmed': 'Подтвержден',
+      'preparing': 'Готовится',
+      'ready': 'Готов',
+      'completed': 'Выполнен',
+      'cancelled': 'Отменен'
+    };
+    
+    const emoji = statusEmojis[newStatus] || '📝';
+    const statusText = statusTexts[newStatus] || newStatus;
+    
+    // Настраиваем цвета и иконки в зависимости от статуса
+    switch(newStatus) {
+      case 'confirmed':
+        icon = 'fas fa-check-circle';
+        backgroundColor = '#27ae60';
+        break;
+      case 'preparing':
+        icon = 'fas fa-utensils';
+        backgroundColor = '#f39c12';
+        break;
+      case 'ready':
+        icon = 'fas fa-glass-martini-alt';
+        backgroundColor = '#3498db';
+        break;
+      case 'completed':
+        icon = 'fas fa-trophy';
+        backgroundColor = '#9b59b6';
+        break;
+      case 'cancelled':
+        icon = 'fas fa-times-circle';
+        backgroundColor = '#e74c3c';
+        break;
+    }
+    
+    message = `${emoji} ${orderData.name} - ${statusText}`;
+    duration = 5000; // Увеличиваем время для более важных уведомлений
+  }
+  
   // Создаем временное уведомление
   const notification = document.createElement('div');
   notification.className = 'status-update-notification';
   notification.innerHTML = `
     <div class="notification-content">
-      <i class="fas fa-sync-alt"></i>
-      <span>Статус заказа обновлен!</span>
+      <i class="${icon}"></i>
+      <div class="notification-text">
+        <div class="notification-title">${message}</div>
+        ${orderData ? `<div class="notification-subtitle">${orderData.user} • ${new Date().toLocaleString('ru-RU')}</div>` : ''}
+      </div>
+      <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
+        <i class="fas fa-times"></i>
+      </button>
     </div>
   `;
   
@@ -1572,31 +1710,122 @@ function showStatusUpdateNotification() {
     position: fixed;
     top: 20px;
     right: 20px;
-    background: #27ae60;
+    background: ${backgroundColor};
     color: white;
     padding: 1rem 1.5rem;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
     z-index: 10000;
-    animation: slideInRight 0.3s ease;
+    animation: slideInRight 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.75rem;
     font-family: 'Inter', sans-serif;
     font-weight: 500;
+    min-width: 300px;
+    max-width: 400px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
   `;
+  
+  // Добавляем стили для содержимого
+  const content = notification.querySelector('.notification-content');
+  content.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+  `;
+  
+  const text = notification.querySelector('.notification-text');
+  text.style.cssText = `
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  `;
+  
+  const title = notification.querySelector('.notification-title');
+  title.style.cssText = `
+    font-weight: 600;
+    font-size: 0.95rem;
+    line-height: 1.2;
+  `;
+  
+  const subtitle = notification.querySelector('.notification-subtitle');
+  if (subtitle) {
+    subtitle.style.cssText = `
+      font-size: 0.8rem;
+      opacity: 0.9;
+      font-weight: 400;
+    `;
+  }
+  
+  const closeBtn = notification.querySelector('.notification-close');
+  closeBtn.style.cssText = `
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `;
+  
+  closeBtn.addEventListener('mouseenter', () => {
+    closeBtn.style.opacity = '1';
+  });
+  
+  closeBtn.addEventListener('mouseleave', () => {
+    closeBtn.style.opacity = '0.7';
+  });
   
   document.body.appendChild(notification);
   
-  // Удаляем уведомление через 3 секунды
+  // Звуковое уведомление (если поддерживается)
+  if (typeof Audio !== 'undefined') {
+    try {
+      // Создаем простой звук уведомления
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.1);
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.1);
+    } catch (e) {
+      console.log('Звуковое уведомление недоступно');
+    }
+  }
+  
+  // Вибрация (если поддерживается)
+  if (navigator.vibrate) {
+    navigator.vibrate([200, 100, 200]);
+  }
+  
+  // Автоматическое удаление уведомления
   setTimeout(() => {
-    notification.style.animation = 'slideOutRight 0.3s ease';
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    }, 300);
-  }, 3000);
+    if (notification.parentNode) {
+      notification.style.animation = 'slideOutRight 0.3s ease';
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification);
+        }
+      }, 300);
+    }
+  }, duration);
 }
 
 // Уведомление об обновлении статуса для админов
@@ -2099,6 +2328,35 @@ function displayTelegramInfo(webhookInfo = null) {
 }
 
 // === КОНЕЦ ФУНКЦИЙ МОНИТОРИНГА ===
+
+// === ФУНКЦИИ ДЛЯ ТЕСТИРОВАНИЯ УВЕДОМЛЕНИЙ ===
+
+// Функция для тестирования уведомлений (для разработки)
+function testNotifications() {
+  const testOrders = [
+    { id: 'test1', name: 'Мохито', user: 'Иван Петров', status: 'confirmed' },
+    { id: 'test2', name: 'Космополитен', user: 'Мария Сидорова', status: 'preparing' },
+    { id: 'test3', name: 'Маргарита', user: 'Алексей Козлов', status: 'ready' },
+    { id: 'test4', name: 'Пина Колада', user: 'Елена Волкова', status: 'completed' },
+    { id: 'test5', name: 'Белый Русский', user: 'Дмитрий Соколов', status: 'cancelled' }
+  ];
+  
+  console.log('🧪 Тестирование уведомлений...');
+  
+  testOrders.forEach((order, index) => {
+    setTimeout(() => {
+      showStatusUpdateNotification(order, order.status);
+      console.log(`✅ Показано уведомление: ${order.name} - ${order.status}`);
+    }, index * 2000); // Показываем каждое уведомление через 2 секунды
+  });
+}
+
+// Добавляем функцию в глобальную область для тестирования
+if (typeof window !== 'undefined') {
+  window.testNotifications = testNotifications;
+}
+
+// === КОНЕЦ ФУНКЦИЙ ДЛЯ ТЕСТИРОВАНИЯ ===
 
 // Инициализация функций
 initThemeToggle();

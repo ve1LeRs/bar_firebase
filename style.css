@@ -1,6 +1,56 @@
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap');
 
+/* Анимации для уведомлений */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes bounce {
+  0%, 20%, 53%, 80%, 100% {
+    transform: translate3d(0,0,0);
+  }
+  40%, 43% {
+    transform: translate3d(0, -8px, 0);
+  }
+  70% {
+    transform: translate3d(0, -4px, 0);
+  }
+  90% {
+    transform: translate3d(0, -2px, 0);
+  }
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -2279,28 +2329,115 @@ body.dark-theme .telegram-info code {
   top: 20px;
   right: 20px;
   z-index: 10000;
-  animation: slideInRight 0.3s ease;
+  animation: slideInRight 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1);
+  min-width: 300px;
+  max-width: 400px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
 }
 
 .status-update-notification {
-  background: #27ae60;
+  background: linear-gradient(135deg, #27ae60, #2ecc71);
   color: white;
 }
 
 .admin-status-update-notification {
-  background: #3498db;
+  background: linear-gradient(135deg, #3498db, #5dade2);
   color: white;
+}
+
+/* Стили для содержимого уведомлений */
+.notification-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 1rem 1.5rem;
+}
+
+.notification-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.notification-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+.notification-subtitle {
+  font-size: 0.8rem;
+  opacity: 0.9;
+  font-weight: 400;
+}
+
+.notification-close {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  opacity: 0.7;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.notification-close:hover {
+  opacity: 1;
+  background-color: rgba(255,255,255,0.1);
+}
+
+/* Анимации для иконок в уведомлениях */
+.status-update-notification .fas,
+.admin-status-update-notification .fas {
+  animation: pulse 2s infinite;
 }
 
 /* Темная тема для уведомлений */
 body.dark-theme .status-update-notification {
-  background: #2ecc71;
+  background: linear-gradient(135deg, #2ecc71, #27ae60);
   color: white;
 }
 
 body.dark-theme .admin-status-update-notification {
-  background: #5dade2;
+  background: linear-gradient(135deg, #5dade2, #3498db);
   color: white;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .status-update-notification,
+  .admin-status-update-notification {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    min-width: auto;
+    max-width: none;
+  }
+  
+  .notification-content {
+    padding: 0.75rem 1rem;
+  }
+  
+  .notification-title {
+    font-size: 0.9rem;
+  }
+  
+  .notification-subtitle {
+    font-size: 0.75rem;
+  }
 }
 
 /* ============= Управление модальными окнами ============= */
