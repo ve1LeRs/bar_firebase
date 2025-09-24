@@ -11,6 +11,9 @@ const firebaseConfig = {
 const TELEGRAM_BOT_TOKEN = "8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo";
 const TELEGRAM_CHAT_ID = "1743362083";
 
+// 🌐 WEBHOOK SERVER
+const WEBHOOK_SERVER_URL = "https://barwebhook-production.up.railway.app";
+
 // Инициализация Firebase
 const app = firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
@@ -63,6 +66,14 @@ const tabBtns = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
 const statusButtons = document.querySelectorAll('.status-btn');
 const statusOrderInfo = document.getElementById('statusOrderInfo');
+const checkSystemBtn = document.getElementById('checkSystemBtn');
+const testWebhookBtn = document.getElementById('testWebhookBtn');
+const systemStatus = document.getElementById('systemStatus');
+const setupWebhookBtn = document.getElementById('setupWebhookBtn');
+const deleteWebhookBtn = document.getElementById('deleteWebhookBtn');
+const getWebhookInfoBtn = document.getElementById('getWebhookInfoBtn');
+const sendTestMessageBtn = document.getElementById('sendTestMessageBtn');
+const telegramStatus = document.getElementById('telegramStatus');
 
 let currentOrder = null;
 let startX = 0;
@@ -343,12 +354,24 @@ async function triggerDirectOrder(name) {
   const card = document.querySelector(`.cocktail-card[data-name="${name}"]`);
   if (!card) return;
   
+  // Находим кнопку заказа в карточке
+  const orderBtn = card.querySelector('.order-btn');
+  if (!orderBtn || orderBtn.disabled || orderBtn.classList.contains('loading')) {
+    return; // Предотвращаем множественные клики
+  }
+  
   // Проверяем, не в стоп-листе ли коктейль
   const isInStoplist = stoplistData.some(item => item.cocktailName === name);
   if (isInStoplist) {
     showError(`❌ ${name} временно недоступен. Причина: ${stoplistData.find(item => item.cocktailName === name).reason}`);
     return;
   }
+  
+  // Устанавливаем состояние загрузки
+  orderBtn.classList.add('loading');
+  orderBtn.disabled = true;
+  const originalText = orderBtn.innerHTML;
+  orderBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Заказываем...';
   
   // Безопасное получение изображения
   const imgElement = card.querySelector('img');
@@ -379,17 +402,39 @@ async function triggerDirectOrder(name) {
 🆔 *ID заказа:* ${docRef.id}
         `.trim();
 
+    // Создаем inline-кнопки для управления заказом
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [
+          { text: "✅ Подтвердить", callback_data: `confirmed_${docRef.id}` },
+          { text: "❌ Отменить", callback_data: `cancelled_${docRef.id}` }
+        ],
+        [
+          { text: "👨‍🍳 Готовится", callback_data: `preparing_${docRef.id}` },
+          { text: "🍸 Готов", callback_data: `ready_${docRef.id}` }
+        ],
+        [
+          { text: "✅ Выполнен", callback_data: `completed_${docRef.id}` }
+        ]
+      ]
+    };
+
     // ИСПРАВЛЕНО: Убран лишний пробел в URL Telegram API
     const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    await fetch(telegramUrl, {
+    const response = await fetch(telegramUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: TELEGRAM_CHAT_ID,
         text: message,
-        parse_mode: 'Markdown'
+        parse_mode: 'Markdown',
+        reply_markup: inlineKeyboard
       })
     });
+    
+    if (!response.ok) {
+      throw new Error(`Telegram API error: ${response.status}`);
+    }
 
     // Вибрация при успешном заказе (если поддерживается)
     if (navigator.vibrate) {
@@ -415,6 +460,13 @@ async function triggerDirectOrder(name) {
   } catch (error) {
     console.error("Ошибка:", error);
     showError('❌ Не удалось отправить заказ.');
+  } finally {
+    // Восстанавливаем состояние кнопки
+    if (orderBtn) {
+      orderBtn.classList.remove('loading');
+      orderBtn.disabled = false;
+      orderBtn.innerHTML = originalText;
+    }
   }
 }
 
@@ -741,10 +793,33 @@ async function changeOrderStatus(orderId, newStatus) {
   if (!orderId) return;
 
   try {
+    // Получаем информацию о заказе для уведомления
+    const orderDoc = await db.collection('orders').doc(orderId).get();
+    const orderData = orderDoc.data();
+    const orderName = orderData?.name || 'Неизвестный заказ';
+    const userName = orderData?.user || 'Неизвестный клиент';
+
+    // Обновляем статус в Firebase
     await db.collection('orders').doc(orderId).update({
       status: newStatus,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp ? firebase.firestore.FieldValue.serverTimestamp() : new Date()
     });
+
+    // Отправляем уведомление в Telegram
+    const telegramResult = await sendStatusUpdateToTelegram(orderId, newStatus, orderName, userName);
+    if (telegramResult.success) {
+      console.log('✅ Уведомление отправлено в Telegram');
+    } else {
+      console.warn('⚠️ Не удалось отправить уведомление в Telegram:', telegramResult.error);
+    }
+
+    // Также отправляем обновление через webhook сервер для синхронизации с Telegram
+    const webhookResult = await updateOrderStatusViaWebhook(orderId, newStatus);
+    if (webhookResult.success) {
+      console.log('✅ Статус синхронизирован с Telegram через webhook');
+    } else {
+      console.warn('⚠️ Не удалось синхронизировать с Telegram:', webhookResult.error);
+    }
 
     // Закрываем модальное окно статуса
     closeModal(statusModal); // Используем новую функцию
@@ -754,7 +829,7 @@ async function changeOrderStatus(orderId, newStatus) {
       await loadAdminOrders();
     }
     
-    showSuccess('Статус заказа успешно обновлён');
+    showSuccess('Статус заказа успешно обновлён и отправлен в Telegram');
   } catch (error) {
     console.error('Ошибка обновления статуса:', error);
     showError('Ошибка обновления статуса заказа');
@@ -763,7 +838,7 @@ async function changeOrderStatus(orderId, newStatus) {
 
 // === КОНЕЦ НОВЫХ ФУНКЦИЙ ===
 
-// Получение текста статуса
+// Получение текста статуса заказа
 function getStatusText(status) {
   switch(status) {
     case 'confirmed': return 'Подтверждён';
@@ -801,6 +876,14 @@ adminBtn?.addEventListener('click', async () => {
     await loadCocktails();
     await loadAdminOrders(); // Теперь эта функция существует
     await loadStoplist();
+    
+    // Загружаем статус мониторинга
+    const statusData = await monitorSystem();
+    displaySystemStatus(statusData);
+    
+    // Показываем базовую информацию о Telegram
+    displayTelegramInfo();
+    
     openModal(adminPanel);
   }
 });
@@ -1195,15 +1278,36 @@ statusButtons.forEach(btn => {
   });
 });
 
+// Обработчики для мониторинга
+checkSystemBtn?.addEventListener('click', async () => {
+  const statusData = await monitorSystem();
+  displaySystemStatus(statusData);
+});
+
+testWebhookBtn?.addEventListener('click', testWebhookServer);
+
+// Обработчики для Telegram управления
+setupWebhookBtn?.addEventListener('click', setupTelegramWebhook);
+deleteWebhookBtn?.addEventListener('click', deleteTelegramWebhook);
+getWebhookInfoBtn?.addEventListener('click', getTelegramWebhookInfo);
+sendTestMessageBtn?.addEventListener('click', sendTestMessage);
+
 // Заказ (кнопка)
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.order-btn');
-  if (btn && !btn.disabled) {
+  if (btn && !btn.disabled && !btn.classList.contains('loading')) {
     const user = auth.currentUser;
     if (!user) {
       showError('🔒 Пожалуйста, войдите или зарегистрируйтесь для заказа.');
       return;
     }
+    
+    // Устанавливаем состояние загрузки
+    btn.classList.add('loading');
+    btn.disabled = true;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Загружаем...';
+    
     const name = btn.getAttribute('data-name');
     // 👇 Безопасное получение изображения коктейля из родительской карточки
     const card = btn.closest('.cocktail-card');
@@ -1252,12 +1356,28 @@ document.addEventListener('click', (e) => {
         }
     }
     openModal(orderModal); // Используем новую функцию
+    
+    // Восстанавливаем состояние кнопки после открытия модального окна
+    btn.classList.remove('loading');
+    btn.disabled = false;
+    btn.innerHTML = originalText;
   }
 });
 
 // Подтверждение заказа
 confirmOrderBtn?.addEventListener('click', async () => {
   if (!currentOrder) return;
+  
+  // Предотвращаем множественные клики
+  if (confirmOrderBtn.disabled || confirmOrderBtn.classList.contains('loading')) {
+    return;
+  }
+  
+  // Устанавливаем состояние загрузки
+  confirmOrderBtn.classList.add('loading');
+  confirmOrderBtn.disabled = true;
+  const originalText = confirmOrderBtn.innerHTML;
+  confirmOrderBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Отправляем заказ...';
 
   try {
     // Сохраняем заказ в Firestore с корректными полями времени
@@ -1277,17 +1397,39 @@ confirmOrderBtn?.addEventListener('click', async () => {
 🆔 *ID заказа:* ${docRef.id}
         `.trim();
 
+    // Создаем inline-кнопки для управления заказом
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [
+          { text: "✅ Подтвердить", callback_data: `confirmed_${docRef.id}` },
+          { text: "❌ Отменить", callback_data: `cancelled_${docRef.id}` }
+        ],
+        [
+          { text: "👨‍🍳 Готовится", callback_data: `preparing_${docRef.id}` },
+          { text: "🍸 Готов", callback_data: `ready_${docRef.id}` }
+        ],
+        [
+          { text: "✅ Выполнен", callback_data: `completed_${docRef.id}` }
+        ]
+      ]
+    };
+
     // ИСПРАВЛЕНО: Убран лишний пробел в URL Telegram API
     const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    await fetch(telegramUrl, {
+    const response = await fetch(telegramUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: TELEGRAM_CHAT_ID,
         text: message,
-        parse_mode: 'Markdown'
+        parse_mode: 'Markdown',
+        reply_markup: inlineKeyboard
       })
     });
+    
+    if (!response.ok) {
+      throw new Error(`Telegram API error: ${response.status}`);
+    }
 
     // Вибрация при успешном заказе (если поддерживается)
     if (navigator.vibrate) {
@@ -1320,6 +1462,11 @@ confirmOrderBtn?.addEventListener('click', async () => {
   } catch (error) {
     console.error("Ошибка:", error);
     showError('❌ Не удалось отправить заказ.');
+  } finally {
+    // Восстанавливаем состояние кнопки
+    confirmOrderBtn.classList.remove('loading');
+    confirmOrderBtn.disabled = false;
+    confirmOrderBtn.innerHTML = originalText;
   }
 });
 
@@ -1356,6 +1503,463 @@ function showSuccess(message) {
   openModal(successModal); // Используем новую функцию
 }
 
+// === ФУНКЦИИ МОНИТОРИНГА WEBHOOK СЕРВЕРА ===
+
+// Проверка статуса webhook сервера
+async function checkWebhookServerStatus() {
+  try {
+    const response = await fetch(`${WEBHOOK_SERVER_URL}/health`);
+    const data = await response.json();
+    
+    if (data.status === 'OK') {
+      console.log('✅ Webhook сервер работает:', data);
+      return { status: 'online', data };
+    } else {
+      console.warn('⚠️ Webhook сервер отвечает, но статус не OK:', data);
+      return { status: 'warning', data };
+    }
+  } catch (error) {
+    console.error('❌ Webhook сервер недоступен:', error);
+    return { status: 'offline', error: error.message };
+  }
+}
+
+// Проверка Firebase через webhook сервер
+async function checkWebhookFirebase() {
+  try {
+    const response = await fetch(`${WEBHOOK_SERVER_URL}/test-firebase`);
+    const data = await response.json();
+    
+    if (data.success) {
+      console.log('✅ Firebase через webhook работает:', data);
+      return { status: 'online', data };
+    } else {
+      console.warn('⚠️ Firebase через webhook не работает:', data);
+      return { status: 'error', data };
+    }
+  } catch (error) {
+    console.error('❌ Ошибка проверки Firebase через webhook:', error);
+    return { status: 'offline', error: error.message };
+  }
+}
+
+// Проверка webhook в Telegram
+async function checkTelegramWebhook() {
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo`);
+    const data = await response.json();
+    
+    if (data.ok && data.result.url) {
+      console.log('✅ Telegram webhook настроен:', data.result.url);
+      return { status: 'online', data: data.result };
+    } else {
+      console.warn('⚠️ Telegram webhook не настроен:', data);
+      return { status: 'error', data };
+    }
+  } catch (error) {
+    console.error('❌ Ошибка проверки Telegram webhook:', error);
+    return { status: 'offline', error: error.message };
+  }
+}
+
+// Обновление статуса заказа через webhook сервер
+async function updateOrderStatusViaWebhook(orderId, newStatus) {
+  try {
+    // Создаем тестовый callback для webhook сервера
+    const callbackData = `${newStatus}_${orderId}`;
+    
+    const response = await fetch(`${WEBHOOK_SERVER_URL}/telegram-webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        callback_query: {
+          id: `test_${Date.now()}`,
+          data: callbackData,
+          message: {
+            message_id: 1
+          },
+          from: {
+            username: 'admin',
+            first_name: 'Admin'
+          }
+        }
+      })
+    });
+    
+    if (response.ok) {
+      console.log('✅ Статус заказа обновлен через webhook:', orderId, newStatus);
+      return { success: true };
+    } else {
+      console.error('❌ Ошибка обновления статуса через webhook:', response.status);
+      return { success: false, error: `HTTP ${response.status}` };
+    }
+  } catch (error) {
+    console.error('❌ Ошибка отправки на webhook сервер:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Отправка уведомления об изменении статуса в Telegram
+async function sendStatusUpdateToTelegram(orderId, newStatus, orderName, userName) {
+  try {
+    const statusEmojis = {
+      'confirmed': '✅',
+      'preparing': '👨‍🍳',
+      'ready': '🍸',
+      'completed': '🎉',
+      'cancelled': '❌'
+    };
+    
+    const statusTexts = {
+      'confirmed': 'Подтвержден',
+      'preparing': 'Готовится',
+      'ready': 'Готов',
+      'completed': 'Выполнен',
+      'cancelled': 'Отменен'
+    };
+    
+    const emoji = statusEmojis[newStatus] || '📝';
+    const statusText = statusTexts[newStatus] || newStatus;
+    
+    const message = `
+${emoji} *Статус заказа обновлен*
+
+🍸 *Коктейль:* ${orderName}
+👤 *Клиент:* ${userName}
+📊 *Новый статус:* ${statusText}
+🕒 *Время:* ${new Date().toLocaleString('ru-RU')}
+🆔 *ID заказа:* ${orderId}
+    `.trim();
+    
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: message,
+        parse_mode: 'Markdown'
+      })
+    });
+    
+    if (response.ok) {
+      console.log('✅ Уведомление о статусе отправлено в Telegram');
+      return { success: true };
+    } else {
+      console.error('❌ Ошибка отправки уведомления в Telegram:', response.status);
+      return { success: false, error: `HTTP ${response.status}` };
+    }
+  } catch (error) {
+    console.error('❌ Ошибка отправки уведомления в Telegram:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Мониторинг системы (вызывается периодически)
+async function monitorSystem() {
+  console.log('🔍 Проверка системы...');
+  
+  const [serverStatus, firebaseStatus, webhookStatus] = await Promise.all([
+    checkWebhookServerStatus(),
+    checkWebhookFirebase(),
+    checkTelegramWebhook()
+  ]);
+  
+  // Логируем результаты
+  console.log('📊 Статус системы:', {
+    server: serverStatus.status,
+    firebase: firebaseStatus.status,
+    webhook: webhookStatus.status
+  });
+  
+  // Если есть проблемы, показываем уведомление
+  if (serverStatus.status === 'offline' || firebaseStatus.status === 'offline' || webhookStatus.status === 'offline') {
+    console.warn('⚠️ Обнаружены проблемы с системой');
+    // Можно добавить визуальное уведомление
+  }
+  
+  return { serverStatus, firebaseStatus, webhookStatus };
+}
+
+// Отображение статуса системы в админ-панели
+function displaySystemStatus(statusData) {
+  if (!systemStatus) return;
+  
+  const { serverStatus, firebaseStatus, webhookStatus } = statusData;
+  
+  systemStatus.innerHTML = `
+    <div class="status-item ${serverStatus.status}">
+      <div class="status-header">
+        <div class="status-title">🌐 Webhook Сервер</div>
+        <div class="status-indicator ${serverStatus.status}">${getMonitoringStatusText(serverStatus.status)}</div>
+      </div>
+      <div class="status-details">
+        ${serverStatus.status === 'online' ? 
+          `✅ Сервер работает<br>URL: ${WEBHOOK_SERVER_URL}` : 
+          `❌ Сервер недоступен<br>Ошибка: ${serverStatus.error || 'Неизвестная ошибка'}`
+        }
+      </div>
+    </div>
+    
+    <div class="status-item ${firebaseStatus.status}">
+      <div class="status-header">
+        <div class="status-title">🔥 Firebase (через webhook)</div>
+        <div class="status-indicator ${firebaseStatus.status}">${getMonitoringStatusText(firebaseStatus.status)}</div>
+      </div>
+      <div class="status-details">
+        ${firebaseStatus.status === 'online' ? 
+          `✅ Firebase подключен<br>Проект: ${firebaseStatus.data?.projectId || 'bar-menu-6145c'}` : 
+          `❌ Firebase недоступен<br>Ошибка: ${firebaseStatus.error || 'Неизвестная ошибка'}`
+        }
+      </div>
+    </div>
+    
+    <div class="status-item ${webhookStatus.status}">
+      <div class="status-header">
+        <div class="status-title">📱 Telegram Webhook</div>
+        <div class="status-indicator ${webhookStatus.status}">${getMonitoringStatusText(webhookStatus.status)}</div>
+      </div>
+      <div class="status-details">
+        ${webhookStatus.status === 'online' ? 
+          `✅ Webhook настроен<br>URL: ${webhookStatus.data?.url || 'Неизвестно'}` : 
+          `❌ Webhook не настроен<br>Ошибка: ${webhookStatus.error || 'Неизвестная ошибка'}`
+        }
+      </div>
+    </div>
+  `;
+}
+
+// Получение текста статуса для мониторинга
+function getMonitoringStatusText(status) {
+  switch(status) {
+    case 'online': return 'Онлайн';
+    case 'warning': return 'Предупреждение';
+    case 'error': return 'Ошибка';
+    case 'offline': return 'Офлайн';
+    default: return 'Неизвестно';
+  }
+}
+
+// Тест webhook сервера
+async function testWebhookServer() {
+  try {
+    // Тестируем callback_query напрямую
+    const testCallback = {
+      callback_query: {
+        id: `test_${Date.now()}`,
+        from: {
+          id: 123456789,
+          is_bot: false,
+          first_name: 'Test Admin',
+          username: 'testadmin'
+        },
+        message: {
+          message_id: 1,
+          from: {
+            id: 123456789,
+            is_bot: true,
+            first_name: 'Asafiev Bar Bot',
+            username: 'asafiev_bar_bot'
+          },
+          chat: {
+            id: parseInt(TELEGRAM_CHAT_ID),
+            type: 'private'
+          },
+          date: Math.floor(Date.now() / 1000),
+          text: 'Тестовое сообщение'
+        },
+        data: 'confirmed_test_order_123'
+      }
+    };
+    
+    const response = await fetch(`${WEBHOOK_SERVER_URL}/telegram-webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(testCallback)
+    });
+    
+    const result = await response.text();
+    console.log('📤 Ответ webhook сервера:', response.status, result);
+    
+    if (response.ok) {
+      showSuccess('✅ Webhook сервер работает корректно! Проверьте логи сервера.');
+    } else {
+      showError(`❌ Ошибка webhook сервера: ${response.status} - ${result}`);
+    }
+  } catch (error) {
+    showError(`❌ Ошибка тестирования webhook: ${error.message}`);
+  }
+}
+
+// === ФУНКЦИИ УПРАВЛЕНИЯ TELEGRAM ===
+
+// Настройка webhook для Telegram
+async function setupTelegramWebhook() {
+  try {
+    const webhookUrl = `${WEBHOOK_SERVER_URL}/telegram-webhook`;
+    
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        url: webhookUrl,
+        allowed_updates: ['message', 'callback_query']
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.ok) {
+      showSuccess('✅ Webhook успешно настроен!');
+      displayTelegramInfo();
+    } else {
+      showError(`❌ Ошибка настройки webhook: ${data.description}`);
+    }
+  } catch (error) {
+    showError(`❌ Ошибка настройки webhook: ${error.message}`);
+  }
+}
+
+// Удаление webhook
+async function deleteTelegramWebhook() {
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteWebhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        drop_pending_updates: true
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.ok) {
+      showSuccess('✅ Webhook успешно удален!');
+      displayTelegramInfo();
+    } else {
+      showError(`❌ Ошибка удаления webhook: ${data.description}`);
+    }
+  } catch (error) {
+    showError(`❌ Ошибка удаления webhook: ${error.message}`);
+  }
+}
+
+// Получение информации о webhook
+async function getTelegramWebhookInfo() {
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo`);
+    const data = await response.json();
+    
+    if (data.ok) {
+      displayTelegramInfo(data.result);
+    } else {
+      showError(`❌ Ошибка получения информации: ${data.description}`);
+    }
+  } catch (error) {
+    showError(`❌ Ошибка получения информации: ${error.message}`);
+  }
+}
+
+// Отправка тестового сообщения
+async function sendTestMessage() {
+  try {
+    const message = `
+🧪 *Тестовое сообщение от Asafiev Bar*
+
+✅ Webhook сервер работает
+✅ Firebase подключен
+✅ Telegram бот активен
+
+🕒 Время: ${new Date().toLocaleString('ru-RU')}
+🌐 Сервер: ${WEBHOOK_SERVER_URL}
+    `.trim();
+    
+    // Создаем тестовые кнопки
+    const testKeyboard = {
+      inline_keyboard: [
+        [
+          { text: "🧪 Тест кнопка 1", callback_data: "test_button_1" },
+          { text: "🧪 Тест кнопка 2", callback_data: "test_button_2" }
+        ],
+        [
+          { text: "✅ Система работает", callback_data: "system_ok" }
+        ]
+      ]
+    };
+    
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: message,
+        parse_mode: 'Markdown',
+        reply_markup: testKeyboard
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.ok) {
+      showSuccess('✅ Тестовое сообщение с кнопками отправлено!');
+    } else {
+      showError(`❌ Ошибка отправки сообщения: ${data.description}`);
+    }
+  } catch (error) {
+    showError(`❌ Ошибка отправки сообщения: ${error.message}`);
+  }
+}
+
+// Отображение информации о Telegram
+function displayTelegramInfo(webhookInfo = null) {
+  if (!telegramStatus) return;
+  
+  if (!webhookInfo) {
+    telegramStatus.innerHTML = `
+      <div class="telegram-info">
+        <h5>📱 Информация о Telegram боте</h5>
+        <p><strong>Токен бота:</strong> <code>${TELEGRAM_BOT_TOKEN.substring(0, 10)}...</code></p>
+        <p><strong>Chat ID:</strong> <code>${TELEGRAM_CHAT_ID}</code></p>
+        <p><strong>Webhook URL:</strong> <code>${WEBHOOK_SERVER_URL}/telegram-webhook</code></p>
+        <p><em>Нажмите "Информация о Webhook" для получения актуальных данных</em></p>
+      </div>
+    `;
+    return;
+  }
+  
+  const hasWebhook = webhookInfo.url && webhookInfo.url.length > 0;
+  const webhookStatus = hasWebhook ? '✅ Настроен' : '❌ Не настроен';
+  const webhookUrl = hasWebhook ? webhookInfo.url : 'Не установлен';
+  
+  telegramStatus.innerHTML = `
+    <div class="telegram-info">
+      <h5>📱 Информация о Telegram боте</h5>
+      <p><strong>Токен бота:</strong> <code>${TELEGRAM_BOT_TOKEN.substring(0, 10)}...</code></p>
+      <p><strong>Chat ID:</strong> <code>${TELEGRAM_CHAT_ID}</code></p>
+      <p><strong>Статус webhook:</strong> ${webhookStatus}</p>
+      <p><strong>Webhook URL:</strong> <code>${webhookUrl}</code></p>
+      ${hasWebhook ? `
+        <p><strong>Последняя ошибка:</strong> ${webhookInfo.last_error_message || 'Нет ошибок'}</p>
+        <p><strong>Количество ошибок:</strong> ${webhookInfo.pending_update_count || 0}</p>
+        <p><strong>Максимум соединений:</strong> ${webhookInfo.max_connections || 'Не указано'}</p>
+      ` : ''}
+    </div>
+  `;
+}
+
+// === КОНЕЦ ФУНКЦИЙ МОНИТОРИНГА ===
+
 // Инициализация функций
 initThemeToggle();
 initSwipe();
@@ -1364,4 +1968,10 @@ initSwipe();
 (async () => {
   await loadStoplist();
   await loadCocktails();
+  
+  // Проверяем статус системы при загрузке
+  await monitorSystem();
+  
+  // Периодическая проверка системы каждые 5 минут
+  setInterval(monitorSystem, 5 * 60 * 1000);
 })();

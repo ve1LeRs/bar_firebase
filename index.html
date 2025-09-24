@@ -120,6 +120,7 @@
           <button class="tab-btn active" data-tab="cocktails">Коктейли</button>
           <button class="tab-btn" data-tab="orders">Заказы</button>
           <button class="tab-btn" data-tab="stoplist">Стоп-лист</button>
+          <button class="tab-btn" data-tab="monitoring">Мониторинг</button>
         </div>
         <!-- Содержимое вкладок -->
         <div class="tab-content active" id="cocktails-tab">
@@ -146,6 +147,27 @@
           </div>
           <div id="currentStoplist" class="admin-list">
             <!-- Текущий стоп-лист будет загружен сюда -->
+          </div>
+        </div>
+        <div class="tab-content" id="monitoring-tab">
+          <h4>Мониторинг системы</h4>
+          <div class="monitoring-controls">
+            <button id="checkSystemBtn" class="admin-btn"><i class="fas fa-sync-alt"></i> Проверить систему</button>
+            <button id="testWebhookBtn" class="admin-btn"><i class="fas fa-paper-plane"></i> Тест webhook</button>
+          </div>
+          <div id="systemStatus" class="system-status">
+            <!-- Статус системы будет загружен сюда -->
+          </div>
+          
+          <h4 style="margin-top: 2rem;">Управление Telegram</h4>
+          <div class="telegram-controls">
+            <button id="setupWebhookBtn" class="admin-btn"><i class="fas fa-link"></i> Настроить Webhook</button>
+            <button id="deleteWebhookBtn" class="admin-btn"><i class="fas fa-unlink"></i> Удалить Webhook</button>
+            <button id="getWebhookInfoBtn" class="admin-btn"><i class="fas fa-info-circle"></i> Информация о Webhook</button>
+            <button id="sendTestMessageBtn" class="admin-btn"><i class="fas fa-paper-plane"></i> Отправить тестовое сообщение</button>
+          </div>
+          <div id="telegramStatus" class="telegram-status">
+            <!-- Статус Telegram будет загружен сюда -->
           </div>
         </div>
       </div>
