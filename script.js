@@ -15,12 +15,18 @@ const TELEGRAM_CHAT_ID = "1743362083";
 const WEBHOOK_SERVER_URL = "https://web-production-72014.up.railway.app";
 
 // Инициализация Firebase
+console.log('🔥 Инициализация Firebase...');
 const app = firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 const storage = firebase.storage();
+console.log('✅ Firebase инициализирован');
+
+// Глобальные переменные
+let audioContextEnabled = false; // Флаг для отслеживания активации звука
 
 // DOM элементы
+console.log('🔍 Инициализация DOM элементов...');
 const themeToggle = document.getElementById('themeToggle');
 const loginBtn = document.getElementById('loginBtn');
 const registerBtn = document.getElementById('registerBtn');
@@ -74,6 +80,12 @@ const deleteWebhookBtn = document.getElementById('deleteWebhookBtn');
 const getWebhookInfoBtn = document.getElementById('getWebhookInfoBtn');
 const sendTestMessageBtn = document.getElementById('sendTestMessageBtn');
 const telegramStatus = document.getElementById('telegramStatus');
+
+// Проверяем критически важные элементы
+console.log('📋 Проверка DOM элементов:');
+console.log('- cocktailsGrid:', cocktailsGrid ? '✅ найден' : '❌ не найден');
+console.log('- loginBtn:', loginBtn ? '✅ найден' : '❌ не найден');
+console.log('- registerBtn:', registerBtn ? '✅ найден' : '❌ не найден');
 
 let currentOrder = null;
 let startX = 0;
@@ -494,6 +506,7 @@ auth.onAuthStateChanged(async user => {
     userName.style.display = 'block';
     
     // Инициализируем глобальный listener для отслеживания изменений статусов
+    console.log('🔄 Инициализируем listener для пользователя:', user.uid);
     initGlobalOrderStatusListener();
   } else {
     loginBtn.style.display = 'inline-block';
@@ -505,21 +518,43 @@ auth.onAuthStateChanged(async user => {
     userName.style.display = 'none';
     isAdmin = false;
     
-    // Отключаем глобальный listener при выходе
+    // Отключаем listener при выходе пользователя
     if (globalOrdersListener) {
+      console.log('🔄 Отключаем listener при выходе пользователя');
       globalOrdersListener();
       globalOrdersListener = null;
+      lastOrderStatuses.clear();
     }
-    lastOrderStatuses.clear();
   }
 });
 
 // Загрузка коктейлей
 async function loadCocktails() {
   try {
-    const cocktailsSnapshot = await db.collection('cocktails').get();
+    console.log('🔄 Начинаем загрузку коктейлей...');
+    
+    if (!cocktailsGrid) {
+      console.error('❌ Элемент cocktailsGrid не найден!');
+      return;
+    }
+    
+    let cocktailsSnapshot = await db.collection('cocktails').get();
+    console.log('📊 Получено коктейлей:', cocktailsSnapshot.size);
     cocktailsData = [];
     cocktailsGrid.innerHTML = '';
+    
+    if (cocktailsSnapshot.empty) {
+      console.log('⚠️ Коллекция коктейлей пуста, добавляем тестовые данные...');
+      await addTestCocktails();
+      // Повторно загружаем коктейли после добавления тестовых данных
+      const newSnapshot = await db.collection('cocktails').get();
+      if (newSnapshot.empty) {
+        cocktailsGrid.innerHTML = '<p style="text-align: center; color: #6b5c47; font-size: 1.2rem; margin: 2rem 0;">Ошибка загрузки коктейлей</p>';
+        return;
+      }
+      // Продолжаем с новыми данными
+      cocktailsSnapshot = newSnapshot;
+    }
     
     cocktailsSnapshot.forEach(doc => {
       const cocktail = { id: doc.id, ...doc.data() };
@@ -607,8 +642,10 @@ async function loadCocktails() {
     // Инициализируем свайп для новых карточек
     initSwipe();
     
+    console.log('✅ Коктейли успешно загружены:', cocktailsData.length);
+    
   } catch (error) {
-    console.error('Ошибка загрузки коктейлей:', error);
+    console.error('❌ Ошибка загрузки коктейлей:', error);
     showError('Ошибка загрузки коктейлей');
   }
 }
@@ -670,10 +707,17 @@ let lastOrderStatuses = new Map(); // Храним последние стату
 // Инициализация глобального listener'а для отслеживания изменений статусов
 function initGlobalOrderStatusListener() {
   const currentUser = auth.currentUser;
-  if (!currentUser) return;
+  if (!currentUser) {
+    console.log('❌ initGlobalOrderStatusListener: Пользователь не авторизован');
+    return;
+  }
+  
+  console.log('🔄 Инициализация глобального listener для заказов пользователя:', currentUser.uid);
+  console.log('🔍 Проверяем Firebase подключение:', !!db);
   
   // Отключаем предыдущий listener, если он есть
   if (globalOrdersListener) {
+    console.log('🔄 Отключение предыдущего listener');
     globalOrdersListener();
     globalOrdersListener = null;
   }
@@ -682,16 +726,43 @@ function initGlobalOrderStatusListener() {
   globalOrdersListener = db.collection('orders')
     .where('userId', '==', currentUser.uid)
     .onSnapshot((snapshot) => {
+      console.log('📊 Получено обновление заказов:', snapshot.docChanges().length, 'изменений');
+      console.log('📋 Всего документов в snapshot:', snapshot.docs.length);
+      
+      // Если это первая загрузка (нет изменений), инициализируем все заказы
+      if (snapshot.docChanges().length === 0 && snapshot.docs.length > 0) {
+        console.log('🔄 Первая загрузка: инициализируем существующие заказы');
+        snapshot.docs.forEach(doc => {
+          const orderData = { id: doc.id, ...doc.data() };
+          lastOrderStatuses.set(orderData.id, orderData.status);
+          console.log(`📝 Инициализирован заказ ${orderData.id} со статусом: ${orderData.status}`);
+        });
+        return;
+      }
+      
       snapshot.docChanges().forEach((change) => {
+        const orderData = { id: change.doc.id, ...change.doc.data() };
+        const orderId = orderData.id;
+        const newStatus = orderData.status;
+        
+        console.log(`📝 Изменение заказа ${orderId}:`, {
+          type: change.type,
+          status: newStatus,
+          updatedBy: orderData.updatedBy || 'unknown'
+        });
+        
         if (change.type === 'modified') {
-          const orderData = { id: change.doc.id, ...change.doc.data() };
-          const orderId = orderData.id;
-          const newStatus = orderData.status;
-          
           // Проверяем, изменился ли статус
           const lastStatus = lastOrderStatuses.get(orderId);
+          console.log(`🔄 Сравнение статусов для заказа ${orderId}:`, {
+            lastStatus,
+            newStatus,
+            changed: lastStatus !== newStatus
+          });
+          
           if (lastStatus && lastStatus !== newStatus) {
             // Статус изменился, показываем уведомление
+            console.log(`🔔 Показываем уведомление для заказа ${orderId}: ${lastStatus} → ${newStatus}`);
             showStatusUpdateNotification(orderData, newStatus);
           }
           
@@ -699,13 +770,15 @@ function initGlobalOrderStatusListener() {
           lastOrderStatuses.set(orderId, newStatus);
         } else if (change.type === 'added') {
           // Новый заказ - сохраняем его статус
-          const orderData = { id: change.doc.id, ...change.doc.data() };
+          console.log(`➕ Новый заказ ${orderId} со статусом: ${newStatus}`);
           lastOrderStatuses.set(orderData.id, orderData.status);
         }
       });
     }, (error) => {
-      console.error('Ошибка глобального listener для заказов:', error);
+      console.error('❌ Ошибка глобального listener для заказов:', error);
     });
+    
+  console.log('✅ Глобальный listener инициализирован');
 }
 
 // Загрузка истории заказов с real-time обновлениями
@@ -722,7 +795,6 @@ async function loadOrderHistory(userId) {
     // Устанавливаем real-time listener для заказов пользователя
     userOrdersListener = db.collection('orders')
       .where('userId', '==', userId)
-      .orderBy('createdAt', 'desc')
       .onSnapshot((snapshot) => {
         ordersList.innerHTML = '';
         
@@ -758,28 +830,8 @@ async function loadOrderHistory(userId) {
           ordersList.appendChild(orderElement);
         });
         
-        // Показываем уведомление о обновлении статуса для всех пользователей
-        // Проверяем, есть ли изменения в статусах заказов
-        const currentUser = auth.currentUser;
-        if (currentUser) {
-          // Находим заказы с обновленными статусами
-          userOrders.forEach(order => {
-            // Проверяем, изменился ли статус заказа
-            const orderElement = document.querySelector(`[data-order-id="${order.id}"]`);
-            if (orderElement) {
-              const currentStatusElement = orderElement.querySelector('.order-status');
-              if (currentStatusElement) {
-                const currentStatus = currentStatusElement.textContent;
-                const newStatus = getStatusText(order.status);
-                
-                // Если статус изменился, показываем уведомление
-                if (currentStatus !== newStatus) {
-                  showStatusUpdateNotification(order, order.status);
-                }
-              }
-            }
-          });
-        }
+        // Уведомления об изменении статусов обрабатываются в initGlobalOrderStatusListener
+        // Здесь мы только обновляем отображение истории заказов
       }, (error) => {
         console.error('Ошибка real-time listener для заказов:', error);
         showError('Ошибка загрузки заказов');
@@ -1635,11 +1687,27 @@ function showSuccess(message) {
 
 // Уведомление об обновлении статуса заказа для пользователей
 function showStatusUpdateNotification(orderData = null, newStatus = null) {
+  console.log('🔔 showStatusUpdateNotification вызвана:', { orderData, newStatus });
+  
+  // Проверяем, что уведомление показывается только владельцу заказа
+  const currentUser = auth.currentUser;
+  if (!currentUser || !orderData || orderData.userId !== currentUser.uid) {
+    console.log('❌ Уведомление не показано: не владелец заказа или пользователь не авторизован', {
+      currentUser: !!currentUser,
+      orderData: !!orderData,
+      userId: orderData?.userId,
+      currentUserId: currentUser?.uid
+    });
+    return;
+  }
+  
+  console.log('✅ Показываем уведомление для пользователя:', currentUser.uid);
+  
   // Определяем тип уведомления и иконку
   let icon = 'fas fa-sync-alt';
   let message = 'Статус заказа обновлен!';
   let backgroundColor = '#27ae60';
-  let duration = 3000;
+  let duration = 4000;
   
   if (orderData && newStatus) {
     const statusEmojis = {
@@ -1685,147 +1753,283 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
         break;
     }
     
-    message = `${emoji} ${orderData.name} - ${statusText}`;
-    duration = 5000; // Увеличиваем время для более важных уведомлений
+    // Показываем только статус заказа
+    message = `${emoji} ${statusText}`;
+    duration = 4000;
   }
   
-  // Создаем временное уведомление
+  // Создаем красивое уведомление
+  console.log('🎨 Создаем уведомление с параметрами:', { icon, message, backgroundColor, duration });
+  
   const notification = document.createElement('div');
   notification.className = 'status-update-notification';
   notification.innerHTML = `
     <div class="notification-content">
-      <i class="${icon}"></i>
+      <div class="notification-icon">
+        <i class="${icon}"></i>
+      </div>
       <div class="notification-text">
         <div class="notification-title">${message}</div>
-        ${orderData ? `<div class="notification-subtitle">${orderData.user} • ${new Date().toLocaleString('ru-RU')}</div>` : ''}
       </div>
       <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
         <i class="fas fa-times"></i>
       </button>
     </div>
+    <div class="notification-progress"></div>
   `;
+  
+  console.log('📝 HTML уведомления создан:', notification.innerHTML);
   
   // Добавляем стили для уведомления
   notification.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: ${backgroundColor};
-    color: white;
-    padding: 1rem 1.5rem;
-    border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-    z-index: 10000;
-    animation: slideInRight 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    font-family: 'Inter', sans-serif;
-    font-weight: 500;
-    min-width: 300px;
-    max-width: 400px;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.1);
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    background: linear-gradient(135deg, ${backgroundColor}, ${adjustColor(backgroundColor, -20)}) !important;
+    color: white !important;
+    border-radius: 16px !important;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.1) !important;
+    z-index: 99999 !important;
+    animation: slideInRight 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), fadeIn 0.3s ease !important;
+    display: flex !important;
+    flex-direction: column !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 500 !important;
+    min-width: 280px !important;
+    max-width: 350px !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255,255,255,0.2) !important;
+    overflow: hidden !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
   `;
+  
+  console.log('🎨 Стили применены к уведомлению');
   
   // Добавляем стили для содержимого
   const content = notification.querySelector('.notification-content');
   content.style.cssText = `
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    width: 100%;
+    display: flex !important;
+    align-items: center !important;
+    gap: 1rem !important;
+    width: 100% !important;
+    padding: 1.2rem 1.5rem !important;
+    position: relative !important;
+    z-index: 2 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  `;
+  
+  // Стили для иконки
+  const iconElement = notification.querySelector('.notification-icon');
+  iconElement.style.cssText = `
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 40px !important;
+    height: 40px !important;
+    background: rgba(255,255,255,0.2) !important;
+    border-radius: 50% !important;
+    font-size: 1.2rem !important;
+    animation: pulse 2s infinite !important;
+    visibility: visible !important;
+    opacity: 1 !important;
   `;
   
   const text = notification.querySelector('.notification-text');
   text.style.cssText = `
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.25rem !important;
+    visibility: visible !important;
+    opacity: 1 !important;
   `;
   
   const title = notification.querySelector('.notification-title');
   title.style.cssText = `
-    font-weight: 600;
-    font-size: 0.95rem;
-    line-height: 1.2;
+    font-weight: 600 !important;
+    font-size: 1rem !important;
+    line-height: 1.3 !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    color: white !important;
   `;
-  
-  const subtitle = notification.querySelector('.notification-subtitle');
-  if (subtitle) {
-    subtitle.style.cssText = `
-      font-size: 0.8rem;
-      opacity: 0.9;
-      font-weight: 400;
-    `;
-  }
   
   const closeBtn = notification.querySelector('.notification-close');
   closeBtn.style.cssText = `
-    background: none;
-    border: none;
-    color: white;
-    cursor: pointer;
-    padding: 0.25rem;
-    border-radius: 4px;
-    opacity: 0.7;
-    transition: opacity 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    background: rgba(255,255,255,0.2) !important;
+    border: none !important;
+    color: white !important;
+    cursor: pointer !important;
+    padding: 0.5rem !important;
+    border-radius: 50% !important;
+    opacity: 0.8 !important;
+    transition: all 0.2s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 0.9rem !important;
+    visibility: visible !important;
   `;
   
   closeBtn.addEventListener('mouseenter', () => {
     closeBtn.style.opacity = '1';
+    closeBtn.style.background = 'rgba(255,255,255,0.3)';
+    closeBtn.style.transform = 'scale(1.1)';
   });
   
   closeBtn.addEventListener('mouseleave', () => {
-    closeBtn.style.opacity = '0.7';
+    closeBtn.style.opacity = '0.8';
+    closeBtn.style.background = 'rgba(255,255,255,0.2)';
+    closeBtn.style.transform = 'scale(1)';
   });
   
-  document.body.appendChild(notification);
+  // Прогресс-бар
+  const progress = notification.querySelector('.notification-progress');
+  progress.style.cssText = `
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    height: 3px !important;
+    background: rgba(255,255,255,0.3) !important;
+    width: 100% !important;
+    animation: progressBar ${duration}ms linear !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  `;
   
-  // Звуковое уведомление (если поддерживается)
-  if (typeof Audio !== 'undefined') {
+  document.body.appendChild(notification);
+  console.log('✅ Уведомление добавлено в DOM');
+  
+  // Проверяем, что уведомление действительно видимо
+  setTimeout(() => {
+    const rect = notification.getBoundingClientRect();
+    const computedStyle = window.getComputedStyle(notification);
+    console.log('🔍 Проверка видимости уведомления:', {
+      element: notification,
+      rect: rect,
+      display: computedStyle.display,
+      visibility: computedStyle.visibility,
+      opacity: computedStyle.opacity,
+      zIndex: computedStyle.zIndex,
+      position: computedStyle.position,
+      top: computedStyle.top,
+      right: computedStyle.right,
+      width: computedStyle.width,
+      height: computedStyle.height
+    });
+    
+    // Проверяем, есть ли уведомление в DOM
+    const foundNotification = document.querySelector('.status-update-notification');
+    console.log('🔍 Найдено уведомлений в DOM:', document.querySelectorAll('.status-update-notification').length);
+    console.log('🔍 Последнее уведомление:', foundNotification);
+  }, 100);
+  
+  // Звуковое уведомление (если поддерживается и разрешено)
+  if (typeof Audio !== 'undefined' && audioContextEnabled) {
     try {
-      // Создаем простой звук уведомления
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
       
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-      oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.1);
-      
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-      
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.1);
+      // Проверяем состояние AudioContext
+      if (audioContext.state === 'suspended') {
+        // Пытаемся возобновить контекст (требует пользовательского взаимодействия)
+        audioContext.resume().then(() => {
+          playNotificationSound(audioContext);
+        }).catch(() => {
+          console.log('Звуковое уведомление заблокировано браузером');
+        });
+      } else {
+        playNotificationSound(audioContext);
+      }
     } catch (e) {
-      console.log('Звуковое уведомление недоступно');
+      console.log('Звуковое уведомление недоступно:', e.message);
     }
+  } else if (!audioContextEnabled) {
+    // Активируем звук при первом пользовательском взаимодействии
+    enableAudioOnUserInteraction();
   }
   
-  // Вибрация (если поддерживается)
-  if (navigator.vibrate) {
-    navigator.vibrate([200, 100, 200]);
+  // Вибрация (если поддерживается и разрешена)
+  if (navigator.vibrate && 'vibrate' in navigator) {
+    try {
+      navigator.vibrate([200, 100, 200]);
+    } catch (e) {
+      console.log('Вибрация заблокирована браузером:', e.message);
+    }
   }
   
   // Автоматическое удаление уведомления
   setTimeout(() => {
     if (notification.parentNode) {
-      notification.style.animation = 'slideOutRight 0.3s ease';
+      notification.style.animation = 'slideOutRight 0.4s ease';
       setTimeout(() => {
         if (notification.parentNode) {
           notification.parentNode.removeChild(notification);
         }
-      }, 300);
+      }, 400);
     }
   }, duration);
+}
+
+// Вспомогательная функция для изменения цвета
+function adjustColor(color, amount) {
+  const usePound = color[0] === '#';
+  const col = usePound ? color.slice(1) : color;
+  const num = parseInt(col, 16);
+  let r = (num >> 16) + amount;
+  let g = (num >> 8 & 0x00FF) + amount;
+  let b = (num & 0x0000FF) + amount;
+  r = r > 255 ? 255 : r < 0 ? 0 : r;
+  g = g > 255 ? 255 : g < 0 ? 0 : g;
+  b = b > 255 ? 255 : b < 0 ? 0 : b;
+  return (usePound ? '#' : '') + (r << 16 | g << 8 | b).toString(16).padStart(6, '0');
+}
+
+// Функция для активации звука при первом пользовательском взаимодействии
+function enableAudioOnUserInteraction() {
+  if (audioContextEnabled) return;
+  
+  const enableAudio = () => {
+    audioContextEnabled = true;
+    console.log('🔊 Звук активирован пользовательским взаимодействием');
+    
+    // Удаляем слушатели после активации
+    document.removeEventListener('click', enableAudio);
+    document.removeEventListener('keydown', enableAudio);
+    document.removeEventListener('touchstart', enableAudio);
+  };
+  
+  // Добавляем слушатели для различных типов взаимодействия
+  document.addEventListener('click', enableAudio, { once: true });
+  document.addEventListener('keydown', enableAudio, { once: true });
+  document.addEventListener('touchstart', enableAudio, { once: true });
+}
+
+// Функция для воспроизведения звука уведомления
+function playNotificationSound(audioContext) {
+  try {
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.1);
+    
+    gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.1);
+  } catch (e) {
+    console.log('Ошибка воспроизведения звука:', e.message);
+  }
 }
 
 // Уведомление об обновлении статуса для админов
@@ -2333,12 +2537,18 @@ function displayTelegramInfo(webhookInfo = null) {
 
 // Функция для тестирования уведомлений (для разработки)
 function testNotifications() {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log('❌ Пользователь не авторизован. Войдите в систему для тестирования уведомлений.');
+    return;
+  }
+  
   const testOrders = [
-    { id: 'test1', name: 'Мохито', user: 'Иван Петров', status: 'confirmed' },
-    { id: 'test2', name: 'Космополитен', user: 'Мария Сидорова', status: 'preparing' },
-    { id: 'test3', name: 'Маргарита', user: 'Алексей Козлов', status: 'ready' },
-    { id: 'test4', name: 'Пина Колада', user: 'Елена Волкова', status: 'completed' },
-    { id: 'test5', name: 'Белый Русский', user: 'Дмитрий Соколов', status: 'cancelled' }
+    { id: 'test1', name: 'Мохито', user: 'Иван Петров', userId: currentUser.uid, status: 'confirmed' },
+    { id: 'test2', name: 'Космополитен', user: 'Мария Сидорова', userId: currentUser.uid, status: 'preparing' },
+    { id: 'test3', name: 'Маргарита', user: 'Алексей Козлов', userId: currentUser.uid, status: 'ready' },
+    { id: 'test4', name: 'Пина Колада', user: 'Елена Волкова', userId: currentUser.uid, status: 'completed' },
+    { id: 'test5', name: 'Белый Русский', user: 'Дмитрий Соколов', userId: currentUser.uid, status: 'cancelled' }
   ];
   
   console.log('🧪 Тестирование уведомлений...');
@@ -2351,12 +2561,511 @@ function testNotifications() {
   });
 }
 
-// Добавляем функцию в глобальную область для тестирования
+// Функция для тестирования новых уведомлений
+function testNewNotifications() {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log('❌ Пользователь не авторизован. Войдите в систему для тестирования уведомлений.');
+    return;
+  }
+  
+  const testOrders = [
+    { id: 'test1', name: 'Мохито', user: 'Иван Петров', userId: currentUser.uid, status: 'confirmed' },
+    { id: 'test2', name: 'Космополитен', user: 'Мария Сидорова', userId: currentUser.uid, status: 'preparing' },
+    { id: 'test3', name: 'Маргарита', user: 'Алексей Козлов', userId: currentUser.uid, status: 'ready' },
+    { id: 'test4', name: 'Пина Колада', user: 'Елена Волкова', userId: currentUser.uid, status: 'completed' },
+    { id: 'test5', name: 'Белый Русский', user: 'Дмитрий Соколов', userId: currentUser.uid, status: 'cancelled' }
+  ];
+  
+  console.log('🧪 Тестирование новых уведомлений...');
+  
+  testOrders.forEach((order, index) => {
+    setTimeout(() => {
+      showStatusUpdateNotification(order, order.status);
+      console.log(`✅ Показано новое уведомление: ${order.name} - ${order.status}`);
+    }, index * 3000); // Показываем каждое уведомление через 3 секунды
+  });
+}
+
+// Функция для тестирования модальных окон из админ-панели
+function testModalLayers() {
+  console.log('🧪 Тестирование слоев модальных окон...');
+  
+  // Сначала открываем админ-панель
+  if (adminPanel) {
+    openModal(adminPanel);
+    console.log('✅ Открыта админ-панель (z-index: 3000)');
+    
+    // Через 2 секунды открываем форму коктейля поверх админ-панели
+    setTimeout(() => {
+      if (cocktailFormModal) {
+        openModal(cocktailFormModal);
+        console.log('✅ Открыта форма коктейля поверх админ-панели (z-index: 3001)');
+        
+        // Через 3 секунды закрываем форму
+        setTimeout(() => {
+          closeModal(cocktailFormModal);
+          console.log('✅ Закрыта форма коктейля');
+          
+          // Через 1 секунду открываем модальное окно статуса
+          setTimeout(() => {
+            if (statusModal) {
+              openModal(statusModal);
+              console.log('✅ Открыто модальное окно статуса поверх админ-панели (z-index: 3001)');
+              
+              // Через 3 секунды закрываем все
+              setTimeout(() => {
+                closeModal(statusModal);
+                closeModal(adminPanel);
+                console.log('✅ Все модальные окна закрыты');
+              }, 3000);
+            }
+          }, 1000);
+        }, 3000);
+      }
+    }, 2000);
+  }
+}
+
+// Функция для тестирования, что уведомления показываются только владельцу заказа
+function testUserNotificationTargeting() {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log('❌ Пользователь не авторизован. Войдите в систему для тестирования.');
+    return;
+  }
+  
+  console.log('🧪 Тестирование таргетинга уведомлений...');
+  console.log(`👤 Текущий пользователь: ${currentUser.displayName || currentUser.email} (${currentUser.uid})`);
+  
+  // Тест 1: Уведомление для текущего пользователя (должно показаться)
+  const ownOrder = {
+    id: 'test_own',
+    name: 'Мохито',
+    user: currentUser.displayName || 'Текущий пользователь',
+    userId: currentUser.uid, // Свой заказ
+    status: 'confirmed'
+  };
+  
+  console.log('📤 Тест 1: Уведомление для собственного заказа (должно показаться)');
+  showStatusUpdateNotification(ownOrder, 'confirmed');
+  
+  // Тест 2: Уведомление для другого пользователя (НЕ должно показаться)
+  setTimeout(() => {
+    const otherUserOrder = {
+      id: 'test_other',
+      name: 'Космополитен',
+      user: 'Другой пользователь',
+      userId: 'other_user_id_123', // Чужой заказ
+      status: 'preparing'
+    };
+    
+    console.log('📤 Тест 2: Уведомление для чужого заказа (НЕ должно показаться)');
+    showStatusUpdateNotification(otherUserOrder, 'preparing');
+  }, 2000);
+  
+  // Тест 3: Уведомление без userId (НЕ должно показаться)
+  setTimeout(() => {
+    const noUserIdOrder = {
+      id: 'test_no_user',
+      name: 'Маргарита',
+      user: 'Пользователь без ID',
+      // userId отсутствует
+      status: 'ready'
+    };
+    
+    console.log('📤 Тест 3: Уведомление без userId (НЕ должно показаться)');
+    showStatusUpdateNotification(noUserIdOrder, 'ready');
+  }, 4000);
+  
+  console.log('✅ Тесты запущены. Проверьте консоль и уведомления на экране.');
+}
+
+// Функция для тестирования исправлений AudioContext и вибрации
+function testAudioAndVibration() {
+  console.log('🧪 Тестирование исправлений AudioContext и вибрации...');
+  console.log(`🔊 Состояние звука: ${audioContextEnabled ? 'активирован' : 'не активирован'}`);
+  
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log('❌ Пользователь не авторизован. Войдите в систему для тестирования.');
+    return;
+  }
+  
+  const testOrder = {
+    id: 'test_audio',
+    name: 'Тестовый коктейль',
+    user: currentUser.displayName || 'Тестовый пользователь',
+    userId: currentUser.uid,
+    status: 'confirmed'
+  };
+  
+  console.log('📤 Показываем тестовое уведомление...');
+  showStatusUpdateNotification(testOrder, 'confirmed');
+  
+  if (!audioContextEnabled) {
+    console.log('💡 Кликните в любом месте страницы для активации звука');
+  }
+}
+
+// Функция для диагностики проблемы с уведомлениями
+function debugNotificationIssue() {
+  console.log('🔍 ДИАГНОСТИКА ПРОБЛЕМЫ С УВЕДОМЛЕНИЯМИ');
+  console.log('=' .repeat(50));
+  
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log('❌ Пользователь не авторизован');
+    return;
+  }
+  
+  console.log('👤 Пользователь:', currentUser.displayName || currentUser.email);
+  console.log('🆔 User ID:', currentUser.uid);
+  
+  // 1. Проверяем listener
+  console.log('\n1️⃣ ПРОВЕРКА LISTENER:');
+  console.log('📊 Глобальный listener активен:', !!globalOrdersListener);
+  console.log('📊 Отслеживаемых заказов:', lastOrderStatuses.size);
+  console.log('📊 Список отслеживаемых заказов:', Array.from(lastOrderStatuses.entries()));
+  
+  // 2. Проверяем функцию уведомления
+  console.log('\n2️⃣ ПРОВЕРКА ФУНКЦИИ УВЕДОМЛЕНИЯ:');
+  console.log('📊 showStatusUpdateNotification доступна:', typeof showStatusUpdateNotification === 'function');
+  
+  // 3. Тестируем уведомление напрямую
+  console.log('\n3️⃣ ТЕСТ УВЕДОМЛЕНИЯ:');
+  const testOrder = {
+    id: 'debug_test',
+    name: 'Тестовый коктейль',
+    user: currentUser.displayName || 'Тестовый пользователь',
+    userId: currentUser.uid,
+    status: 'confirmed'
+  };
+  
+  console.log('📤 Показываем тестовое уведомление...');
+  showStatusUpdateNotification(testOrder, 'confirmed');
+  
+  // 4. Проверяем DOM
+  console.log('\n4️⃣ ПРОВЕРКА DOM:');
+  const notifications = document.querySelectorAll('.status-update-notification');
+  console.log('📊 Уведомлений на странице:', notifications.length);
+  
+  // 5. Проверяем Firebase подключение
+  console.log('\n5️⃣ ПРОВЕРКА FIREBASE:');
+  console.log('📊 Firebase app:', !!firebase.apps.length);
+  console.log('📊 Firestore:', !!db);
+  console.log('📊 Auth:', !!auth);
+  
+  console.log('\n✅ Диагностика завершена. Проверьте результаты выше.');
+}
+
+// Функция для принудительной переинициализации listener
+function reinitializeListener() {
+  console.log('🔄 Принудительная переинициализация listener...');
+  
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log('❌ Пользователь не авторизован');
+    return;
+  }
+  
+  // Отключаем текущий listener
+  if (globalOrdersListener) {
+    console.log('🔄 Отключаем текущий listener');
+    globalOrdersListener();
+    globalOrdersListener = null;
+  }
+  
+  // Очищаем кэш статусов
+  lastOrderStatuses.clear();
+  console.log('🧹 Кэш статусов очищен');
+  
+  // Переинициализируем listener
+  console.log('🔄 Переинициализируем listener...');
+  initGlobalOrderStatusListener();
+  
+  console.log('✅ Listener переинициализирован');
+}
+
+// Функция для тестирования интеграции Telegram с сайтом
+async function testTelegramIntegration() {
+  console.log('🧪 Тестирование интеграции Telegram с сайтом...');
+  
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log('❌ Пользователь не авторизован. Войдите в систему для тестирования.');
+    return;
+  }
+  
+  // 1. Проверяем статус webhook сервера
+  console.log('1️⃣ Проверка webhook сервера...');
+  try {
+    const response = await fetch(`${WEBHOOK_SERVER_URL}/health`);
+    const data = await response.json();
+    
+    if (data.status === 'OK') {
+      console.log('✅ Webhook сервер работает:', data);
+    } else {
+      console.log('❌ Webhook сервер не работает:', data);
+      return;
+    }
+  } catch (error) {
+    console.log('❌ Ошибка подключения к webhook серверу:', error.message);
+    return;
+  }
+  
+  // 2. Проверяем Firebase подключение webhook сервера
+  console.log('2️⃣ Проверка Firebase подключения webhook сервера...');
+  try {
+    const response = await fetch(`${WEBHOOK_SERVER_URL}/test-firebase`);
+    const data = await response.json();
+    
+    if (data.success) {
+      console.log('✅ Firebase подключение webhook сервера работает:', data);
+    } else {
+      console.log('❌ Firebase подключение webhook сервера не работает:', data);
+      return;
+    }
+  } catch (error) {
+    console.log('❌ Ошибка проверки Firebase:', error.message);
+    return;
+  }
+  
+  // 3. Создаем тестовый заказ
+  console.log('3️⃣ Создание тестового заказа...');
+  const testOrderData = {
+    name: 'Тестовый коктейль для Telegram',
+    user: currentUser.displayName || 'Тестовый пользователь',
+    userId: currentUser.uid,
+    status: 'pending',
+    createdAt: new Date(),
+    displayTime: new Date().toLocaleString('ru-RU')
+  };
+  
+  try {
+    const orderRef = await db.collection('orders').add(testOrderData);
+    const orderId = orderRef.id;
+    console.log('✅ Тестовый заказ создан:', orderId);
+    
+    // 4. Симулируем изменение статуса через webhook
+    console.log('4️⃣ Симуляция изменения статуса через webhook...');
+    
+    // Обновляем статус заказа (как это делает webhook сервер)
+    await db.collection('orders').doc(orderId).update({
+      status: 'confirmed',
+      updatedAt: new Date(),
+      updatedBy: 'telegram_admin'
+    });
+    
+    console.log('✅ Статус заказа обновлен на "confirmed"');
+    console.log('👀 Следите за уведомлением на сайте...');
+    
+    // 5. Проверяем, что listener работает
+    console.log('5️⃣ Проверка listener...');
+    console.log(`📊 Активных listeners: ${globalOrdersListener ? '1' : '0'}`);
+    console.log(`📊 Отслеживаемых заказов: ${lastOrderStatuses.size}`);
+    
+    // 6. Очищаем тестовый заказ через 10 секунд
+    setTimeout(async () => {
+      try {
+        await db.collection('orders').doc(orderId).delete();
+        console.log('🧹 Тестовый заказ удален');
+      } catch (error) {
+        console.log('⚠️ Не удалось удалить тестовый заказ:', error.message);
+      }
+    }, 10000);
+    
+  } catch (error) {
+    console.log('❌ Ошибка создания тестового заказа:', error.message);
+  }
+}
+
+// Функция для быстрого тестирования одного уведомления
+function testSingleNotification(status = 'confirmed') {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log('❌ Для тестирования уведомлений необходимо войти в систему');
+    return;
+  }
+  
+  const testOrder = {
+    id: 'test-single',
+    name: 'Тестовый коктейль',
+    status: status,
+    userId: currentUser.uid
+  };
+  
+  console.log('🧪 Тестирование одного уведомления:', status);
+  showStatusUpdateNotification(testOrder, status);
+}
+
+// Функция для проверки состояния listener'а
+function checkListenerStatus() {
+  console.log('🔍 Проверка состояния listener\'а:');
+  console.log('- globalOrdersListener:', !!globalOrdersListener);
+  console.log('- lastOrderStatuses size:', lastOrderStatuses.size);
+  console.log('- currentUser:', !!auth.currentUser);
+  console.log('- Firebase db:', !!db);
+  
+  if (globalOrdersListener) {
+    console.log('✅ Listener активен');
+  } else {
+    console.log('❌ Listener не активен');
+  }
+  
+  return {
+    listenerActive: !!globalOrdersListener,
+    ordersCount: lastOrderStatuses.size,
+    userLoggedIn: !!auth.currentUser,
+    firebaseConnected: !!db
+  };
+}
+
+// Функция для принудительного показа уведомления с отладкой
+function forceShowNotification(status = 'confirmed') {
+  console.log('🔧 Принудительный показ уведомления:', status);
+  
+  // Создаем простое уведомление для тестирования
+  const notification = document.createElement('div');
+  notification.id = 'force-notification-test';
+  notification.innerHTML = `
+    <div style="padding: 20px; background: red; color: white; font-size: 20px; font-weight: bold;">
+      ТЕСТ УВЕДОМЛЕНИЯ: ${status}
+    </div>
+  `;
+  
+  // Принудительные стили
+  notification.style.cssText = `
+    position: fixed !important;
+    top: 50px !important;
+    right: 50px !important;
+    z-index: 999999 !important;
+    background: red !important;
+    color: white !important;
+    padding: 20px !important;
+    border-radius: 10px !important;
+    font-size: 18px !important;
+    font-weight: bold !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    width: 300px !important;
+    height: auto !important;
+  `;
+  
+  // Добавляем в DOM
+  document.body.appendChild(notification);
+  console.log('🔧 Принудительное уведомление добавлено в DOM');
+  
+  // Проверяем через секунду
+  setTimeout(() => {
+    const rect = notification.getBoundingClientRect();
+    const computedStyle = window.getComputedStyle(notification);
+    console.log('🔧 Проверка принудительного уведомления:', {
+      rect: rect,
+      display: computedStyle.display,
+      visibility: computedStyle.visibility,
+      opacity: computedStyle.opacity,
+      zIndex: computedStyle.zIndex,
+      position: computedStyle.position
+    });
+    
+    // Удаляем через 5 секунд
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+        console.log('🔧 Принудительное уведомление удалено');
+      }
+    }, 5000);
+  }, 1000);
+}
+
+// Добавляем функции в глобальную область для тестирования
 if (typeof window !== 'undefined') {
   window.testNotifications = testNotifications;
+  window.testNewNotifications = testNewNotifications;
+  window.testModalLayers = testModalLayers;
+  window.testUserNotificationTargeting = testUserNotificationTargeting;
+  window.testAudioAndVibration = testAudioAndVibration;
+  window.testTelegramIntegration = testTelegramIntegration;
+  window.debugNotificationIssue = debugNotificationIssue;
+  window.reinitializeListener = reinitializeListener;
+  window.addTestCocktails = addTestCocktails;
+  window.loadCocktails = loadCocktails;
+  window.loadStoplist = loadStoplist;
+  window.testSingleNotification = testSingleNotification;
+  window.checkListenerStatus = checkListenerStatus;
+  window.forceShowNotification = forceShowNotification;
 }
 
 // === КОНЕЦ ФУНКЦИЙ ДЛЯ ТЕСТИРОВАНИЯ ===
+
+// Функция для добавления тестовых коктейлей
+async function addTestCocktails() {
+  try {
+    console.log('🍸 Добавляем тестовые коктейли...');
+    
+    const testCocktails = [
+      {
+        name: "Мохито",
+        ingredients: "Белый ром, свежая мята, лайм, сахар, содовая",
+        mood: "Освежающий и бодрящий",
+        alcohol: 15,
+        createdAt: new Date()
+      },
+      {
+        name: "Маргарита",
+        ingredients: "Текила, лаймовый сок, трипл-сек, соль",
+        mood: "Классический и элегантный",
+        alcohol: 20,
+        createdAt: new Date()
+      },
+      {
+        name: "Космополитен",
+        ingredients: "Водка, клюквенный сок, лайм, трипл-сек",
+        mood: "Современный и стильный",
+        alcohol: 18,
+        createdAt: new Date()
+      },
+      {
+        name: "Пина Колада",
+        ingredients: "Белый ром, кокосовое молоко, ананасовый сок",
+        mood: "Тропический и расслабляющий",
+        alcohol: 12,
+        createdAt: new Date()
+      },
+      {
+        name: "Белый Русский",
+        ingredients: "Водка, кофейный ликер, сливки",
+        mood: "Кремовый и уютный",
+        alcohol: 16,
+        createdAt: new Date()
+      },
+      {
+        name: "Дайкири",
+        ingredients: "Белый ром, лаймовый сок, сахар",
+        mood: "Простой и изысканный",
+        alcohol: 22,
+        createdAt: new Date()
+      }
+    ];
+    
+    const batch = db.batch();
+    
+    testCocktails.forEach(cocktail => {
+      const docRef = db.collection('cocktails').doc();
+      batch.set(docRef, cocktail);
+    });
+    
+    await batch.commit();
+    console.log('✅ Тестовые коктейли добавлены');
+    
+  } catch (error) {
+    console.error('❌ Ошибка добавления тестовых коктейлей:', error);
+  }
+}
 
 // Инициализация функций
 initThemeToggle();
@@ -2364,11 +3073,22 @@ initSwipe();
 
 // Загружаем начальные данные последовательно, чтобы статусы стоп-листа применились к карточкам
 (async () => {
-  await loadStoplist();
-  await loadCocktails();
+  console.log('🚀 Начинаем инициализацию приложения...');
   
-  // Проверяем статус системы при загрузке
-  await monitorSystem();
+  try {
+    console.log('📋 Загружаем стоп-лист...');
+    await loadStoplist();
+    
+    console.log('🍸 Загружаем коктейли...');
+    await loadCocktails();
+    
+    console.log('🔍 Проверяем статус системы...');
+    await monitorSystem();
+    
+    console.log('✅ Инициализация завершена');
+  } catch (error) {
+    console.error('❌ Ошибка инициализации:', error);
+  }
   
   // Периодическая проверка системы каждые 5 минут
   setInterval(monitorSystem, 5 * 60 * 1000);

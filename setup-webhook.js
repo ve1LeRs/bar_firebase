@@ -1,5 +1,5 @@
 // Скрипт для настройки webhook в Telegram
-const TELEGRAM_BOT_TOKEN = "8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo";
+// TELEGRAM_BOT_TOKEN будет объявлен в script.js
 
 // Функция для настройки webhook
 async function setupWebhook(webhookUrl) {
