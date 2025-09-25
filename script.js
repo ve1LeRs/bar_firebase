@@ -1845,9 +1845,9 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
         <i class="${icon}"></i>
       </div>
       <div class="notification-text">
-        <div class="notification-title">Ваш заказ</div>
+        <div class="notification-title">Статус заказа обновлен</div>
         <div class="notification-cocktail">"${cocktailName}"</div>
-        <div class="notification-status">${statusText}</div>
+        <div class="notification-subtitle">${statusText}</div>
       </div>
       <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
         <i class="fas fa-times"></i>
@@ -1858,25 +1858,28 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
   
   console.log('📝 HTML уведомления создан:', notification.innerHTML);
   
-  // Добавляем стили для уведомления
+  // Добавляем стили для уведомления - КРАСИВЫЙ НОВЫЙ ДИЗАЙН
   notification.style.cssText = `
     position: fixed !important;
     top: 20px !important;
     right: 20px !important;
-    background: linear-gradient(135deg, ${backgroundColor}, ${adjustColor(backgroundColor, -20)}) !important;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
     color: white !important;
-    border-radius: 16px !important;
-    box-shadow: 0 12px 40px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.1) !important;
+    border-radius: 20px !important;
+    box-shadow: 
+      0 20px 60px rgba(0, 0, 0, 0.15),
+      0 8px 25px rgba(0, 0, 0, 0.1),
+      0 0 0 1px rgba(255, 255, 255, 0.2) !important;
     z-index: 99999 !important;
-    animation: slideInRight 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), fadeIn 0.3s ease !important;
+    animation: notificationSlideIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
     display: flex !important;
     flex-direction: column !important;
     font-family: 'Inter', sans-serif !important;
     font-weight: 500 !important;
-    min-width: 320px !important;
-    max-width: 400px !important;
+    min-width: 380px !important;
+    max-width: 480px !important;
     backdrop-filter: blur(20px) !important;
-    border: 1px solid rgba(255,255,255,0.2) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
     overflow: hidden !important;
     visibility: visible !important;
     opacity: 1 !important;
@@ -1885,32 +1888,38 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
   
   console.log('🎨 Стили применены к уведомлению');
   
-  // Добавляем стили для содержимого
+  // Добавляем стили для содержимого - КРАСИВЫЙ НОВЫЙ ДИЗАЙН
   const content = notification.querySelector('.notification-content');
   content.style.cssText = `
     display: flex !important;
     align-items: center !important;
-    gap: 1rem !important;
+    gap: 1.5rem !important;
     width: 100% !important;
-    padding: 1.2rem 1.5rem !important;
+    padding: 2rem 2.5rem !important;
     position: relative !important;
     z-index: 2 !important;
     visibility: visible !important;
     opacity: 1 !important;
   `;
   
-  // Стили для иконки
+  // Стили для иконки - КРАСИВЫЙ НОВЫЙ ДИЗАЙН
   const iconElement = notification.querySelector('.notification-icon');
   iconElement.style.cssText = `
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    width: 40px !important;
-    height: 40px !important;
-    background: rgba(255,255,255,0.2) !important;
+    width: 60px !important;
+    height: 60px !important;
+    background: rgba(255, 255, 255, 0.2) !important;
     border-radius: 50% !important;
-    font-size: 1.2rem !important;
-    animation: pulse 2s infinite !important;
+    font-size: 1.8rem !important;
+    color: white !important;
+    animation: float 3s ease-in-out infinite !important;
+    border: 2px solid rgba(255, 255, 255, 0.3) !important;
+    box-shadow: 
+      0 10px 30px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+    backdrop-filter: blur(10px) !important;
     visibility: visible !important;
     opacity: 1 !important;
   `;
@@ -1920,89 +1929,102 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
     flex: 1 !important;
     display: flex !important;
     flex-direction: column !important;
-    gap: 0.25rem !important;
+    gap: 0.4rem !important;
     visibility: visible !important;
     opacity: 1 !important;
   `;
   
   const title = notification.querySelector('.notification-title');
   title.style.cssText = `
-    font-weight: 500 !important;
-    font-size: 0.9rem !important;
-    line-height: 1.2 !important;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
-    visibility: visible !important;
-    opacity: 0.9 !important;
+    font-weight: 700 !important;
+    font-size: 1.4rem !important;
+    line-height: 1.3 !important;
     color: white !important;
-    margin-bottom: 2px !important;
+    font-family: 'Inter', sans-serif !important;
+    letter-spacing: 0.01em !important;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    margin-bottom: 0 !important;
   `;
   
   const cocktail = notification.querySelector('.notification-cocktail');
   cocktail.style.cssText = `
-    font-weight: 700 !important;
-    font-size: 1.1rem !important;
-    line-height: 1.3 !important;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+    font-weight: 600 !important;
+    font-size: 1.2rem !important;
+    line-height: 1.4 !important;
     visibility: visible !important;
     opacity: 1 !important;
-    color: white !important;
-    margin-bottom: 2px !important;
+    color: rgba(255, 255, 255, 0.95) !important;
+    margin: 0.3rem 0 !important;
     font-style: italic !important;
+    font-family: 'Inter', sans-serif !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
   `;
   
-  const status = notification.querySelector('.notification-status');
+  const status = notification.querySelector('.notification-subtitle');
   status.style.cssText = `
-    font-weight: 600 !important;
+    font-weight: 500 !important;
     font-size: 1rem !important;
-    line-height: 1.3 !important;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+    line-height: 1.4 !important;
     visibility: visible !important;
-    opacity: 1 !important;
-    color: white !important;
+    opacity: 0.9 !important;
+    color: rgba(255, 255, 255, 0.9) !important;
     text-transform: capitalize !important;
+    font-family: 'Inter', sans-serif !important;
   `;
   
   const closeBtn = notification.querySelector('.notification-close');
   closeBtn.style.cssText = `
-    background: rgba(255,255,255,0.2) !important;
-    border: none !important;
+    background: rgba(255, 255, 255, 0.2) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
     color: white !important;
     cursor: pointer !important;
-    padding: 0.5rem !important;
+    padding: 0.6rem !important;
     border-radius: 50% !important;
     opacity: 0.8 !important;
-    transition: all 0.2s ease !important;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    width: 32px !important;
-    height: 32px !important;
-    font-size: 0.9rem !important;
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 1.1rem !important;
+    backdrop-filter: blur(10px) !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
     visibility: visible !important;
   `;
   
   closeBtn.addEventListener('mouseenter', () => {
     closeBtn.style.opacity = '1';
-    closeBtn.style.background = 'rgba(255,255,255,0.3)';
-    closeBtn.style.transform = 'scale(1.1)';
+    closeBtn.style.background = 'rgba(255, 255, 255, 0.3)';
+    closeBtn.style.borderColor = 'rgba(255, 255, 255, 0.5)';
+    closeBtn.style.transform = 'scale(1.1) rotate(90deg)';
+    closeBtn.style.color = 'white';
+    closeBtn.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.3)';
   });
   
   closeBtn.addEventListener('mouseleave', () => {
     closeBtn.style.opacity = '0.8';
-    closeBtn.style.background = 'rgba(255,255,255,0.2)';
-    closeBtn.style.transform = 'scale(1)';
+    closeBtn.style.background = 'rgba(255, 255, 255, 0.2)';
+    closeBtn.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+    closeBtn.style.transform = 'scale(1) rotate(0deg)';
+    closeBtn.style.color = 'white';
+    closeBtn.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.2)';
   });
   
-  // Прогресс-бар
+  // Прогресс-бар - КРАСИВЫЙ НОВЫЙ ДИЗАЙН
   const progress = notification.querySelector('.notification-progress');
   progress.style.cssText = `
     position: absolute !important;
     bottom: 0 !important;
     left: 0 !important;
     height: 3px !important;
-    background: rgba(255,255,255,0.3) !important;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.8)) !important;
+    background-size: 200% 100% !important;
     width: 100% !important;
-    animation: progressBar ${duration}ms linear !important;
+    animation: progressBar ${duration}ms linear, shimmer 2s ease-in-out infinite !important;
+    border-radius: 0 0 20px 20px !important;
     visibility: visible !important;
     opacity: 1 !important;
   `;
@@ -2136,48 +2158,63 @@ function playNotificationSound(audioContext) {
   }
 }
 
-// Уведомление об обновлении статуса для админов
+// Уведомление об обновлении статуса для админов - НОВЫЙ ДИЗАЙН
 function showAdminStatusUpdateNotification() {
   // Создаем временное уведомление для админа
   const notification = document.createElement('div');
   notification.className = 'admin-status-update-notification';
   notification.innerHTML = `
     <div class="notification-content">
-      <i class="fas fa-bell"></i>
-      <span>Заказ обновлен через Telegram!</span>
+      <div class="notification-icon">
+        <i class="fas fa-bell"></i>
+      </div>
+      <div class="notification-text">
+        <div class="notification-title">Обновление через Telegram</div>
+        <div class="notification-subtitle">Статус заказа изменен</div>
+      </div>
+      <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
+        <i class="fas fa-times"></i>
+      </button>
     </div>
+    <div class="notification-progress"></div>
   `;
   
-  // Добавляем стили для уведомления
+  // Добавляем стили для уведомления - КРАСИВЫЙ НОВЫЙ ДИЗАЙН
   notification.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: #3498db;
-    color: white;
-    padding: 1rem 1.5rem;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    z-index: 10000;
-    animation: slideInRight 0.3s ease;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-family: 'Inter', sans-serif;
-    font-weight: 500;
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
+    color: white !important;
+    border-radius: 20px !important;
+    box-shadow: 
+      0 20px 60px rgba(0, 0, 0, 0.15),
+      0 8px 25px rgba(0, 0, 0, 0.1),
+      0 0 0 1px rgba(255, 255, 255, 0.2) !important;
+    z-index: 10000 !important;
+    animation: notificationSlideIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 500 !important;
+    min-width: 380px !important;
+    max-width: 480px !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    overflow: hidden !important;
   `;
   
   document.body.appendChild(notification);
   
-  // Удаляем уведомление через 4 секунды
+  // Удаляем уведомление через 5 секунд
   setTimeout(() => {
-    notification.style.animation = 'slideOutRight 0.3s ease';
+    notification.style.animation = 'notificationSlideOut 0.6s ease';
     setTimeout(() => {
       if (notification.parentNode) {
         notification.parentNode.removeChild(notification);
       }
-    }, 300);
-  }, 4000);
+    }, 600);
+  }, 5000);
 }
 
 // === ФУНКЦИИ МОНИТОРИНГА WEBHOOK СЕРВЕРА ===

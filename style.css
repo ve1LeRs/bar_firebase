@@ -56,6 +56,61 @@
   }
 }
 
+@keyframes gentlePulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.02);
+    opacity: 0.9;
+  }
+}
+
+@keyframes notificationSlideIn {
+  0% {
+    transform: translateX(100%) scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: translateX(-10px) scale(1.05);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes notificationSlideOut {
+  0% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%) scale(0.8);
+    opacity: 0;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
 @keyframes bounce {
   0%, 20%, 53%, 80%, 100% {
     transform: translate3d(0,0,0);
@@ -4395,43 +4450,50 @@ body.dark-theme .telegram-info code {
   }
 }
 
-/* Стили для уведомлений об обновлении статуса */
+/* Стили для уведомлений об обновлении статуса - СОВЕРШЕННО НОВЫЙ КРАСИВЫЙ ДИЗАЙН */
 .status-update-notification,
 .admin-status-update-notification {
   position: fixed;
-  top: 80px;
+  top: 20px;
   right: 20px;
   z-index: 10000;
-  animation: slideInRight 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-  border-radius: 16px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.1);
+  animation: notificationSlideIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border-radius: 20px;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.15),
+    0 8px 25px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.2);
-  min-width: 280px;
-  max-width: 350px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  min-width: 380px;
+  max-width: 480px;
   font-family: 'Inter', sans-serif;
   font-weight: 500;
   overflow: hidden;
   position: relative;
+  transform: translateX(0);
+  opacity: 1;
 }
 
 .status-update-notification {
-  background: linear-gradient(135deg, #27ae60, #2ecc71);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .admin-status-update-notification {
-  background: linear-gradient(135deg, #3498db, #5dade2);
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
   color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* Стили для содержимого уведомлений */
+/* Стили для содержимого уведомлений - КРАСИВЫЙ НОВЫЙ ДИЗАЙН */
 .notification-content {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.5rem;
   width: 100%;
-  padding: 1.2rem 1.5rem;
+  padding: 2rem 2.5rem;
   position: relative;
   z-index: 2;
 }
@@ -4440,55 +4502,81 @@ body.dark-theme .telegram-info code {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: rgba(255,255,255,0.2);
+  width: 60px;
+  height: 60px;
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 50%;
-  font-size: 1.2rem;
-  animation: pulse 2s infinite;
+  font-size: 1.8rem;
+  color: white;
+  animation: float 3s ease-in-out infinite;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 
+    0 10px 30px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(10px);
 }
 
 .notification-text {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.4rem;
 }
 
 .notification-title {
-  font-weight: 600;
-  font-size: 1rem;
+  font-weight: 700;
+  font-size: 1.4rem;
   line-height: 1.3;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  color: white;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 0.01em;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .notification-subtitle {
-  font-size: 0.8rem;
+  font-size: 1rem;
   opacity: 0.9;
-  font-weight: 400;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: 'Inter', sans-serif;
+  line-height: 1.4;
+}
+
+.notification-cocktail {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  font-style: italic;
+  margin: 0.3rem 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .notification-close {
-  background: rgba(255,255,255,0.2);
-  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   color: white;
   cursor: pointer;
-  padding: 0.5rem;
+  padding: 0.6rem;
   border-radius: 50%;
   opacity: 0.8;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  font-size: 1.1rem;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  font-size: 0.9rem;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
 .notification-close:hover {
   opacity: 1;
-  background: rgba(255,255,255,0.3);
-  transform: scale(1.1);
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.1) rotate(90deg);
+  color: white;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 
 .notification-progress {
@@ -4496,25 +4584,62 @@ body.dark-theme .telegram-info code {
   bottom: 0;
   left: 0;
   height: 3px;
-  background: rgba(255,255,255,0.3);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.8));
+  background-size: 200% 100%;
   width: 100%;
-  animation: progressBar 4000ms linear;
+  animation: progressBar 5000ms linear, shimmer 2s ease-in-out infinite;
+  border-radius: 0 0 20px 20px;
 }
 
 /* Анимации для иконок в уведомлениях */
 .status-update-notification .fas,
 .admin-status-update-notification .fas {
-  animation: pulse 2s infinite;
+  animation: float 3s ease-in-out infinite;
 }
 
 /* Темная тема для уведомлений */
 body.dark-theme .status-update-notification {
-  background: linear-gradient(135deg, #2ecc71, #27ae60);
+  background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
   color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    0 8px 25px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 body.dark-theme .admin-status-update-notification {
-  background: linear-gradient(135deg, #5dade2, #3498db);
+  background: linear-gradient(135deg, #805ad5 0%, #553c9a 100%);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    0 8px 25px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .notification-icon {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+body.dark-theme .notification-title {
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+body.dark-theme .notification-subtitle {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+body.dark-theme .notification-cocktail {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+body.dark-theme .notification-close {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
 }
 
@@ -4522,37 +4647,41 @@ body.dark-theme .admin-status-update-notification {
 @media (max-width: 768px) {
   .status-update-notification,
   .admin-status-update-notification {
-    top: 70px;
-    right: 10px;
-    left: 10px;
+    top: 15px;
+    right: 15px;
+    left: 15px;
     min-width: auto;
     max-width: none;
-    border-radius: 12px;
+    border-radius: 16px;
   }
   
   .notification-content {
-    padding: 1rem 1.2rem;
-    gap: 0.8rem;
+    padding: 1.5rem 2rem;
+    gap: 1.2rem;
   }
   
   .notification-icon {
-    width: 36px;
-    height: 36px;
-    font-size: 1.1rem;
+    width: 50px;
+    height: 50px;
+    font-size: 1.5rem;
   }
   
   .notification-title {
-    font-size: 0.95rem;
+    font-size: 1.3rem;
   }
   
   .notification-subtitle {
-    font-size: 0.8rem;
+    font-size: 0.95rem;
+  }
+  
+  .notification-cocktail {
+    font-size: 1.1rem;
   }
   
   .notification-close {
-    width: 28px;
-    height: 28px;
-    font-size: 0.8rem;
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
   }
 }
 
