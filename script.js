@@ -25,6 +25,98 @@ console.log('✅ Firebase инициализирован');
 // Глобальные переменные
 let audioContextEnabled = false; // Флаг для отслеживания активации звука
 
+// Глобальные функции для тестирования
+window.testBeautifulNotifications = function() {
+  console.log('🎨 Тестирование красивых уведомлений с эмодзи...');
+  
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log('❌ Пользователь не авторизован. Войдите в систему для тестирования.');
+    return;
+  }
+  
+  const testOrders = [
+    { id: 'test1', name: 'Мохито', user: 'Иван Петров', userId: currentUser.uid, status: 'confirmed' },
+    { id: 'test2', name: 'Космополитен', user: 'Мария Сидорова', userId: currentUser.uid, status: 'preparing' },
+    { id: 'test3', name: 'Маргарита', user: 'Алексей Козлов', userId: currentUser.uid, status: 'ready' },
+    { id: 'test4', name: 'Пина Колада', user: 'Елена Волкова', userId: currentUser.uid, status: 'completed' },
+    { id: 'test5', name: 'Белый Русский', user: 'Дмитрий Соколов', userId: currentUser.uid, status: 'cancelled' }
+  ];
+  
+  console.log('📤 Показываем все типы красивых уведомлений с эмодзи...');
+  
+  testOrders.forEach((order, index) => {
+    setTimeout(() => {
+      showStatusUpdateNotification(order, order.status);
+      console.log(`✅ Показано красивое уведомление: ${order.name} - ${order.status}`);
+    }, index * 4000); // Показываем каждое уведомление через 4 секунды
+  });
+  
+  console.log('💡 Обратите внимание на:');
+  console.log('   - Эмодзи для каждого статуса (✅👨‍🍳🍸🎉❌)');
+  console.log('   - Разные цвета для разных статусов');
+  console.log('   - Красивые анимации и переходы');
+  console.log('   - Разные звуки для каждого статуса');
+  console.log('   - Разные паттерны вибрации');
+  console.log('   - Улучшенный дизайн и типографику');
+};
+
+// Другие тестовые функции
+window.testAudioAndVibration = function() {
+  console.log('🔊 Тестирование звука и вибрации...');
+  if (navigator.vibrate) {
+    navigator.vibrate([200, 100, 200]);
+    console.log('📳 Вибрация активирована');
+  }
+  console.log('💡 Звук будет воспроизведен при следующем уведомлении');
+};
+
+window.testEmojiNotifications = function() {
+  console.log('😀 Тестирование эмодзи в уведомлениях...');
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log('❌ Пользователь не авторизован. Войдите в систему для тестирования.');
+    return;
+  }
+  
+  const testOrder = { id: 'emoji-test', name: 'Тестовый коктейль', userId: currentUser.uid };
+  showStatusUpdateNotification(testOrder, 'confirmed');
+  console.log('✅ Показано тестовое уведомление с эмодзи');
+};
+
+window.testEmojiDisplay = function() {
+  console.log('🎭 Тестирование отображения эмодзи...');
+  const emojis = ['✅', '👨‍🍳', '🍸', '🎉', '❌'];
+  emojis.forEach((emoji, index) => {
+    setTimeout(() => {
+      console.log(`Эмодзи ${index + 1}: ${emoji}`);
+    }, index * 500);
+  });
+};
+
+window.testConfirmedNotification = function() {
+  console.log('✅ Тестирование уведомления о подтверждении заказа...');
+  
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log('❌ Пользователь не авторизован. Войдите в систему для тестирования.');
+    return;
+  }
+  
+  const testOrder = { 
+    id: 'confirmed-test', 
+    name: 'Мохито', 
+    userId: currentUser.uid 
+  };
+  
+  console.log('📤 Показываем тестовое уведомление...');
+  showStatusUpdateNotification(testOrder, 'confirmed');
+  
+  if (!audioContextEnabled) {
+    console.log('💡 Кликните в любом месте страницы для активации звука');
+  }
+};
+
 // DOM элементы
 console.log('🔍 Инициализация DOM элементов...');
 const themeToggle = document.getElementById('themeToggle');
@@ -1768,132 +1860,78 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
   
   console.log('✅ Показываем уведомление для пользователя:', currentUser.uid);
   
-  // Определяем тип уведомления и иконку
-  let icon = 'fas fa-sync-alt';
-  let message = 'Статус заказа обновлен!';
-  let backgroundColor = '#27ae60';
-  let duration = 4000;
-  
-  if (orderData && newStatus) {
-    const statusEmojis = {
-      'confirmed': '✅',
-      'preparing': '👨‍🍳',
-      'ready': '🍸',
-      'completed': '🎉',
-      'cancelled': '❌'
-    };
-    
-    const statusTexts = {
-      'confirmed': 'подтвержден',
-      'preparing': 'готовится',
-      'ready': 'готов',
-      'completed': 'выполнен',
-      'cancelled': 'отменен'
-    };
-    
-    const emoji = statusEmojis[newStatus] || '📝';
-    const statusText = statusTexts[newStatus] || newStatus;
-    const cocktailName = orderData.name || 'Неизвестный коктейль';
-    
-    // Настраиваем цвета и иконки в зависимости от статуса
-    switch(newStatus) {
-      case 'confirmed':
-        icon = 'fas fa-check-circle';
-        backgroundColor = '#27ae60';
-        break;
-      case 'preparing':
-        icon = 'fas fa-utensils';
-        backgroundColor = '#f39c12';
-        break;
-      case 'ready':
-        icon = 'fas fa-glass-martini-alt';
-        backgroundColor = '#3498db';
-        break;
-      case 'completed':
-        icon = 'fas fa-trophy';
-        backgroundColor = '#9b59b6';
-        break;
-      case 'cancelled':
-        icon = 'fas fa-times-circle';
-        backgroundColor = '#e74c3c';
-        break;
+  // Новые данные для уведомлений
+  const statusConfig = {
+    'confirmed': {
+      emoji: '✅',
+      icon: 'fas fa-check-circle',
+      title: 'Заказ подтвержден!',
+      subtitle: 'Бармен принял ваш заказ',
+      class: 'status-confirmed'
+    },
+    'preparing': {
+      emoji: '👨‍🍳',
+      icon: 'fas fa-utensils',
+      title: 'Готовится!',
+      subtitle: 'Ваш коктейль готовится',
+      class: 'status-preparing'
+    },
+    'ready': {
+      emoji: '🍸',
+      icon: 'fas fa-glass-cheers',
+      title: 'Готов!',
+      subtitle: 'Ваш заказ готов к выдаче',
+      class: 'status-ready'
+    },
+    'completed': {
+      emoji: '🎉',
+      icon: 'fas fa-star',
+      title: 'Завершен!',
+      subtitle: 'Спасибо за заказ!',
+      class: 'status-completed'
+    },
+    'cancelled': {
+      emoji: '❌',
+      icon: 'fas fa-times-circle',
+      title: 'Отменен',
+      subtitle: 'Заказ был отменен',
+      class: 'status-cancelled'
     }
-    
-    // Новый формат сообщения: "Ваш заказ [коктейль] [статус]"
-    message = `Ваш заказ "${cocktailName}" ${statusText}`;
-    duration = 5000; // Увеличиваем время показа для лучшего восприятия
-  }
+  };
   
-  // Создаем красивое уведомление
-  console.log('🎨 Создаем уведомление с параметрами:', { icon, message, backgroundColor, duration });
+  // Получаем конфигурацию для текущего статуса
+  const config = statusConfig[newStatus] || statusConfig['confirmed'];
+  const cocktailName = orderData?.name || 'Неизвестный коктейль';
+  
+  // Создаем новое современное уведомление
+  console.log('🎨 Создаем новое уведомление с параметрами:', { config, cocktailName });
   
   const notification = document.createElement('div');
-  notification.className = 'status-update-notification';
-  
-  // Разбиваем сообщение на части для лучшего отображения
-  const cocktailName = orderData?.name || 'Неизвестный коктейль';
-  const statusText = orderData && newStatus ? 
-    (newStatus === 'confirmed' ? 'подтвержден' :
-     newStatus === 'preparing' ? 'готовится' :
-     newStatus === 'ready' ? 'готов' :
-     newStatus === 'completed' ? 'выполнен' :
-     newStatus === 'cancelled' ? 'отменен' : newStatus) : 'обновлен';
+  notification.className = `status-update-notification ${config.class}`;
   
   notification.innerHTML = `
     <div class="notification-content">
       <div class="notification-icon">
-        <i class="${icon}"></i>
+        <i class="${config.icon}"></i>
       </div>
-      <div class="notification-text">
-        <div class="notification-title">Статус заказа обновлен</div>
-        <div class="notification-cocktail">"${cocktailName}"</div>
-        <div class="notification-subtitle">${statusText}</div>
+      <div class="notification-body">
+        <div class="notification-title">${config.title}</div>
+        <div class="notification-subtitle">${config.subtitle}</div>
       </div>
       <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
         <i class="fas fa-times"></i>
       </button>
     </div>
-    <div class="notification-progress"></div>
   `;
   
   console.log('📝 HTML уведомления создан:', notification.innerHTML);
-  
-  // Добавляем стили для уведомления - КРАСИВЫЙ НОВЫЙ ДИЗАЙН
-  notification.style.cssText = `
-    position: fixed !important;
-    top: 20px !important;
-    right: 20px !important;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-    color: white !important;
-    border-radius: 20px !important;
-    box-shadow: 
-      0 20px 60px rgba(0, 0, 0, 0.15),
-      0 8px 25px rgba(0, 0, 0, 0.1),
-      0 0 0 1px rgba(255, 255, 255, 0.2) !important;
-    z-index: 99999 !important;
-    animation: notificationSlideIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
-    display: flex !important;
-    flex-direction: column !important;
-    font-family: 'Inter', sans-serif !important;
-    font-weight: 500 !important;
-    min-width: 380px !important;
-    max-width: 480px !important;
-    backdrop-filter: blur(20px) !important;
-    border: 1px solid rgba(255, 255, 255, 0.3) !important;
-    overflow: hidden !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    pointer-events: auto !important;
-  `;
-  
-  console.log('🎨 Стили применены к уведомлению');
   
   // Добавляем стили для содержимого - КРАСИВЫЙ НОВЫЙ ДИЗАЙН
   const content = notification.querySelector('.notification-content');
   content.style.cssText = `
     display: flex !important;
     align-items: center !important;
-    gap: 1.5rem !important;
+    gap: 1rem !important;
     width: 100% !important;
     padding: 2rem 2.5rem !important;
     position: relative !important;
@@ -1902,135 +1940,136 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
     opacity: 1 !important;
   `;
   
-  // Стили для иконки - КРАСИВЫЙ НОВЫЙ ДИЗАЙН
-  const iconElement = notification.querySelector('.notification-icon');
-  iconElement.style.cssText = `
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 60px !important;
-    height: 60px !important;
-    background: rgba(255, 255, 255, 0.2) !important;
-    border-radius: 50% !important;
-    font-size: 1.8rem !important;
-    color: white !important;
-    animation: float 3s ease-in-out infinite !important;
-    border: 2px solid rgba(255, 255, 255, 0.3) !important;
-    box-shadow: 
-      0 10px 30px rgba(0, 0, 0, 0.2),
-      inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
-    backdrop-filter: blur(10px) !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-  `;
+  // Иконка убрана - эмодзи теперь в заголовке
   
-  const text = notification.querySelector('.notification-text');
-  text.style.cssText = `
-    flex: 1 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 0.4rem !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-  `;
+  const text = notification.querySelector('.notification-body');
+  if (text) {
+    text.style.cssText = `
+      flex: 1 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 0.4rem !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+    `;
+  }
   
   const title = notification.querySelector('.notification-title');
-  title.style.cssText = `
-    font-weight: 700 !important;
-    font-size: 1.4rem !important;
-    line-height: 1.3 !important;
-    color: white !important;
-    font-family: 'Inter', sans-serif !important;
-    letter-spacing: 0.01em !important;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    margin-bottom: 0 !important;
-  `;
+  if (title) {
+    // Определяем тему для правильного цвета текста
+    const isDarkTheme = document.body.classList.contains('dark-theme');
+    const titleColor = isDarkTheme ? 'white' : '#2d3748';
+    const textShadow = isDarkTheme ? '0 2px 4px rgba(0, 0, 0, 0.3)' : '0 1px 2px rgba(0, 0, 0, 0.1)';
+    
+    title.style.cssText = `
+      font-weight: 700 !important;
+      font-size: 1.4rem !important;
+      line-height: 1.3 !important;
+      color: ${titleColor} !important;
+      font-family: 'Inter', sans-serif !important;
+      letter-spacing: 0.01em !important;
+      text-shadow: ${textShadow} !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      margin-bottom: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+    `;
+  }
   
-  const cocktail = notification.querySelector('.notification-cocktail');
-  cocktail.style.cssText = `
-    font-weight: 600 !important;
-    font-size: 1.2rem !important;
-    line-height: 1.4 !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    color: rgba(255, 255, 255, 0.95) !important;
-    margin: 0.3rem 0 !important;
-    font-style: italic !important;
-    font-family: 'Inter', sans-serif !important;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
-  `;
+  // Стили для эмодзи в заголовке
+  const emojiElement = notification.querySelector('.notification-title .emoji');
+  if (emojiElement) {
+    emojiElement.style.cssText = `
+      font-size: 1.6em !important;
+      margin-right: 0.5em !important;
+      display: inline-block !important;
+      animation: bounce 2s ease-in-out infinite !important;
+      line-height: 1 !important;
+      vertical-align: middle !important;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+    `;
+  }
+  
+  // Элемент cocktail удален из HTML
   
   const status = notification.querySelector('.notification-subtitle');
-  status.style.cssText = `
-    font-weight: 500 !important;
-    font-size: 1rem !important;
-    line-height: 1.4 !important;
-    visibility: visible !important;
-    opacity: 0.9 !important;
-    color: rgba(255, 255, 255, 0.9) !important;
-    text-transform: capitalize !important;
-    font-family: 'Inter', sans-serif !important;
-  `;
+  if (status) {
+    // Определяем тему для правильного цвета текста
+    const isDarkTheme = document.body.classList.contains('dark-theme');
+    const subtitleColor = isDarkTheme ? 'rgba(255, 255, 255, 0.9)' : 'rgba(45, 55, 72, 0.8)';
+    
+    status.style.cssText = `
+      font-weight: 500 !important;
+      font-size: 1rem !important;
+      line-height: 1.4 !important;
+      visibility: visible !important;
+      opacity: 0.9 !important;
+      color: ${subtitleColor} !important;
+      text-transform: none !important;
+      font-family: 'Inter', sans-serif !important;
+    `;
+  }
   
   const closeBtn = notification.querySelector('.notification-close');
-  closeBtn.style.cssText = `
-    background: rgba(255, 255, 255, 0.2) !important;
-    border: 1px solid rgba(255, 255, 255, 0.3) !important;
-    color: white !important;
-    cursor: pointer !important;
-    padding: 0.6rem !important;
-    border-radius: 50% !important;
-    opacity: 0.8 !important;
-    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 40px !important;
-    height: 40px !important;
-    font-size: 1.1rem !important;
-    backdrop-filter: blur(10px) !important;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
-    visibility: visible !important;
-  `;
+  if (closeBtn) {
+    // Определяем тему для правильного цвета кнопки
+    const isDarkTheme = document.body.classList.contains('dark-theme');
+    const closeBtnBg = isDarkTheme ? 'rgba(255, 255, 255, 0.2)' : 'rgba(45, 55, 72, 0.1)';
+    const closeBtnBorder = isDarkTheme ? 'rgba(255, 255, 255, 0.3)' : 'rgba(45, 55, 72, 0.2)';
+    const closeBtnColor = isDarkTheme ? 'white' : '#2d3748';
+    const closeBtnShadow = isDarkTheme ? '0 4px 15px rgba(0, 0, 0, 0.2)' : '0 2px 8px rgba(0, 0, 0, 0.1)';
+    
+    closeBtn.style.cssText = `
+      background: ${closeBtnBg} !important;
+      border: 1px solid ${closeBtnBorder} !important;
+      color: ${closeBtnColor} !important;
+      cursor: pointer !important;
+      padding: 0.6rem !important;
+      border-radius: 50% !important;
+      opacity: 0.8 !important;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 40px !important;
+      height: 40px !important;
+      font-size: 1.1rem !important;
+      backdrop-filter: blur(10px) !important;
+      box-shadow: ${closeBtnShadow} !important;
+      visibility: visible !important;
+    `;
+  }
   
-  closeBtn.addEventListener('mouseenter', () => {
-    closeBtn.style.opacity = '1';
-    closeBtn.style.background = 'rgba(255, 255, 255, 0.3)';
-    closeBtn.style.borderColor = 'rgba(255, 255, 255, 0.5)';
-    closeBtn.style.transform = 'scale(1.1) rotate(90deg)';
-    closeBtn.style.color = 'white';
-    closeBtn.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.3)';
-  });
+  if (closeBtn) {
+    const isDarkTheme = document.body.classList.contains('dark-theme');
+    
+    closeBtn.addEventListener('mouseenter', () => {
+      closeBtn.style.opacity = '1';
+      closeBtn.style.background = isDarkTheme ? 'rgba(255, 255, 255, 0.3)' : 'rgba(45, 55, 72, 0.2)';
+      closeBtn.style.borderColor = isDarkTheme ? 'rgba(255, 255, 255, 0.5)' : 'rgba(45, 55, 72, 0.3)';
+      closeBtn.style.transform = 'scale(1.1) rotate(90deg)';
+      closeBtn.style.color = isDarkTheme ? 'white' : '#2d3748';
+      closeBtn.style.boxShadow = isDarkTheme ? '0 6px 20px rgba(0, 0, 0, 0.3)' : '0 4px 12px rgba(0, 0, 0, 0.15)';
+    });
+    
+    closeBtn.addEventListener('mouseleave', () => {
+      closeBtn.style.opacity = '0.8';
+      closeBtn.style.background = isDarkTheme ? 'rgba(255, 255, 255, 0.2)' : 'rgba(45, 55, 72, 0.1)';
+      closeBtn.style.borderColor = isDarkTheme ? 'rgba(255, 255, 255, 0.3)' : 'rgba(45, 55, 72, 0.2)';
+      closeBtn.style.transform = 'scale(1) rotate(0deg)';
+      closeBtn.style.color = isDarkTheme ? 'white' : '#2d3748';
+      closeBtn.style.boxShadow = isDarkTheme ? '0 4px 15px rgba(0, 0, 0, 0.2)' : '0 2px 8px rgba(0, 0, 0, 0.1)';
+    });
+  }
   
-  closeBtn.addEventListener('mouseleave', () => {
-    closeBtn.style.opacity = '0.8';
-    closeBtn.style.background = 'rgba(255, 255, 255, 0.2)';
-    closeBtn.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-    closeBtn.style.transform = 'scale(1) rotate(0deg)';
-    closeBtn.style.color = 'white';
-    closeBtn.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.2)';
-  });
-  
-  // Прогресс-бар - КРАСИВЫЙ НОВЫЙ ДИЗАЙН
-  const progress = notification.querySelector('.notification-progress');
-  progress.style.cssText = `
-    position: absolute !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    height: 3px !important;
-    background: linear-gradient(90deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.8)) !important;
-    background-size: 200% 100% !important;
-    width: 100% !important;
-    animation: progressBar ${duration}ms linear, shimmer 2s ease-in-out infinite !important;
-    border-radius: 0 0 20px 20px !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-  `;
+  // Прогресс-бар удален в новом дизайне
   
   document.body.appendChild(notification);
   console.log('✅ Уведомление добавлено в DOM');
+  
+  // Уведомление готово
+  console.log('🎨 Уведомление создано без иконки');
   
   // Проверяем, что уведомление действительно видимо
   setTimeout(() => {
@@ -2065,12 +2104,12 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
       if (audioContext.state === 'suspended') {
         // Пытаемся возобновить контекст (требует пользовательского взаимодействия)
         audioContext.resume().then(() => {
-          playNotificationSound(audioContext);
+          playNotificationSound(audioContext, newStatus);
         }).catch(() => {
           console.log('Звуковое уведомление заблокировано браузером');
         });
       } else {
-        playNotificationSound(audioContext);
+        playNotificationSound(audioContext, newStatus);
       }
     } catch (e) {
       console.log('Звуковое уведомление недоступно:', e.message);
@@ -2083,7 +2122,29 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
   // Вибрация (если поддерживается и разрешена)
   if (navigator.vibrate && 'vibrate' in navigator) {
     try {
-      navigator.vibrate([200, 100, 200]);
+      // Разные паттерны вибрации для разных статусов
+      let vibrationPattern = [200, 100, 200]; // Стандартный паттерн
+      
+      switch(newStatus) {
+        case 'confirmed':
+          vibrationPattern = [100, 50, 100]; // Короткая радостная вибрация
+          break;
+        case 'preparing':
+          vibrationPattern = [300, 100, 300]; // Долгая вибрация
+          break;
+        case 'ready':
+          vibrationPattern = [150, 50, 150, 50, 150]; // Серия коротких
+          break;
+        case 'completed':
+          vibrationPattern = [200, 100, 200, 100, 200]; // Торжественная серия
+          break;
+        case 'cancelled':
+          vibrationPattern = [500]; // Одна долгая вибрация
+          break;
+      }
+      
+      navigator.vibrate(vibrationPattern);
+      console.log(`📳 Вибрация для статуса ${newStatus}:`, vibrationPattern);
     } catch (e) {
       console.log('Вибрация заблокирована браузером:', e.message);
     }
@@ -2092,12 +2153,12 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
   // Автоматическое удаление уведомления
   setTimeout(() => {
     if (notification.parentNode) {
-      notification.style.animation = 'slideOutRight 0.4s ease';
+      notification.style.animation = 'notificationSlideOut 0.6s ease';
       setTimeout(() => {
         if (notification.parentNode) {
           notification.parentNode.removeChild(notification);
         }
-      }, 400);
+      }, 600);
     }
   }, duration);
 }
@@ -2137,22 +2198,68 @@ function enableAudioOnUserInteraction() {
 }
 
 // Функция для воспроизведения звука уведомления
-function playNotificationSound(audioContext) {
+function playNotificationSound(audioContext, status = 'default') {
   try {
+    // Создаем разные звуки для разных статусов
+    let frequencies = [];
+    let duration = 0.2;
+    
+    switch(status) {
+      case 'confirmed':
+        // Приятный восходящий звук
+        frequencies = [400, 600, 800];
+        duration = 0.3;
+        break;
+      case 'preparing':
+        // Средний тон
+        frequencies = [500, 700];
+        duration = 0.25;
+        break;
+      case 'ready':
+        // Радостный звук
+        frequencies = [600, 800, 1000, 800];
+        duration = 0.4;
+        break;
+      case 'completed':
+        // Торжественный звук
+        frequencies = [800, 1000, 1200, 1000, 800];
+        duration = 0.5;
+        break;
+      case 'cancelled':
+        // Нисходящий звук
+        frequencies = [800, 600, 400];
+        duration = 0.3;
+        break;
+      default:
+        // Стандартный звук
+        frequencies = [600, 800];
+        duration = 0.2;
+    }
+    
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
     
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
     
-    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.1);
+    // Устанавливаем тип волны
+    oscillator.type = 'sine';
     
-    gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+    // Создаем мелодию из частот
+    const timeStep = duration / frequencies.length;
+    frequencies.forEach((freq, index) => {
+      const time = audioContext.currentTime + (index * timeStep);
+      oscillator.frequency.setValueAtTime(freq, time);
+    });
+    
+    // Настройка громкости
+    gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
     
     oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.1);
+    oscillator.stop(audioContext.currentTime + duration);
+    
+    console.log(`🔊 Воспроизведен звук для статуса: ${status}`);
   } catch (e) {
     console.log('Ошибка воспроизведения звука:', e.message);
   }
@@ -2165,12 +2272,13 @@ function showAdminStatusUpdateNotification() {
   notification.className = 'admin-status-update-notification';
   notification.innerHTML = `
     <div class="notification-content">
-      <div class="notification-icon">
-        <i class="fas fa-bell"></i>
-      </div>
       <div class="notification-text">
-        <div class="notification-title">Обновление через Telegram</div>
-        <div class="notification-subtitle">Статус заказа изменен</div>
+        <div class="notification-title">
+          <span class="emoji">🔔</span> Обновление через Telegram
+        </div>
+        <div class="notification-subtitle">
+          <span class="emoji">📱</span> Статус заказа изменен
+        </div>
       </div>
       <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
         <i class="fas fa-times"></i>
@@ -2204,11 +2312,104 @@ function showAdminStatusUpdateNotification() {
     overflow: hidden !important;
   `;
   
+  // Добавляем стили для содержимого админского уведомления
+  const content = notification.querySelector('.notification-content');
+  content.style.cssText = `
+    display: flex !important;
+    align-items: center !important;
+    gap: 1rem !important;
+    width: 100% !important;
+    padding: 2rem 2.5rem !important;
+    position: relative !important;
+    z-index: 2 !important;
+  `;
+  
+  const text = notification.querySelector('.notification-text');
+  text.style.cssText = `
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.4rem !important;
+  `;
+  
+  const title = notification.querySelector('.notification-title');
+  title.style.cssText = `
+    font-weight: 700 !important;
+    font-size: 1.4rem !important;
+    line-height: 1.3 !important;
+    color: white !important;
+    font-family: 'Inter', sans-serif !important;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+    display: flex !important;
+    align-items: center !important;
+  `;
+  
+  const subtitle = notification.querySelector('.notification-subtitle');
+  subtitle.style.cssText = `
+    font-weight: 500 !important;
+    font-size: 1rem !important;
+    line-height: 1.4 !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+    font-family: 'Inter', sans-serif !important;
+    display: flex !important;
+    align-items: center !important;
+  `;
+  
+  // Стили для эмодзи в админских уведомлениях
+  const emojis = notification.querySelectorAll('.emoji');
+  emojis.forEach(emoji => {
+    emoji.style.cssText = `
+      font-size: 1.4em !important;
+      margin-right: 0.4em !important;
+      display: inline-block !important;
+      animation: bounce 2s ease-in-out infinite !important;
+      line-height: 1 !important;
+      vertical-align: middle !important;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+    `;
+  });
+  
+  const closeBtn = notification.querySelector('.notification-close');
+  closeBtn.style.cssText = `
+    background: rgba(255, 255, 255, 0.2) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    color: white !important;
+    cursor: pointer !important;
+    padding: 0.6rem !important;
+    border-radius: 50% !important;
+    opacity: 0.8 !important;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 1.1rem !important;
+    backdrop-filter: blur(10px) !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+  `;
+  
+  // Прогресс-бар для админского уведомления
+  const progress = notification.querySelector('.notification-progress');
+  progress.style.cssText = `
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    height: 3px !important;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.8)) !important;
+    background-size: 200% 100% !important;
+    width: 100% !important;
+    animation: progressBar 5000ms linear, shimmer 2s ease-in-out infinite !important;
+    border-radius: 0 0 20px 20px !important;
+  `;
+
   document.body.appendChild(notification);
   
-  // Удаляем уведомление через 5 секунд
+  // Удаляем уведомление через 5 секунд с анимацией "уезжания направо"
   setTimeout(() => {
     notification.style.animation = 'notificationSlideOut 0.6s ease';
+    notification.style.transform = 'translateX(100%)';
+    notification.style.opacity = '0';
     setTimeout(() => {
       if (notification.parentNode) {
         notification.parentNode.removeChild(notification);
@@ -2849,6 +3050,146 @@ function testAudioAndVibration() {
   }
 }
 
+// Функция для тестирования всех новых красивых уведомлений
+function testBeautifulNotifications() {
+  console.log('🎨 Тестирование красивых уведомлений с эмодзи...');
+  
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log('❌ Пользователь не авторизован. Войдите в систему для тестирования.');
+    return;
+  }
+  
+  const testOrders = [
+    { id: 'test1', name: 'Мохито', user: 'Иван Петров', userId: currentUser.uid, status: 'confirmed' },
+    { id: 'test2', name: 'Космополитен', user: 'Мария Сидорова', userId: currentUser.uid, status: 'preparing' },
+    { id: 'test3', name: 'Маргарита', user: 'Алексей Козлов', userId: currentUser.uid, status: 'ready' },
+    { id: 'test4', name: 'Пина Колада', user: 'Елена Волкова', userId: currentUser.uid, status: 'completed' },
+    { id: 'test5', name: 'Белый Русский', user: 'Дмитрий Соколов', userId: currentUser.uid, status: 'cancelled' }
+  ];
+  
+  console.log('📤 Показываем все типы красивых уведомлений с эмодзи...');
+  
+  testOrders.forEach((order, index) => {
+    setTimeout(() => {
+      showStatusUpdateNotification(order, order.status);
+      console.log(`✅ Показано красивое уведомление: ${order.name} - ${order.status}`);
+    }, index * 4000); // Показываем каждое уведомление через 4 секунды
+  });
+  
+  console.log('💡 Обратите внимание на:');
+  console.log('   - Эмодзи для каждого статуса (✅👨‍🍳🍸🎉❌)');
+  console.log('   - Разные цвета для разных статусов');
+  console.log('   - Красивые анимации и переходы');
+  console.log('   - Разные звуки для каждого статуса');
+  console.log('   - Разные паттерны вибрации');
+  console.log('   - Улучшенный дизайн и типографику');
+}
+
+// Функция для быстрого тестирования уведомления о подтверждении
+function testConfirmedNotification() {
+  console.log('✅ Тестирование уведомления о подтверждении заказа...');
+  
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log('❌ Пользователь не авторизован. Войдите в систему для тестирования.');
+    return;
+  }
+  
+  const testOrder = {
+    id: 'test_confirmed',
+    name: 'Мохито',
+    user: currentUser.displayName || 'Тестовый пользователь',
+    userId: currentUser.uid,
+    status: 'confirmed'
+  };
+  
+  console.log('📤 Показываем уведомление о подтверждении...');
+  showStatusUpdateNotification(testOrder, 'confirmed');
+  
+  console.log('💡 Проверьте:');
+  console.log('   - Эмодзи ✅ должен отображаться в заголовке');
+  console.log('   - Текст "Статус заказа обновлен"');
+  console.log('   - Название коктейля "Мохито"');
+  console.log('   - Статус "подтвержден"');
+}
+
+// Функция для тестирования отображения эмодзи
+function testEmojiDisplay() {
+  console.log('🧪 Тестирование отображения эмодзи...');
+  
+  const testEmojis = ['✅', '❌', '👨‍🍳', '🍸', '🎉'];
+  
+  testEmojis.forEach((emoji, index) => {
+    setTimeout(() => {
+      const notification = document.createElement('div');
+      notification.className = 'status-update-notification';
+      notification.innerHTML = `
+        <div class="notification-content">
+          <div class="notification-text">
+            <div class="notification-title">${emoji} Тест эмодзи</div>
+            <div class="notification-cocktail">"Тестовый коктейль"</div>
+            <div class="notification-subtitle">тест</div>
+          </div>
+          <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="notification-progress"></div>
+      `;
+      
+      // Эмодзи теперь в заголовке
+      
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.remove();
+      }, 3000);
+      
+      console.log(`📱 Тест эмодзи ${index + 1}: ${emoji}`);
+    }, index * 1000);
+  });
+}
+
+// Функция для быстрого тестирования исправленных уведомлений
+function testEmojiNotifications() {
+  console.log('🎨 Тестирование исправленных уведомлений...');
+  
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log('❌ Пользователь не авторизован. Войдите в систему для тестирования.');
+    return;
+  }
+  
+  const testOrder = {
+    id: 'test_emoji',
+    name: 'Мохито',
+    user: currentUser.displayName || 'Тестовый пользователь',
+    userId: currentUser.uid,
+    status: 'confirmed'
+  };
+  
+  console.log('📤 Показываем уведомление о подтверждении заказа...');
+  showStatusUpdateNotification(testOrder, 'confirmed');
+  
+  setTimeout(() => {
+    testOrder.status = 'preparing';
+    testOrder.name = 'Космополитен';
+    showStatusUpdateNotification(testOrder, 'preparing');
+  }, 3000);
+  
+  setTimeout(() => {
+    testOrder.status = 'ready';
+    testOrder.name = 'Маргарита';
+    showStatusUpdateNotification(testOrder, 'ready');
+  }, 6000);
+  
+  console.log('✅ Тестируем:');
+  console.log('   - ✅ Подтверждение заказа');
+  console.log('   - 👨‍🍳 Готовится');
+  console.log('   - 🍸 Готов');
+}
+
 // Функция для диагностики проблемы с уведомлениями
 function debugNotificationIssue() {
   console.log('🔍 ДИАГНОСТИКА ПРОБЛЕМЫ С УВЕДОМЛЕНИЯМИ');
@@ -3142,6 +3483,172 @@ function forceShowNotification(status = 'confirmed') {
   }, 1000);
 }
 
+// Простая функция для тестирования уведомлений
+function testSimpleNotification() {
+  console.log('🧪 Тестируем простое уведомление...');
+  
+  // Создаем тестовые данные
+  const testOrder = {
+    id: 'test_' + Date.now(),
+    name: 'Тестовый коктейль 🍸',
+    userId: auth.currentUser ? auth.currentUser.uid : 'test_user',
+    status: 'confirmed'
+  };
+  
+  console.log('📊 Данные для теста:', testOrder);
+  console.log('👤 Текущий пользователь:', auth.currentUser ? auth.currentUser.uid : 'Нет пользователя');
+  
+  // Вызываем функцию уведомления
+  showStatusUpdateNotification(testOrder, 'confirmed');
+  
+  console.log('✅ Тестовое уведомление отправлено');
+}
+
+// Принудительное создание уведомления для тестирования
+function forceCreateNotification() {
+  console.log('🔧 Принудительно создаем уведомление...');
+  
+  // Создаем уведомление напрямую
+  const notification = document.createElement('div');
+  notification.className = 'status-update-notification';
+  notification.innerHTML = `
+    <div class="notification-content">
+      <div class="notification-text">
+        <div class="notification-title">Статус заказа обновлен</div>
+        <div class="notification-cocktail">"Мохито"</div>
+        <div class="notification-subtitle">✅ подтвержден</div>
+      </div>
+      <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="notification-progress"></div>
+  `;
+  
+  // Добавляем стили
+  notification.style.cssText = `
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: white !important;
+    border-radius: 20px !important;
+    box-shadow: 
+      0 20px 60px rgba(0, 0, 0, 0.15),
+      0 8px 25px rgba(0, 0, 0, 0.1),
+      0 0 0 1px rgba(255, 255, 255, 0.2) !important;
+    z-index: 99999 !important;
+    animation: notificationSlideIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 500 !important;
+    min-width: 380px !important;
+    max-width: 480px !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    overflow: hidden !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  `;
+  
+  document.body.appendChild(notification);
+  console.log('✅ Принудительное уведомление создано');
+  
+  // Удаляем через 5 секунд
+  setTimeout(() => {
+    if (notification.parentNode) {
+      notification.style.animation = 'notificationSlideOut 0.6s ease';
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification);
+        }
+      }, 600);
+    }
+  }, 5000);
+}
+
+// Простая функция для быстрого тестирования
+function quickTest() {
+  console.log('🚀 Быстрый тест уведомления...');
+  
+  // Создаем уведомление напрямую
+  const notification = document.createElement('div');
+  notification.className = 'status-update-notification';
+  notification.innerHTML = `
+    <div class="notification-content">
+      <div class="notification-icon">
+        <i class="fas fa-check-circle"></i>
+      </div>
+      <div class="notification-text">
+        <div class="notification-title">Тест уведомления</div>
+        <div class="notification-cocktail">"Мохито"</div>
+        <div class="notification-subtitle">✅ подтвержден</div>
+      </div>
+      <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="notification-progress"></div>
+  `;
+  
+  document.body.appendChild(notification);
+  console.log('✅ Уведомление добавлено в DOM');
+  
+  // Удаляем через 5 секунд
+  setTimeout(() => {
+    if (notification.parentNode) {
+      notification.style.animation = 'notificationSlideOut 0.6s ease';
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification);
+        }
+      }, 600);
+    }
+  }, 5000);
+}
+
+// Функция для принудительного обновления стилей
+function forceReloadStyles() {
+  console.log('🔄 Принудительно обновляем стили...');
+  
+  // Удаляем старые стили
+  const oldStyles = document.querySelectorAll('link[href*="style.css"]');
+  oldStyles.forEach(link => link.remove());
+  
+  // Добавляем новые стили с timestamp
+  const newLink = document.createElement('link');
+  newLink.rel = 'stylesheet';
+  newLink.href = `style.css?v=${Date.now()}`;
+  document.head.appendChild(newLink);
+  
+  console.log('✅ Стили обновлены');
+}
+
+// Функция для проверки загрузки стилей
+function checkStyles() {
+  console.log('🔍 Проверяем загрузку стилей...');
+  
+  const testEl = document.createElement('div');
+  testEl.className = 'status-update-notification';
+  testEl.style.position = 'fixed';
+  testEl.style.top = '-1000px';
+  testEl.style.left = '-1000px';
+  testEl.style.visibility = 'hidden';
+  document.body.appendChild(testEl);
+  
+  const styles = window.getComputedStyle(testEl);
+  console.log('📊 Стили уведомления:', {
+    background: styles.background,
+    borderRadius: styles.borderRadius,
+    boxShadow: styles.boxShadow,
+    zIndex: styles.zIndex
+  });
+  
+  document.body.removeChild(testEl);
+}
+
 // Добавляем функции в глобальную область для тестирования
 if (typeof window !== 'undefined') {
   window.testNotifications = testNotifications;
@@ -3158,6 +3665,11 @@ if (typeof window !== 'undefined') {
   window.testSingleNotification = testSingleNotification;
   window.checkListenerStatus = checkListenerStatus;
   window.forceShowNotification = forceShowNotification;
+  window.testSimpleNotification = testSimpleNotification;
+  window.forceCreateNotification = forceCreateNotification;
+  window.quickTest = quickTest;
+  window.forceReloadStyles = forceReloadStyles;
+  window.checkStyles = checkStyles;
 }
 
 // === КОНЕЦ ФУНКЦИЙ ДЛЯ ТЕСТИРОВАНИЯ ===
@@ -3679,5 +4191,94 @@ function getCategoryIcon(category) {
   setInterval(monitorSystem, 5 * 60 * 1000);
 })();
 
+// Новая функция для тестирования современного дизайна уведомлений
+window.testNewNotificationDesign = function() {
+  console.log('🎨 Тестируем новый современный дизайн уведомлений...');
+  
+  const testOrder = {
+    id: 'test-' + Date.now(),
+    name: 'Мохито',
+    userId: 'test-user',
+    status: 'confirmed'
+  };
+  
+  // Тестируем все статусы по очереди
+  showStatusUpdateNotification(testOrder, 'confirmed');
+  
+  setTimeout(() => {
+    showStatusUpdateNotification(testOrder, 'preparing');
+  }, 2000);
+  
+  setTimeout(() => {
+    showStatusUpdateNotification(testOrder, 'ready');
+  }, 4000);
+  
+  setTimeout(() => {
+    showStatusUpdateNotification(testOrder, 'completed');
+  }, 6000);
+  
+  console.log('✅ Тест запущен! Смотрите уведомления справа вверху');
+};
+
+// Простая функция для быстрого тестирования
+window.testQuickNotification = function() {
+  console.log('🚀 Быстрый тест уведомления...');
+  
+  const testOrder = {
+    id: 'quick-test',
+    name: 'Маргарита',
+    userId: 'test-user',
+    status: 'confirmed'
+  };
+  
+  showStatusUpdateNotification(testOrder, 'confirmed');
+};
+
+// Функция для тестирования центрированного дизайна
+window.testCenteredNotification = function() {
+  console.log('🎯 Тестируем центрированный дизайн...');
+  
+  const testOrder = {
+    id: 'centered-test',
+    name: 'Мохито',
+    userId: 'test-user',
+    status: 'confirmed'
+  };
+  
+  // Показываем все статусы по очереди
+  showStatusUpdateNotification(testOrder, 'confirmed');
+  
+  setTimeout(() => {
+    showStatusUpdateNotification(testOrder, 'preparing');
+  }, 2000);
+  
+  setTimeout(() => {
+    showStatusUpdateNotification(testOrder, 'ready');
+  }, 4000);
+  
+  setTimeout(() => {
+    showStatusUpdateNotification(testOrder, 'completed');
+  }, 6000);
+  
+  console.log('✅ Тест центрированного дизайна запущен!');
+};
+
 // Глобальная функция для тестирования селектора категорий (доступна в консоли)
 window.testCategorySelector = testCategorySelector;
+
+// Функция для тестирования нового дизайна уведомления о заказе
+window.testNewOrderNotification = function() {
+  console.log('🎨 Тестирование нового дизайна уведомления о заказе...');
+  
+  // Показываем модальное окно уведомления
+  openModal(notificationModal);
+  
+  console.log('✅ Показано новое модальное окно уведомления');
+  console.log('📝 Новые функции:');
+  console.log('   - Простая и понятная иконка успеха');
+  console.log('   - Прогресс-бар этапов заказа');
+  console.log('   - Улучшенная типографика');
+  console.log('   - Плавные анимации появления');
+  console.log('   - Современный дизайн с градиентами');
+  console.log('   - Адаптивность для мобильных устройств');
+};

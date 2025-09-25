@@ -104,10 +104,41 @@
     <!-- Модальное окно уведомления -->
     <div id="notificationModal" class="modal notification-modal">
       <div class="modal-content notification-content">
-        <div class="notification-icon">✅</div>
-        <h3>Заказ отправлен!</h3>
-        <p>Ваш заказ успешно отправлен. Ожидайте подтверждения от бармена.</p>
-        <button id="closeNotification" class="notification-btn">Хорошо</button>
+        <div class="notification-body">
+          <div class="success-message">
+            <h3 class="notification-title">
+              Заказ отправлен бармену!
+            </h3>
+            
+            <div class="notification-text">
+              <p>Ваш заказ успешно отправлен и будет обработан в ближайшее время.</p>
+              <p>Ожидайте подтверждения от бармена.</p>
+            </div>
+            
+            <div class="status-indicator">
+              <div class="status-item completed">
+                <span class="status-icon">✓</span>
+                <span class="status-text">Заказ отправлен</span>
+              </div>
+              <div class="status-arrow">→</div>
+              <div class="status-item pending">
+                <span class="status-icon">⏳</span>
+                <span class="status-text">Обработка</span>
+              </div>
+              <div class="status-arrow">→</div>
+              <div class="status-item pending">
+                <span class="status-icon">🍸</span>
+                <span class="status-text">Готовится</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="notification-footer">
+          <button id="closeNotification" class="notification-btn">
+            Понятно
+          </button>
+        </div>
       </div>
     </div>
     <!-- Админ-панель -->
@@ -362,5 +393,27 @@
   <div id="champagneAnimation" class="champagne-animation"></div>
   <script src="setup-webhook.js"></script>
   <script src="script.js"></script>
+  
+  <!-- Инструкции для разработчиков -->
+  <script>
+    // Добавляем функции в глобальную область видимости для тестирования
+    window.testBeautifulNotifications = testBeautifulNotifications;
+    window.testAudioAndVibration = testAudioAndVibration;
+    window.testEmojiNotifications = testEmojiNotifications;
+    window.testEmojiDisplay = testEmojiDisplay;
+    window.testConfirmedNotification = testConfirmedNotification;
+    
+    console.log('🎨 Исправленные уведомления загружены!');
+    console.log('📝 Доступные функции тестирования:');
+    console.log('   - testNewOrderNotification() - тест нового дизайна уведомления о заказе');
+    console.log('   - testConfirmedNotification() - быстрый тест подтверждения');
+    console.log('   - testBeautifulNotifications() - тест всех типов уведомлений');
+    console.log('   - testAudioAndVibration() - тест звука и вибрации');
+    console.log('   - testEmojiNotifications() - тест уведомлений с эмодзи');
+    console.log('   - testEmojiDisplay() - тест отображения эмодзи');
+    console.log('💡 Для тестирования вызовите функцию в консоли');
+    console.log('🔧 Исправлено: дублирование переменных и логика уведомлений!');
+    console.log('🎨 Новый дизайн уведомления о заказе с современными эффектами!');
+  </script>
 </body>
 </html>
