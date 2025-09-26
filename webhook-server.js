@@ -11,18 +11,7 @@ app.use(cors());
 app.use(express.json());
 
 // Firebase Admin SDK инициализация
-const serviceAccount = {
-  "type": "service_account",
-  "project_id": "bar-menu-6145c",
-  "private_key_id": process.env.FIREBASE_PRIVATE_KEY_ID,
-  "private_key": process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  "client_email": process.env.FIREBASE_CLIENT_EMAIL,
-  "client_id": process.env.FIREBASE_CLIENT_ID,
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": process.env.FIREBASE_CLIENT_X509_CERT_URL
-};
+const serviceAccount = require('./service-private-key.json');
 
 if (!admin.apps.length) {
   admin.initializeApp({
@@ -60,6 +49,122 @@ app.get('/test-firebase', async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: error.message 
+    });
+  }
+});
+
+// Получение информации об очереди заказов
+app.get('/queue-info', async (req, res) => {
+  try {
+    const queueInfo = await getQueueInfo();
+    res.json({
+      success: true,
+      queueInfo: queueInfo,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Ошибка получения информации об очереди:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Очистка всех заказов из базы данных (только для разработки)
+app.delete('/cleanup-orders', async (req, res) => {
+  try {
+    console.log('🧹 Начинаем очистку всех заказов из базы данных...');
+    
+    // Получаем все заказы
+    const ordersSnapshot = await db.collection('orders').get();
+    console.log(`📊 Найдено заказов для удаления: ${ordersSnapshot.size}`);
+    
+    if (ordersSnapshot.empty) {
+      return res.json({
+        success: true,
+        message: 'База данных уже пуста',
+        deletedCount: 0
+      });
+    }
+    
+    // Удаляем заказы батчами
+    const batch = db.batch();
+    let deletedCount = 0;
+    
+    ordersSnapshot.forEach(doc => {
+      batch.delete(doc.ref);
+      deletedCount++;
+    });
+    
+    await batch.commit();
+    
+    console.log(`✅ Успешно удалено ${deletedCount} заказов`);
+    
+    res.json({
+      success: true,
+      message: `Успешно удалено ${deletedCount} заказов`,
+      deletedCount: deletedCount,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка очистки заказов:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Очистка только тестовых заказов (по статусу или названию)
+app.delete('/cleanup-test-orders', async (req, res) => {
+  try {
+    console.log('🧹 Начинаем очистку тестовых заказов...');
+    
+    // Получаем все заказы
+    const ordersSnapshot = await db.collection('orders').get();
+    console.log(`📊 Всего заказов в базе: ${ordersSnapshot.size}`);
+    
+    let deletedCount = 0;
+    const batch = db.batch();
+    
+    ordersSnapshot.forEach(doc => {
+      const orderData = doc.data();
+      const orderName = orderData.name?.toLowerCase() || '';
+      const isTestOrder = orderName.includes('тест') || 
+                         orderName.includes('test') ||
+                         orderName.includes('проверка') ||
+                         orderData.status === 'completed' ||
+                         orderData.status === 'cancelled';
+      
+      if (isTestOrder) {
+        batch.delete(doc.ref);
+        deletedCount++;
+        console.log(`🗑️ Удаляем тестовый заказ: ${orderData.name} (${orderData.status})`);
+      }
+    });
+    
+    if (deletedCount > 0) {
+      await batch.commit();
+      console.log(`✅ Успешно удалено ${deletedCount} тестовых заказов`);
+    } else {
+      console.log('ℹ️ Тестовые заказы не найдены');
+    }
+    
+    res.json({
+      success: true,
+      message: `Удалено ${deletedCount} тестовых заказов`,
+      deletedCount: deletedCount,
+      remainingOrders: ordersSnapshot.size - deletedCount,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка очистки тестовых заказов:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });
@@ -120,6 +225,104 @@ async function handleCallbackQuery(callbackQuery) {
   }
 }
 
+// Получение следующей позиции в очереди
+async function getNextQueuePosition() {
+  try {
+    const activeOrdersSnapshot = await db.collection('orders')
+      .where('status', 'in', ['confirmed', 'preparing', 'ready'])
+      .orderBy('queuePosition', 'desc')
+      .limit(1)
+      .get();
+    
+    if (activeOrdersSnapshot.empty) {
+      return 1; // Первый заказ в очереди
+    }
+    
+    const lastOrder = activeOrdersSnapshot.docs[0];
+    const lastPosition = lastOrder.data().queuePosition || 0;
+    return lastPosition + 1;
+    
+  } catch (error) {
+    console.error('❌ Ошибка получения позиции в очереди:', error);
+    // Fallback: используем timestamp как позицию
+    return Date.now();
+  }
+}
+
+// Обновление позиций в очереди после завершения заказа
+async function updateQueuePositions(completedOrderId) {
+  try {
+    const completedOrderRef = db.collection('orders').doc(completedOrderId);
+    const completedOrderDoc = await completedOrderRef.get();
+    
+    if (!completedOrderDoc.exists) {
+      console.error('❌ Завершенный заказ не найден:', completedOrderId);
+      return;
+    }
+    
+    const completedPosition = completedOrderDoc.data().queuePosition;
+    if (!completedPosition) {
+      console.log('⚠️ У заказа нет позиции в очереди:', completedOrderId);
+      return;
+    }
+    
+    // Находим все заказы с позицией больше завершенного
+    const ordersToUpdate = await db.collection('orders')
+      .where('status', 'in', ['confirmed', 'preparing', 'ready'])
+      .where('queuePosition', '>', completedPosition)
+      .orderBy('queuePosition', 'asc')
+      .get();
+    
+    console.log(`🔄 Обновляем позиции для ${ordersToUpdate.size} заказов после завершения заказа #${completedPosition}`);
+    
+    // Обновляем позиции в batch операции
+    const batch = db.batch();
+    
+    ordersToUpdate.forEach(doc => {
+      const currentPosition = doc.data().queuePosition;
+      batch.update(doc.ref, {
+        queuePosition: currentPosition - 1,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    });
+    
+    await batch.commit();
+    console.log('✅ Позиции в очереди успешно обновлены');
+    
+  } catch (error) {
+    console.error('❌ Ошибка обновления позиций в очереди:', error);
+  }
+}
+
+// Получение информации об очереди
+async function getQueueInfo() {
+  try {
+    const activeOrdersSnapshot = await db.collection('orders')
+      .where('status', 'in', ['confirmed', 'preparing', 'ready'])
+      .orderBy('queuePosition', 'asc')
+      .get();
+    
+    const queueInfo = {
+      totalOrders: activeOrdersSnapshot.size,
+      orders: []
+    };
+    
+    activeOrdersSnapshot.forEach(doc => {
+      const orderData = doc.data();
+      queueInfo.orders.push({
+        id: doc.id,
+        ...orderData
+      });
+    });
+    
+    return queueInfo;
+    
+  } catch (error) {
+    console.error('❌ Ошибка получения информации об очереди:', error);
+    return { totalOrders: 0, orders: [] };
+  }
+}
+
 // Обновление статуса заказа в Firebase
 async function updateOrderStatus(orderId, newStatus) {
   try {
@@ -138,6 +341,11 @@ async function updateOrderStatus(orderId, newStatus) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedBy: 'telegram_admin'
     });
+    
+    // Если заказ завершен, обновляем позиции в очереди
+    if (newStatus === 'completed' && orderData.queuePosition) {
+      await updateQueuePositions(orderId);
+    }
     
     return { 
       success: true, 
@@ -185,13 +393,32 @@ async function updateTelegramMessage(messageId, orderId, newStatus, orderData) {
     const emoji = statusEmojis[newStatus] || '📝';
     const statusText = getStatusText(newStatus);
     
+    // Получаем информацию об очереди для отображения позиции
+    const queueInfo = await getQueueInfo();
+    const queuePosition = orderData.queuePosition;
+    const totalInQueue = queueInfo.totalOrders;
+    
+    // Формируем информацию о позиции в очереди
+    let queueInfoText = '';
+    if (queuePosition && ['confirmed', 'preparing', 'ready'].includes(newStatus)) {
+      queueInfoText = `🎯 *Позиция в очереди:* #${queuePosition} из ${totalInQueue}\n`;
+      
+      // Добавляем примерное время ожидания
+      const estimatedMinutes = queuePosition * 3; // Примерно 3 минуты на заказ
+      if (estimatedMinutes > 0) {
+        queueInfoText += `⏰ *Примерное время ожидания:* ${estimatedMinutes} мин\n`;
+      }
+    } else if (newStatus === 'completed') {
+      queueInfoText = `🎉 *Заказ выполнен!*\n`;
+    }
+    
     const updatedMessage = `
 ${emoji} *Заказ обновлен - ${statusText}*
 
 🍸 *Коктейль:* ${orderData.name}
 👤 *Клиент:* ${orderData.user}
 📊 *Статус:* ${statusText}
-🕒 *Время:* ${orderData.displayTime || new Date().toLocaleString('ru-RU')}
+${queueInfoText}🕒 *Время:* ${orderData.displayTime || new Date().toLocaleString('ru-RU')}
 🆔 *ID заказа:* ${orderId}
     `.trim();
     

@@ -84,11 +84,15 @@
 
 @keyframes notificationSlideOut {
   0% {
-    transform: translateX(0);
+    transform: translateX(0) scale(1);
     opacity: 1;
   }
+  50% {
+    transform: translateX(50%) scale(0.95);
+    opacity: 0.7;
+  }
   100% {
-    transform: translateX(100%);
+    transform: translateX(100%) scale(0.9);
     opacity: 0;
   }
 }
@@ -4917,6 +4921,47 @@ body.dark-theme .telegram-info code {
     inset 0 2px 0 rgba(255, 255, 255, 0.4);
 }
 
+/* Стили для прогресс-бара уведомлений */
+.notification-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 0 0 12px 12px;
+  overflow: hidden;
+}
+
+/* Стили для скрывающегося уведомления */
+.notification-hiding {
+  pointer-events: none;
+  z-index: 1;
+}
+
+.notification-hiding .notification-progress-bar {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.notification-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.4));
+  border-radius: 0 0 12px 12px;
+  transition: width linear;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+}
+
+/* Темная тема для прогресс-бара */
+body.dark-theme .notification-progress-bar {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+body.dark-theme .notification-progress-fill {
+  background: linear-gradient(90deg, rgba(46, 204, 113, 0.8), rgba(39, 174, 96, 0.4));
+  box-shadow: 0 0 8px rgba(46, 204, 113, 0.3);
+}
+
 .notification-progress {
   position: absolute;
   bottom: 0;
@@ -5113,11 +5158,15 @@ body:not(.dark-theme) .notification-close {
 /* Дополнительные анимации для уведомлений */
 @keyframes notificationSlideOut {
   0% {
-    transform: translateX(0);
+    transform: translateX(0) scale(1);
     opacity: 1;
   }
+  50% {
+    transform: translateX(50%) scale(0.95);
+    opacity: 0.7;
+  }
   100% {
-    transform: translateX(100%);
+    transform: translateX(100%) scale(0.9);
     opacity: 0;
   }
 }
@@ -5250,6 +5299,305 @@ body.modal-open {
   flex-shrink: 0;
   /* Фиксированные размеры для предотвращения сдвигов */
   box-sizing: border-box;
+}
+
+/* === СТИЛИ ДЛЯ СИСТЕМЫ ОЧЕРЕДИ === */
+
+/* Контейнер для информации о позиции в очереди */
+.queue-position {
+  margin-top: 0.8rem;
+  padding: 0.8rem;
+  background: linear-gradient(135deg, rgba(139, 69, 19, 0.1), rgba(160, 82, 45, 0.1));
+  border-radius: 8px;
+  border: 1px solid rgba(139, 69, 19, 0.2);
+}
+
+.queue-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #8B4513;
+}
+
+.queue-info i {
+  font-size: 1rem;
+  color: #A0522D;
+}
+
+.queue-progress {
+  margin-top: 0.5rem;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background-color: rgba(139, 69, 19, 0.2);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8B4513, #A0522D);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  animation: progressShine 2s infinite;
+}
+
+@keyframes progressShine {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Стили для темной темы */
+.dark-theme .queue-position {
+  background: linear-gradient(135deg, rgba(139, 69, 19, 0.2), rgba(160, 82, 45, 0.2));
+  border-color: rgba(139, 69, 19, 0.3);
+}
+
+.dark-theme .queue-info {
+  color: #D2B48C;
+}
+
+.dark-theme .queue-info i {
+  color: #DEB887;
+}
+
+.dark-theme .progress-bar {
+  background-color: rgba(139, 69, 19, 0.3);
+}
+
+/* Анимация появления очереди */
+.queue-position {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Стили для контейнера очереди в заказах */
+.order-queue-info {
+  margin-top: 0.5rem;
+}
+
+/* Стили для информации об очереди в уведомлениях */
+.notification-queue-info {
+  margin-top: 0.8rem;
+  padding: 0.6rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.notification-queue-info .queue-position {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 0.3rem;
+}
+
+.notification-queue-info .queue-position i {
+  color: #FFD700;
+}
+
+.notification-queue-info .queue-time {
+  font-size: 0.8rem;
+  opacity: 0.8;
+  text-align: center;
+}
+
+/* Стили для уведомлений о очереди */
+.queue-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: linear-gradient(135deg, #8B4513, #A0522D);
+  color: white;
+  padding: 1rem;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(139, 69, 19, 0.3);
+  z-index: 10000;
+  max-width: 350px;
+  animation: slideInRight 0.5s ease-out;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  transform: translateX(100%);
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.queue-notification.show {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.queue-notification.hide {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+.queue-notification-content {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.queue-notification-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.queue-notification-text {
+  flex: 1;
+}
+
+.queue-notification-title {
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 0.3rem;
+}
+
+.queue-notification-details {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.queue-status {
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-left: 0.5rem;
+  padding: 0.2rem 0.5rem;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.queue-time {
+  font-size: 0.8rem;
+  opacity: 0.8;
+  margin-top: 0.3rem;
+  text-align: center;
+}
+
+/* Адаптивность для очереди */
+@media (max-width: 480px) {
+  .queue-position {
+    padding: 0.6rem;
+    margin-top: 0.6rem;
+  }
+  
+  .queue-info {
+    font-size: 0.9rem;
+  }
+  
+  .queue-info i {
+    font-size: 0.9rem;
+  }
+  
+  .progress-bar {
+    height: 4px;
+  }
+  
+  .queue-notification {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+  }
+}
+
+/* Стили для админской очереди */
+.admin-queue-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  background: linear-gradient(135deg, rgba(139, 69, 19, 0.1), rgba(160, 82, 45, 0.1));
+  border-radius: 6px;
+  border: 1px solid rgba(139, 69, 19, 0.2);
+  font-size: 0.9rem;
+  color: #8B4513;
+}
+
+.admin-queue-info i {
+  color: #A0522D;
+}
+
+.queue-next {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  color: white;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
+}
+
+.dark-theme .admin-queue-info {
+  background: linear-gradient(135deg, rgba(139, 69, 19, 0.2), rgba(160, 82, 45, 0.2));
+  border-color: rgba(139, 69, 19, 0.3);
+  color: #D2B48C;
+}
+
+.dark-theme .admin-queue-info i {
+  color: #DEB887;
+}
+
+/* === СТИЛИ ДЛЯ КНОПКИ ОЧИСТКИ === */
+
+.admin-btn.danger {
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  border-color: #dc3545;
+  color: white;
+}
+
+.admin-btn.danger:hover {
+  background: linear-gradient(135deg, #c82333, #a71e2a);
+  border-color: #c82333;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+}
+
+.admin-btn.danger:active {
+  transform: translateY(0);
+}
+
+/* Стили для темной темы */
+.dark-theme .admin-btn.danger {
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  border-color: #dc3545;
+}
+
+.dark-theme .admin-btn.danger:hover {
+  background: linear-gradient(135deg, #c82333, #a71e2a);
+  border-color: #c82333;
 }
 
 .orders-list,

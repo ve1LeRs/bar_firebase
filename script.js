@@ -12,7 +12,7 @@ const TELEGRAM_BOT_TOKEN = "8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo";
 const TELEGRAM_CHAT_ID = "1743362083";
 
 // 🌐 WEBHOOK SERVER
-const WEBHOOK_SERVER_URL = "https://web-production-72014.up.railway.app";
+const WEBHOOK_SERVER_URL = "http://localhost:3000";
 
 // Инициализация Firebase
 console.log('🔥 Инициализация Firebase...');
@@ -24,6 +24,155 @@ console.log('✅ Firebase инициализирован');
 
 // Глобальные переменные
 let audioContextEnabled = false; // Флаг для отслеживания активации звука
+let queueInfo = { totalOrders: 0, orders: [] }; // Информация об очереди
+let lastOrderQueuePositions = new Map(); // Отслеживание позиций в очереди для уведомлений
+
+// === ФУНКЦИИ ДЛЯ РАБОТЫ С ОЧЕРЕДЬЮ ===
+
+// Получение следующей позиции в очереди
+async function getNextQueuePosition() {
+  try {
+    // Получаем количество активных заказов
+    const activeOrdersSnapshot = await db.collection('orders')
+      .where('status', 'in', ['pending', 'confirmed', 'preparing', 'ready'])
+      .get();
+    
+    return activeOrdersSnapshot.size + 1;
+  } catch (error) {
+    console.error('❌ Ошибка получения позиции в очереди:', error);
+    // Fallback: используем timestamp
+    return Date.now();
+  }
+}
+
+// Получение информации об очереди
+async function getQueueInfo() {
+  try {
+    const response = await fetch(`${WEBHOOK_SERVER_URL}/queue-info`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    return data.queueInfo;
+  } catch (error) {
+    console.error('❌ Ошибка получения информации об очереди:', error);
+    return { totalOrders: 0, orders: [] };
+  }
+}
+
+// Обновление отображения позиции в очереди
+function updateQueueDisplay() {
+  // Обновляем информацию в истории заказов
+  const ordersList = document.getElementById('ordersList');
+  if (ordersList) {
+    // Перезагружаем историю заказов для обновления позиций
+    if (auth.currentUser) {
+      loadOrderHistory(auth.currentUser.uid);
+    }
+  }
+  
+  // Обновляем админский список заказов
+  const adminOrdersList = document.getElementById('adminOrdersList');
+  if (adminOrdersList) {
+    loadAdminOrders();
+  }
+}
+
+// Отображение позиции в очереди для заказа
+function displayQueuePosition(orderData, container) {
+  if (!orderData.queuePosition || !['confirmed', 'preparing', 'ready'].includes(orderData.status)) {
+    return;
+  }
+  
+  const queueElement = document.createElement('div');
+  queueElement.className = 'queue-position';
+  
+  // Вычисляем примерное время ожидания
+  const estimatedMinutes = orderData.queuePosition * 3; // Примерно 3 минуты на заказ
+  const timeText = estimatedMinutes > 0 ? ` (~${estimatedMinutes} мин)` : '';
+  
+  // Определяем статус очереди
+  let queueStatus = '';
+  let statusIcon = '';
+  if (orderData.queuePosition === 1) {
+    queueStatus = 'Следующий в очереди';
+    statusIcon = '🎯';
+  } else if (orderData.queuePosition <= 3) {
+    queueStatus = 'Скоро будет готов';
+    statusIcon = '⏰';
+  } else {
+    queueStatus = 'В очереди';
+    statusIcon = '📋';
+  }
+  
+  queueElement.innerHTML = `
+    <div class="queue-info">
+      <i class="fas fa-list-ol"></i>
+      <span>Позиция в очереди: #${orderData.queuePosition}</span>
+      <span class="queue-status">${statusIcon} ${queueStatus}</span>
+    </div>
+    <div class="queue-progress">
+      <div class="progress-bar">
+        <div class="progress-fill" style="width: ${(orderData.queuePosition <= 1 ? 100 : Math.max(10, 100 - (orderData.queuePosition - 1) * 15))}%"></div>
+      </div>
+      <div class="queue-time">${timeText}</div>
+    </div>
+  `;
+  
+  container.appendChild(queueElement);
+}
+
+// Уведомление о смене позиции в очереди
+function showQueuePositionUpdateNotification(orderData, oldPosition, newPosition) {
+  console.log('🎯 Показываем уведомление о продвижении в очереди:', {
+    orderName: orderData.name,
+    oldPosition,
+    newPosition
+  });
+  
+  // Создаем уведомление о продвижении в очереди
+  const notification = document.createElement('div');
+  notification.className = 'queue-notification';
+  notification.innerHTML = `
+    <div class="queue-notification-content">
+      <div class="queue-notification-icon">🎯</div>
+      <div class="queue-notification-text">
+        <div class="queue-notification-title">Ваш заказ продвинулся в очереди!</div>
+        <div class="queue-notification-details">
+          ${orderData.name} - теперь #${newPosition} в очереди
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Добавляем уведомление на страницу
+  document.body.appendChild(notification);
+  
+  // Анимация появления
+  setTimeout(() => {
+    notification.classList.add('show');
+  }, 100);
+  
+  // Удаляем уведомление через 5 секунд
+  setTimeout(() => {
+    notification.classList.add('hide');
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 5000);
+  
+  // Звуковое уведомление
+  if (audioContextEnabled) {
+    playNotificationSound('queue');
+  }
+  
+  // Вибрация
+  if (navigator.vibrate) {
+    navigator.vibrate([200, 100, 200]);
+  }
+}
 
 // Глобальные функции для тестирования
 window.testBeautifulNotifications = function() {
@@ -92,6 +241,82 @@ window.testEmojiDisplay = function() {
       console.log(`Эмодзи ${index + 1}: ${emoji}`);
     }, index * 500);
   });
+};
+
+// Тестирование системы очереди
+window.testQueueSystem = function() {
+  console.log('🎯 Тестирование системы очереди...');
+  
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log('❌ Пользователь не авторизован. Войдите в систему для тестирования.');
+    return;
+  }
+  
+  // Создаем тестовые данные для демонстрации очереди
+  const testOrders = [
+    { name: 'Мохито', user: 'Иван Петров', queuePosition: 1, status: 'confirmed' },
+    { name: 'Космополитен', user: 'Мария Сидорова', queuePosition: 2, status: 'preparing' },
+    { name: 'Маргарита', user: 'Алексей Козлов', queuePosition: 3, status: 'ready' },
+    { name: 'Пина Колада', user: 'Елена Волкова', queuePosition: 4, status: 'confirmed' }
+  ];
+  
+  console.log('📋 Тестовая очередь заказов:');
+  testOrders.forEach((order, index) => {
+    console.log(`#${order.queuePosition} - ${order.name} (${order.user}) - ${order.status}`);
+  });
+  
+  // Демонстрируем уведомления о продвижении в очереди
+  console.log('🔔 Демонстрация уведомлений о продвижении в очереди...');
+  
+  // Симулируем подтверждение заказа с позицией в очереди
+  setTimeout(() => {
+    const orderData = { 
+      name: 'Мохито', 
+      user: 'Иван Петров', 
+      userId: currentUser.uid,
+      queuePosition: 1 
+    };
+    showStatusUpdateNotification(orderData, 'confirmed');
+    console.log('✅ Показано уведомление: Мохито подтвержден с позицией #1');
+  }, 1000);
+  
+  // Симулируем продвижение заказа "Пина Колада" с позиции 4 на позицию 3
+  setTimeout(() => {
+    const orderData = { name: 'Пина Колада', user: 'Елена Волкова' };
+    showQueuePositionUpdateNotification(orderData, 4, 3);
+    console.log('✅ Показано уведомление: Пина Колада продвинулась с #4 на #3');
+  }, 3000);
+  
+  // Симулируем изменение статуса заказа с отображением позиции
+  setTimeout(() => {
+    const orderData = { 
+      name: 'Маргарита', 
+      user: 'Алексей Козлов', 
+      userId: currentUser.uid,
+      queuePosition: 2 
+    };
+    showStatusUpdateNotification(orderData, 'preparing');
+    console.log('✅ Показано уведомление: Маргарита готовится с позицией #2');
+  }, 5000);
+  
+  // Симулируем завершение заказа
+  setTimeout(() => {
+    const orderData = { 
+      name: 'Мохито', 
+      user: 'Иван Петров', 
+      userId: currentUser.uid
+    };
+    showStatusUpdateNotification(orderData, 'completed');
+    console.log('✅ Показано уведомление: Мохито завершен');
+  }, 7000);
+  
+  console.log('💡 Обратите внимание на:');
+  console.log('   - Отображение позиции в очереди для каждого заказа');
+  console.log('   - Уведомления о продвижении в очереди');
+  console.log('   - Автоматическое обновление позиций при завершении заказов');
+  console.log('   - Визуальные индикаторы статуса очереди');
+  console.log('   - Сортировку заказов по позиции в очереди в админ-панели');
 };
 
 window.testConfirmedNotification = function() {
@@ -165,6 +390,7 @@ const statusButtons = document.querySelectorAll('.status-btn');
 const statusOrderInfo = document.getElementById('statusOrderInfo');
 const checkSystemBtn = document.getElementById('checkSystemBtn');
 const testWebhookBtn = document.getElementById('testWebhookBtn');
+const cleanupOrdersBtn = document.getElementById('cleanupOrdersBtn');
 const systemStatus = document.getElementById('systemStatus');
 const setupWebhookBtn = document.getElementById('setupWebhookBtn');
 const deleteWebhookBtn = document.getElementById('deleteWebhookBtn');
@@ -825,7 +1051,8 @@ function initGlobalOrderStatusListener() {
         snapshot.docs.forEach(doc => {
           const orderData = { id: doc.id, ...doc.data() };
           lastOrderStatuses.set(orderData.id, orderData.status);
-          console.log(`📝 Инициализирован заказ ${orderData.id} со статусом: ${orderData.status}`);
+          lastOrderQueuePositions.set(orderData.id, orderData.queuePosition);
+          console.log(`📝 Инициализирован заказ ${orderData.id} со статусом: ${orderData.status}, позиция: ${orderData.queuePosition}`);
         });
         return;
       }
@@ -844,10 +1071,16 @@ function initGlobalOrderStatusListener() {
         if (change.type === 'modified') {
           // Проверяем, изменился ли статус
           const lastStatus = lastOrderStatuses.get(orderId);
+          const lastQueuePosition = lastOrderQueuePositions.get(orderId);
+          const newQueuePosition = orderData.queuePosition;
+          
           console.log(`🔄 Сравнение статусов для заказа ${orderId}:`, {
             lastStatus,
             newStatus,
-            changed: lastStatus !== newStatus
+            statusChanged: lastStatus !== newStatus,
+            lastQueuePosition,
+            newQueuePosition,
+            queuePositionChanged: lastQueuePosition !== newQueuePosition
           });
           
           if (lastStatus && lastStatus !== newStatus) {
@@ -856,12 +1089,21 @@ function initGlobalOrderStatusListener() {
             showStatusUpdateNotification(orderData, newStatus);
           }
           
-          // Обновляем последний статус
+          // Проверяем, изменилась ли позиция в очереди
+          if (lastQueuePosition && lastQueuePosition !== newQueuePosition && newQueuePosition < lastQueuePosition) {
+            // Позиция в очереди уменьшилась (заказ продвинулся)
+            console.log(`🎯 Заказ ${orderId} продвинулся в очереди: #${lastQueuePosition} → #${newQueuePosition}`);
+            showQueuePositionUpdateNotification(orderData, lastQueuePosition, newQueuePosition);
+          }
+          
+          // Обновляем последний статус и позицию
           lastOrderStatuses.set(orderId, newStatus);
+          lastOrderQueuePositions.set(orderId, newQueuePosition);
         } else if (change.type === 'added') {
-          // Новый заказ - сохраняем его статус
-          console.log(`➕ Новый заказ ${orderId} со статусом: ${newStatus}`);
+          // Новый заказ - сохраняем его статус и позицию
+          console.log(`➕ Новый заказ ${orderId} со статусом: ${newStatus}, позиция: ${orderData.queuePosition}`);
           lastOrderStatuses.set(orderData.id, orderData.status);
+          lastOrderQueuePositions.set(orderData.id, orderData.queuePosition);
         }
       });
     }, (error) => {
@@ -910,13 +1152,27 @@ async function loadOrderHistory(userId) {
           const orderElement = document.createElement('div');
           orderElement.className = 'order-item';
           orderElement.setAttribute('data-order-id', order.id);
+          
+          // Определяем класс статуса для стилизации
+          const statusClass = order.status || 'pending';
+          const statusText = getStatusText(order.status);
+          
           orderElement.innerHTML = `
             <div class="order-header">
               <span class="order-name">${order.name}</span>
-              <span class="order-status ${order.status || 'pending'}">${getStatusText(order.status)}</span>
+              <span class="order-status ${statusClass}">${statusText}</span>
             </div>
             <div class="order-time" style="font-size: 1.1rem;">${order.displayTime || (order.createdAt?.toDate ? order.createdAt.toDate().toLocaleString('ru-RU') : '')}</div>
           `;
+          
+          // Добавляем информацию о позиции в очереди, если заказ активен
+          if (order.queuePosition && ['confirmed', 'preparing', 'ready'].includes(order.status)) {
+            const queueContainer = document.createElement('div');
+            queueContainer.className = 'order-queue-info';
+            displayQueuePosition(order, queueContainer);
+            orderElement.appendChild(queueContainer);
+          }
+          
           ordersList.appendChild(orderElement);
         });
         
@@ -966,11 +1222,46 @@ async function loadAdminOrders() {
           return;
         }
 
+        // Сортируем заказы по позиции в очереди для активных заказов
+        const orders = [];
         snapshot.forEach(doc => {
-          const order = { id: doc.id, ...doc.data() };
+          orders.push({ id: doc.id, ...doc.data() });
+        });
+        
+        // Сортируем активные заказы по позиции в очереди
+        const activeOrders = orders.filter(order => 
+          ['confirmed', 'preparing', 'ready'].includes(order.status)
+        ).sort((a, b) => (a.queuePosition || 0) - (b.queuePosition || 0));
+        
+        // Остальные заказы сортируем по времени
+        const otherOrders = orders.filter(order => 
+          !['confirmed', 'preparing', 'ready'].includes(order.status)
+        ).sort((a, b) => {
+          const aTime = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+          const bTime = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+          return bTime - aTime;
+        });
+        
+        // Объединяем списки: сначала активные заказы в порядке очереди, потом остальные
+        const sortedOrders = [...activeOrders, ...otherOrders];
+        
+        sortedOrders.forEach(order => {
           const orderElement = document.createElement('div');
           orderElement.className = 'admin-order-item';
           orderElement.setAttribute('data-order-id', order.id);
+          
+          // Добавляем информацию о позиции в очереди для активных заказов
+          let queueInfo = '';
+          if (order.queuePosition && ['confirmed', 'preparing', 'ready'].includes(order.status)) {
+            queueInfo = `
+              <div class="admin-queue-info">
+                <i class="fas fa-list-ol"></i>
+                <span>Позиция в очереди: #${order.queuePosition}</span>
+                ${order.queuePosition === 1 ? '<span class="queue-next">🎯 Следующий</span>' : ''}
+              </div>
+            `;
+          }
+          
           orderElement.innerHTML = `
             <div class="admin-order-header">
               <div>
@@ -978,6 +1269,7 @@ async function loadAdminOrders() {
                 <div>Клиент: ${order.user || 'Гость'}</div>
                 <small>ID: ${order.id}</small>
                 <small>${order.displayTime || (order.createdAt?.toDate ? order.createdAt.toDate().toLocaleString('ru-RU') : '')}</small>
+                ${queueInfo}
               </div>
               <div>
                 <div class="admin-order-status ${order.status || 'pending'}">${getStatusText(order.status)}</div>
@@ -1625,6 +1917,59 @@ checkSystemBtn?.addEventListener('click', async () => {
 
 testWebhookBtn?.addEventListener('click', testWebhookServer);
 
+// Обработчик для очистки заказов
+cleanupOrdersBtn?.addEventListener('click', async () => {
+  const confirmed = confirm('⚠️ ВНИМАНИЕ!\n\nВы действительно хотите удалить ВСЕ заказы из базы данных?\n\nЭто действие нельзя отменить!');
+  
+  if (!confirmed) {
+    console.log('❌ Очистка заказов отменена пользователем');
+    return;
+  }
+  
+  const button = cleanupOrdersBtn;
+  const originalText = button.innerHTML;
+  
+  try {
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Очищаем...';
+    
+    console.log('🧹 Начинаем очистку всех заказов...');
+    
+    const response = await fetch(`${WEBHOOK_SERVER_URL}/cleanup-orders`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      console.log('✅ Заказы успешно очищены:', result);
+      alert(`✅ Успешно удалено ${result.deletedCount} заказов!`);
+      
+      // Обновляем отображение заказов
+      if (auth.currentUser) {
+        await loadOrderHistory(auth.currentUser.uid);
+        await loadAdminOrders();
+      }
+    } else {
+      throw new Error(result.error || 'Неизвестная ошибка');
+    }
+    
+  } catch (error) {
+    console.error('❌ Ошибка очистки заказов:', error);
+    alert(`❌ Ошибка очистки заказов: ${error.message}`);
+  } finally {
+    button.disabled = false;
+    button.innerHTML = originalText;
+  }
+});
+
 // Обработчики для Telegram управления
 setupWebhookBtn?.addEventListener('click', setupTelegramWebhook);
 deleteWebhookBtn?.addEventListener('click', deleteTelegramWebhook);
@@ -1719,11 +2064,16 @@ confirmOrderBtn?.addEventListener('click', async () => {
   confirmOrderBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Отправляем заказ...';
 
   try {
-    // Сохраняем заказ в Firestore с корректными полями времени
+    // Получаем следующую позицию в очереди
+    const queuePosition = await getNextQueuePosition();
+    
+    // Сохраняем заказ в Firestore с корректными полями времени и позицией в очереди
     const now = new Date();
     const orderData = {
       ...currentOrder,
       displayTime: now.toLocaleString('ru-RU'),
+      queuePosition: queuePosition, // Добавляем позицию в очереди
+      status: 'pending', // Начальный статус
       createdAt: firebase.firestore.FieldValue.serverTimestamp ? firebase.firestore.FieldValue.serverTimestamp() : now
     };
     const docRef = await db.collection('orders').add(orderData);
@@ -1909,6 +2259,21 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
   const notification = document.createElement('div');
   notification.className = `status-update-notification ${config.class}`;
   
+  // Добавляем информацию о позиции в очереди для активных заказов
+  let queueInfo = '';
+  if (orderData.queuePosition && ['confirmed', 'preparing', 'ready'].includes(newStatus)) {
+    const estimatedMinutes = orderData.queuePosition * 3;
+    queueInfo = `
+      <div class="notification-queue-info">
+        <div class="queue-position">
+          <i class="fas fa-list-ol"></i>
+          <span>Позиция в очереди: #${orderData.queuePosition}</span>
+        </div>
+        <div class="queue-time">~${estimatedMinutes} мин</div>
+      </div>
+    `;
+  }
+  
   notification.innerHTML = `
     <div class="notification-content">
       <div class="notification-icon">
@@ -1917,10 +2282,14 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
       <div class="notification-body">
         <div class="notification-title">${config.title}</div>
         <div class="notification-subtitle">${config.subtitle}</div>
+        ${queueInfo}
       </div>
-      <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
+      <button class="notification-close" onclick="hideNotification(this.parentElement.parentElement)">
         <i class="fas fa-times"></i>
       </button>
+    </div>
+    <div class="notification-progress-bar">
+      <div class="notification-progress-fill"></div>
     </div>
   `;
   
@@ -2150,17 +2519,107 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
     }
   }
   
-  // Автоматическое удаление уведомления
+  // Определяем время отображения уведомления в зависимости от статуса
+  const durationConfig = {
+    'confirmed': 8000,    // 8 секунд - важное уведомление о подтверждении
+    'preparing': 6000,    // 6 секунд - уведомление о начале приготовления
+    'ready': 10000,       // 10 секунд - важное уведомление о готовности
+    'completed': 12000,   // 12 секунд - финальное уведомление
+    'cancelled': 8000     // 8 секунд - важное уведомление об отмене
+  };
+  
+  const duration = durationConfig[newStatus] || 6000; // По умолчанию 6 секунд
+  
+  console.log(`⏰ Уведомление будет автоматически скрыто через ${duration/1000} секунд`);
+  
+  // Запускаем анимацию прогресс-бара с JavaScript
+  const progressFill = notification.querySelector('.notification-progress-fill');
+  if (progressFill) {
+    progressFill.style.width = '0%';
+    progressFill.style.transition = 'none'; // Отключаем CSS transition
+    
+    // JavaScript анимация прогресс-бара
+    const startTime = Date.now();
+    const animateProgress = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const width = progress * 100;
+      
+      progressFill.style.width = `${width}%`;
+      
+      if (progress < 1) {
+        requestAnimationFrame(animateProgress);
+      }
+    };
+    
+    // Запускаем анимацию через небольшую задержку
+    setTimeout(() => {
+      requestAnimationFrame(animateProgress);
+    }, 100);
+  }
+  
+  // Автоматическое удаление уведомления с более надежным подходом
+  console.log(`⏰ Запускаем таймер на ${duration}ms для автоматического удаления`);
+  
+  const startTime = Date.now();
+  
+  const autoHideTimer = setInterval(() => {
+    const elapsed = Date.now() - startTime;
+    
+    if (elapsed >= duration) {
+      clearInterval(autoHideTimer);
+      
+      if (notification.parentNode) {
+        console.log('🗑️ Автоматически скрываем уведомление (таймер сработал)');
+        
+        // Добавляем класс для анимации исчезновения
+        notification.classList.add('notification-hiding');
+        
+        // Применяем анимацию исчезновения
+        notification.style.animation = 'notificationSlideOut 0.6s ease forwards';
+        
+        // Удаляем уведомление после завершения анимации
+        setTimeout(() => {
+          if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+            console.log('✅ Уведомление удалено из DOM');
+          }
+        }, 600);
+      } else {
+        console.log('⚠️ Уведомление уже было удалено');
+      }
+    }
+  }, 100); // Проверяем каждые 100мс
+  
+  // Сохраняем ссылку на таймер для возможной отмены
+  notification._autoHideTimer = autoHideTimer;
+}
+
+// Функция для скрытия уведомления с анимацией
+function hideNotification(notification) {
+  if (!notification || !notification.parentNode) return;
+  
+  console.log('🗑️ Скрываем уведомление вручную');
+  
+  // Отменяем автоматический таймер, если он есть
+  if (notification._autoHideTimer) {
+    clearInterval(notification._autoHideTimer);
+    console.log('⏰ Автоматический таймер отменен');
+  }
+  
+  // Добавляем класс для анимации исчезновения
+  notification.classList.add('notification-hiding');
+  
+  // Применяем анимацию исчезновения
+  notification.style.animation = 'notificationSlideOut 0.6s ease forwards';
+  
+  // Удаляем уведомление после завершения анимации
   setTimeout(() => {
     if (notification.parentNode) {
-      notification.style.animation = 'notificationSlideOut 0.6s ease';
-      setTimeout(() => {
-        if (notification.parentNode) {
-          notification.parentNode.removeChild(notification);
-        }
-      }, 600);
+      notification.parentNode.removeChild(notification);
+      console.log('✅ Уведомление удалено из DOM');
     }
-  }, duration);
+  }, 600);
 }
 
 // Вспомогательная функция для изменения цвета
@@ -3648,6 +4107,87 @@ function checkStyles() {
   
   document.body.removeChild(testEl);
 }
+
+// Функция для тестирования автоматического исчезновения уведомлений
+window.testAutoHideNotifications = function() {
+  console.log('🧪 Тестируем автоматическое исчезновение уведомлений...');
+  
+  const testOrder = {
+    id: 'auto-hide-test',
+    name: 'Тестовый коктейль',
+    userId: auth.currentUser?.uid || 'test-user'
+  };
+  
+  // Тестируем разные статусы с разными временами отображения
+  const statuses = [
+    { status: 'confirmed', time: 8000, name: 'Подтвержден (8 сек)' },
+    { status: 'preparing', time: 6000, name: 'Готовится (6 сек)' },
+    { status: 'ready', time: 10000, name: 'Готов (10 сек)' },
+    { status: 'completed', time: 12000, name: 'Завершен (12 сек)' },
+    { status: 'cancelled', time: 8000, name: 'Отменен (8 сек)' }
+  ];
+  
+  statuses.forEach((test, index) => {
+    setTimeout(() => {
+      console.log(`📱 Показываем уведомление: ${test.name}`);
+      showStatusUpdateNotification(testOrder, test.status);
+    }, index * 15000); // Показываем каждое уведомление через 15 секунд
+  });
+  
+  console.log('✅ Тест запущен! Уведомления будут появляться каждые 15 секунд');
+  console.log('⏰ Времена отображения:');
+  console.log('   - Подтвержден: 8 секунд');
+  console.log('   - Готовится: 6 секунд');
+  console.log('   - Готов: 10 секунд');
+  console.log('   - Завершен: 12 секунд');
+  console.log('   - Отменен: 8 секунд');
+};
+
+// Быстрый тест анимации исчезновения
+window.testNotificationHide = function() {
+  console.log('🧪 Быстрый тест анимации исчезновения...');
+  
+  const testOrder = {
+    id: 'hide-test',
+    name: 'Тест исчезновения',
+    userId: auth.currentUser?.uid || 'test-user'
+  };
+  
+  // Показываем уведомление с коротким временем (3 секунды)
+  showStatusUpdateNotification(testOrder, 'confirmed');
+  
+  console.log('✅ Уведомление показано! Оно исчезнет через 8 секунд с анимацией');
+  console.log('💡 Вы также можете закрыть его вручную кнопкой "×"');
+};
+
+// Диагностический тест таймера
+window.testTimerDiagnostic = function() {
+  console.log('🔍 Диагностический тест таймера...');
+  
+  const testOrder = {
+    id: 'timer-test',
+    name: 'Диагностика таймера',
+    userId: auth.currentUser?.uid || 'test-user'
+  };
+  
+  // Показываем уведомление
+  showStatusUpdateNotification(testOrder, 'confirmed');
+  
+  // Логируем каждую секунду
+  let seconds = 0;
+  const logInterval = setInterval(() => {
+    seconds++;
+    console.log(`⏰ Прошло ${seconds} секунд с момента показа уведомления`);
+    
+    if (seconds >= 10) {
+      clearInterval(logInterval);
+      console.log('🔍 Диагностика завершена. Если уведомление не исчезло, есть проблема с таймером.');
+    }
+  }, 1000);
+  
+  console.log('✅ Уведомление показано! Следите за логами в консоли.');
+  console.log('💡 НЕ ДВИГАЙТЕ МЫШЬЮ - это поможет выявить проблему с таймером.');
+};
 
 // Добавляем функции в глобальную область для тестирования
 if (typeof window !== 'undefined') {

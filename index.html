@@ -258,6 +258,7 @@
           <div class="monitoring-controls">
             <button id="checkSystemBtn" class="admin-btn"><i class="fas fa-sync-alt"></i> Проверить систему</button>
             <button id="testWebhookBtn" class="admin-btn"><i class="fas fa-paper-plane"></i> Тест webhook</button>
+            <button id="cleanupOrdersBtn" class="admin-btn danger"><i class="fas fa-trash"></i> Очистить все заказы</button>
           </div>
           <div id="systemStatus" class="system-status">
             <!-- Статус системы будет загружен сюда -->
@@ -402,6 +403,7 @@
     window.testEmojiNotifications = testEmojiNotifications;
     window.testEmojiDisplay = testEmojiDisplay;
     window.testConfirmedNotification = testConfirmedNotification;
+    window.testQueueSystem = testQueueSystem;
     
     console.log('🎨 Исправленные уведомления загружены!');
     console.log('📝 Доступные функции тестирования:');
@@ -411,9 +413,15 @@
     console.log('   - testAudioAndVibration() - тест звука и вибрации');
     console.log('   - testEmojiNotifications() - тест уведомлений с эмодзи');
     console.log('   - testEmojiDisplay() - тест отображения эмодзи');
+    console.log('   - testQueueSystem() - тест системы очереди заказов');
+    console.log('   - testAutoHideNotifications() - тест автоматического исчезновения уведомлений');
+    console.log('   - testNotificationHide() - быстрый тест анимации исчезновения');
+    console.log('   - testTimerDiagnostic() - диагностика проблемы с таймером');
     console.log('💡 Для тестирования вызовите функцию в консоли');
     console.log('🔧 Исправлено: дублирование переменных и логика уведомлений!');
     console.log('🎨 Новый дизайн уведомления о заказе с современными эффектами!');
+    console.log('🎯 Система очереди заказов активирована!');
+    console.log('⏰ Автоматическое исчезновение уведомлений настроено!');
   </script>
 </body>
 </html>
