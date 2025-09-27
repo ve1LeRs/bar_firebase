@@ -30,14 +30,56 @@ let serviceAccount;
 try {
   serviceAccount = require('./service-private-key.json');
   console.log('📁 Используем локальный файл service-private-key.json');
+  console.log('🔧 Service account details:', {
+    type: serviceAccount.type,
+    project_id: serviceAccount.project_id,
+    private_key_id: serviceAccount.private_key_id ? 'SET' : 'NOT SET',
+    client_email: serviceAccount.client_email ? 'SET' : 'NOT SET',
+    client_id: serviceAccount.client_id ? 'SET' : 'NOT SET'
+  });
 } catch (error) {
   // Если файла нет, используем переменные окружения
   console.log('🔧 Используем переменные окружения для Firebase');
+  
+  // Проверяем наличие всех необходимых переменных
+  const requiredVars = [
+    'FIREBASE_PRIVATE_KEY_ID',
+    'FIREBASE_PRIVATE_KEY', 
+    'FIREBASE_CLIENT_EMAIL',
+    'FIREBASE_CLIENT_ID',
+    'FIREBASE_CLIENT_X509_CERT_URL'
+  ];
+  
+  const missingVars = requiredVars.filter(varName => !process.env[varName]);
+  if (missingVars.length > 0) {
+    console.error('❌ Отсутствуют переменные окружения:', missingVars);
+    throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+  }
+  
+  let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+  
+  // Обрабатываем private key - убираем лишние кавычки и заменяем \n на реальные переносы
+  if (privateKey) {
+    // Убираем лишние кавычки в начале и конце если есть
+    privateKey = privateKey.replace(/^["']|["']$/g, '');
+    // Заменяем \\n на реальные переносы строк
+    privateKey = privateKey.replace(/\\n/g, '\n');
+    console.log('🔑 Processed private key length:', privateKey.length);
+    console.log('🔑 Private key starts with:', privateKey.substring(0, 30) + '...');
+    console.log('🔑 Private key ends with:', '...' + privateKey.substring(privateKey.length - 30));
+    
+    // Проверяем, что private key имеет правильный формат
+    if (!privateKey.includes('BEGIN PRIVATE KEY') || !privateKey.includes('END PRIVATE KEY')) {
+      console.error('❌ Private key format is invalid');
+      throw new Error('Invalid private key format');
+    }
+  }
+  
   serviceAccount = {
     type: "service_account",
     project_id: "bar-menu-6145c",
     private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    private_key: privateKey,
     client_email: process.env.FIREBASE_CLIENT_EMAIL,
     client_id: process.env.FIREBASE_CLIENT_ID,
     auth_uri: "https://accounts.google.com/o/oauth2/auth",
@@ -45,18 +87,42 @@ try {
     auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
     client_x509_cert_url: process.env.FIREBASE_CLIENT_X509_CERT_URL
   };
+  
+  console.log('🔧 Service account object created with:', {
+    type: serviceAccount.type,
+    project_id: serviceAccount.project_id,
+    private_key_id: serviceAccount.private_key_id ? 'SET' : 'NOT SET',
+    private_key: serviceAccount.private_key ? 'SET' : 'NOT SET',
+    client_email: serviceAccount.client_email ? 'SET' : 'NOT SET',
+    client_id: serviceAccount.client_id ? 'SET' : 'NOT SET',
+    client_x509_cert_url: serviceAccount.client_x509_cert_url ? 'SET' : 'NOT SET'
+  });
 }
 
 if (!admin.apps.length) {
   try {
+    // Проверяем, что serviceAccount содержит все необходимые поля
+    if (!serviceAccount || !serviceAccount.private_key || !serviceAccount.client_email) {
+      throw new Error('Invalid service account configuration');
+    }
+    
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
       projectId: 'bar-menu-6145c'
     });
     console.log('✅ Firebase Admin SDK инициализирован успешно');
+    console.log('🔧 Project ID:', 'bar-menu-6145c');
+    console.log('🔧 Service Account Email:', serviceAccount.client_email);
   } catch (error) {
     console.error('❌ Ошибка инициализации Firebase:', error);
     console.error('🔍 Проверьте переменные окружения Firebase в Railway');
+    console.error('🔍 Service Account details:', {
+      hasPrivateKey: !!serviceAccount?.private_key,
+      hasClientEmail: !!serviceAccount?.client_email,
+      hasPrivateKeyId: !!serviceAccount?.private_key_id,
+      projectId: serviceAccount?.project_id
+    });
+    throw error; // Re-throw to stop the server if Firebase can't initialize
   }
 }
 
@@ -123,6 +189,15 @@ app.get('/test-firebase', async (req, res) => {
     };
     
     console.log('🔍 Проверка переменных окружения Firebase:', envCheck);
+    
+    // Дополнительная диагностика private key
+    if (process.env.FIREBASE_PRIVATE_KEY) {
+      const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+      console.log('🔑 Private key length:', privateKey.length);
+      console.log('🔑 Private key starts with:', privateKey.substring(0, 50) + '...');
+      console.log('🔑 Private key contains \\n:', privateKey.includes('\\n'));
+      console.log('🔑 Private key contains actual newlines:', privateKey.includes('\n'));
+    }
     
     // Проверяем, что Firebase инициализирован
     if (!db) {
