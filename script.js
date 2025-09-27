@@ -12,7 +12,93 @@ const TELEGRAM_BOT_TOKEN = "8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo";
 const TELEGRAM_CHAT_ID = "1743362083";
 
 // 🌐 WEBHOOK SERVER
-const WEBHOOK_SERVER_URL = "http://localhost:3000";
+// Определяем URL webhook сервера
+let WEBHOOK_SERVER_URL = "http://localhost:3000"; // По умолчанию localhost для разработки
+
+// Отладочная информация
+console.log('🔍 Отладка определения URL:');
+console.log('- hostname:', window.location.hostname);
+console.log('- protocol:', window.location.protocol);
+console.log('- href:', window.location.href);
+
+// Проверяем, запущены ли мы локально (для разработки)
+if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  WEBHOOK_SERVER_URL = "http://localhost:3000";
+  console.log('🔧 Режим разработки: используем localhost');
+} else {
+  // В продакшне пытаемся определить Railway URL автоматически
+  const savedUrl = localStorage.getItem('webhook_server_url');
+  console.log('💾 Сохраненный URL в localStorage:', savedUrl);
+  
+  if (savedUrl) {
+    WEBHOOK_SERVER_URL = savedUrl;
+    console.log('💾 Используем сохраненный URL:', WEBHOOK_SERVER_URL);
+  } else {
+    // Пытаемся автоматически определить Railway URL
+    const currentHost = window.location.hostname;
+    console.log('🌐 Текущий хост:', currentHost);
+    
+    if (currentHost.includes('railway.app')) {
+      WEBHOOK_SERVER_URL = `https://${currentHost}`;
+      console.log('🚀 Автоматически определен Railway URL:', WEBHOOK_SERVER_URL);
+      // Сохраняем для будущего использования
+      localStorage.setItem('webhook_server_url', WEBHOOK_SERVER_URL);
+    } else if (currentHost.includes('github.io')) {
+      // Для GitHub Pages используем дефолтный Railway URL или просим пользователя настроить
+      console.log('🌐 GitHub Pages обнаружен, необходимо настроить URL webhook сервера');
+      console.log('💡 Используйте кнопку "Настроить URL сервера" в админ панели');
+      console.log('🔗 Введите ваш Railway URL (например: https://your-app.railway.app)');
+      // Показываем уведомление пользователю
+      showError('⚠️ Необходимо настроить URL webhook сервера для GitHub Pages!');
+      showError('💡 Используйте кнопку "Настроить URL сервера" в админ панели');
+      showError('🔗 Введите ваш Railway URL (например: https://your-app.railway.app)');
+    } else {
+      console.log('🚀 Продакшн режим: необходимо настроить URL webhook сервера');
+      console.log('💡 Используйте кнопку "Настроить URL сервера" в админ панели');
+      console.log('💡 Или кнопку "Автонастройка" для быстрого решения');
+    }
+  }
+}
+
+console.log('🎯 Финальный URL webhook сервера:', WEBHOOK_SERVER_URL);
+
+// Функция для обновления URL webhook сервера
+function updateWebhookServerUrl(newUrl) {
+  WEBHOOK_SERVER_URL = newUrl;
+  // Сохраняем URL в localStorage для сохранения между перезагрузками
+  localStorage.setItem('webhook_server_url', newUrl);
+  console.log('🔄 URL webhook сервера обновлен и сохранен:', WEBHOOK_SERVER_URL);
+}
+
+// Функция для получения текущего URL
+function getWebhookServerUrl() {
+  return WEBHOOK_SERVER_URL;
+}
+
+// Функция для сброса настроек webhook сервера
+function resetWebhookServerUrl() {
+  localStorage.removeItem('webhook_server_url');
+  // Перезагружаем страницу для применения изменений
+  location.reload();
+}
+
+// Функция для принудительной настройки Railway URL
+function forceRailwayUrl() {
+  const railwayUrl = prompt('🌐 Принудительная настройка Railway URL\n\nВведите ваш Railway URL (например: https://web-production-72014.up.railway.app):');
+  
+  if (railwayUrl && railwayUrl.startsWith('https://')) {
+    updateWebhookServerUrl(railwayUrl);
+    showSuccess(`✅ Railway URL принудительно установлен: ${railwayUrl}`);
+    
+    // Автоматически проверяем систему
+    setTimeout(async () => {
+      const statusData = await monitorSystem();
+      displaySystemStatus(statusData);
+    }, 1000);
+  } else if (railwayUrl) {
+    showError('❌ URL должен начинаться с https://');
+  }
+}
 
 // Инициализация Firebase
 console.log('🔥 Инициализация Firebase...');
@@ -1917,6 +2003,203 @@ checkSystemBtn?.addEventListener('click', async () => {
 
 testWebhookBtn?.addEventListener('click', testWebhookServer);
 
+// Обработчик для диагностики
+const diagnoseBtn = document.getElementById('diagnoseBtn');
+diagnoseBtn?.addEventListener('click', async () => {
+  try {
+    showSuccess('🔍 Запуск диагностики...');
+    
+    const baseUrl = WEBHOOK_SERVER_URL.replace(/\/+$/, '');
+    const response = await fetch(`${baseUrl}/diagnose`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    console.log('🔍 Результаты диагностики:', data);
+    
+    // Показываем результаты в модальном окне
+    const diagnosticResults = `
+      <h4>🔍 Диагностика системы</h4>
+      <div class="diagnostic-results">
+        <h5>🌐 Переменные окружения:</h5>
+        <ul>
+          <li><strong>PORT:</strong> ${data.environment.PORT || 'НЕ УСТАНОВЛЕН'}</li>
+          <li><strong>RAILWAY_PUBLIC_DOMAIN:</strong> ${data.environment.RAILWAY_PUBLIC_DOMAIN || 'НЕ УСТАНОВЛЕН'}</li>
+          <li><strong>TELEGRAM_BOT_TOKEN:</strong> ${data.environment.TELEGRAM_BOT_TOKEN}</li>
+          <li><strong>TELEGRAM_CHAT_ID:</strong> ${data.environment.TELEGRAM_CHAT_ID}</li>
+          <li><strong>FIREBASE_PRIVATE_KEY_ID:</strong> ${data.environment.FIREBASE_PRIVATE_KEY_ID}</li>
+          <li><strong>FIREBASE_CLIENT_EMAIL:</strong> ${data.environment.FIREBASE_CLIENT_EMAIL}</li>
+          <li><strong>FIREBASE_PRIVATE_KEY:</strong> ${data.environment.FIREBASE_PRIVATE_KEY}</li>
+        </ul>
+        <p><strong>Время:</strong> ${new Date(data.timestamp).toLocaleString('ru-RU')}</p>
+      </div>
+    `;
+    
+    // Создаем временное модальное окно для диагностики
+    const diagnosticModal = document.createElement('div');
+    diagnosticModal.className = 'modal';
+    diagnosticModal.innerHTML = `
+      <div class="modal-content">
+        <span class="close">&times;</span>
+        ${diagnosticResults}
+      </div>
+    `;
+    
+    document.body.appendChild(diagnosticModal);
+    
+    // Показываем модальное окно
+    diagnosticModal.style.display = 'block';
+    
+    // Обработчик закрытия
+    const closeBtn = diagnosticModal.querySelector('.close');
+    closeBtn.addEventListener('click', () => {
+      document.body.removeChild(diagnosticModal);
+    });
+    
+    // Закрытие по клику вне модального окна
+    diagnosticModal.addEventListener('click', (e) => {
+      if (e.target === diagnosticModal) {
+        document.body.removeChild(diagnosticModal);
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка диагностики:', error);
+    
+    // Fallback диагностика - показываем базовую информацию
+    const fallbackResults = `
+      <h4>🔍 Диагностика системы (Fallback)</h4>
+      <div class="diagnostic-results">
+        <h5>⚠️ Endpoint /diagnose недоступен</h5>
+        <p><strong>URL webhook сервера:</strong> ${WEBHOOK_SERVER_URL}</p>
+        <p><strong>Статус:</strong> Endpoint не найден (404)</p>
+        <p><strong>Возможные причины:</strong></p>
+        <ul>
+          <li>Railway развертывает не webhook-server.js</li>
+          <li>Сервер не запущен</li>
+          <li>Неправильная конфигурация Railway</li>
+        </ul>
+        <p><strong>Рекомендации:</strong></p>
+        <ul>
+          <li>Проверьте Railway Dashboard → Logs</li>
+          <li>Убедитесь, что используется webhook-server.js</li>
+          <li>Перезапустите Railway сервис</li>
+        </ul>
+      </div>
+    `;
+    
+    // Создаем временное модальное окно для fallback диагностики
+    const diagnosticModal = document.createElement('div');
+    diagnosticModal.className = 'modal';
+    diagnosticModal.innerHTML = `
+      <div class="modal-content">
+        <span class="close">&times;</span>
+        ${fallbackResults}
+      </div>
+    `;
+    
+    document.body.appendChild(diagnosticModal);
+    
+    // Показываем модальное окно
+    diagnosticModal.style.display = 'block';
+    
+    // Обработчик закрытия
+    const closeBtn = diagnosticModal.querySelector('.close');
+    closeBtn.addEventListener('click', () => {
+      document.body.removeChild(diagnosticModal);
+    });
+    
+    // Закрытие по клику вне модального окна
+    diagnosticModal.addEventListener('click', (e) => {
+      if (e.target === diagnosticModal) {
+        document.body.removeChild(diagnosticModal);
+      }
+    });
+  }
+});
+
+// Обработчик для настройки URL webhook сервера
+const setupWebhookUrlBtn = document.getElementById('setupWebhookUrlBtn');
+setupWebhookUrlBtn?.addEventListener('click', () => {
+  const currentUrl = getWebhookServerUrl();
+  const newUrl = prompt(`🌐 Настройка URL webhook сервера\n\nТекущий URL: ${currentUrl}\n\nВведите новый URL:`, currentUrl);
+  
+  if (newUrl && newUrl !== currentUrl) {
+    if (newUrl.startsWith('http://') || newUrl.startsWith('https://')) {
+      updateWebhookServerUrl(newUrl);
+      showSuccess(`✅ URL webhook сервера обновлен: ${newUrl}`);
+      
+      // Автоматически проверяем систему после изменения URL
+      setTimeout(async () => {
+        const statusData = await monitorSystem();
+        displaySystemStatus(statusData);
+      }, 1000);
+    } else {
+      showError('❌ URL должен начинаться с http:// или https://');
+    }
+  }
+});
+
+// Обработчик для принудительной настройки Railway URL
+const forceRailwayBtn = document.getElementById('forceRailwayBtn');
+forceRailwayBtn?.addEventListener('click', () => {
+  forceRailwayUrl();
+});
+
+// Обработчик для сброса URL
+const resetUrlBtn = document.getElementById('resetUrlBtn');
+resetUrlBtn?.addEventListener('click', () => {
+  const confirmed = confirm('⚠️ ВНИМАНИЕ!\n\nВы действительно хотите сбросить настройки URL webhook сервера?\n\nСтраница будет перезагружена.');
+  
+  if (confirmed) {
+    showSuccess('🔄 Сбрасываем настройки URL...');
+    resetWebhookServerUrl();
+  }
+});
+
+// Обработчик для автонастройки
+const autoSetupBtn = document.getElementById('autoSetupBtn');
+autoSetupBtn?.addEventListener('click', async () => {
+  showSuccess('🚀 Запуск автонастройки...');
+  
+  try {
+    // Шаг 1: Настройка URL webhook сервера
+    const railwayUrl = prompt('🌐 Введите ваш Railway URL (например: https://your-app.railway.app):');
+    
+    if (!railwayUrl) {
+      showError('❌ URL не введен. Автонастройка отменена.');
+      return;
+    }
+    
+    if (!railwayUrl.startsWith('http://') && !railwayUrl.startsWith('https://')) {
+      showError('❌ URL должен начинаться с http:// или https://');
+      return;
+    }
+    
+    // Обновляем URL
+    updateWebhookServerUrl(railwayUrl);
+    showSuccess('✅ URL webhook сервера настроен');
+    
+    // Шаг 2: Проверяем систему
+    showSuccess('🔍 Проверяем систему...');
+    const statusData = await monitorSystem();
+    displaySystemStatus(statusData);
+    
+    // Шаг 3: Настраиваем Telegram webhook
+    showSuccess('📱 Настраиваем Telegram webhook...');
+    await setupTelegramWebhook();
+    
+    showSuccess('🎉 Автонастройка завершена!');
+    
+  } catch (error) {
+    showError(`❌ Ошибка автонастройки: ${error.message}`);
+    console.error('❌ Ошибка автонастройки:', error);
+  }
+});
+
 // Обработчик для очистки заказов
 cleanupOrdersBtn?.addEventListener('click', async () => {
   const confirmed = confirm('⚠️ ВНИМАНИЕ!\n\nВы действительно хотите удалить ВСЕ заказы из базы данных?\n\nЭто действие нельзя отменить!');
@@ -2882,7 +3165,15 @@ function showAdminStatusUpdateNotification() {
 // Проверка статуса webhook сервера
 async function checkWebhookServerStatus() {
   try {
-    const response = await fetch(`${WEBHOOK_SERVER_URL}/health`);
+    // Убираем лишние слеши из URL
+    const baseUrl = WEBHOOK_SERVER_URL.replace(/\/+$/, ''); // Убираем слеши в конце
+    const response = await fetch(`${baseUrl}/health`);
+    
+    if (!response.ok) {
+      console.warn(`⚠️ HTTP ${response.status}: ${response.statusText}`);
+      return { status: 'offline', error: `HTTP ${response.status}: ${response.statusText}` };
+    }
+    
     const data = await response.json();
     
     if (data.status === 'OK') {
@@ -2901,7 +3192,15 @@ async function checkWebhookServerStatus() {
 // Проверка Firebase через webhook сервер
 async function checkWebhookFirebase() {
   try {
-    const response = await fetch(`${WEBHOOK_SERVER_URL}/test-firebase`);
+    // Убираем лишние слеши из URL
+    const baseUrl = WEBHOOK_SERVER_URL.replace(/\/+$/, ''); // Убираем слеши в конце
+    const response = await fetch(`${baseUrl}/test-firebase`);
+    
+    if (!response.ok) {
+      console.warn(`⚠️ HTTP ${response.status}: ${response.statusText}`);
+      return { status: 'offline', error: `HTTP ${response.status}: ${response.statusText}` };
+    }
+    
     const data = await response.json();
     
     if (data.success) {
@@ -2923,12 +3222,19 @@ async function checkTelegramWebhook() {
     const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo`);
     const data = await response.json();
     
-    if (data.ok && data.result.url) {
-      console.log('✅ Telegram webhook настроен:', data.result.url);
-      return { status: 'online', data: data.result };
+    console.log('📡 Ответ от Telegram API:', data);
+    
+    if (data.ok) {
+      if (data.result.url && data.result.url !== '') {
+        console.log('✅ Telegram webhook настроен:', data.result.url);
+        return { status: 'online', data: data.result };
+      } else {
+        console.warn('⚠️ Telegram webhook не настроен (пустой URL)');
+        return { status: 'warning', data: data.result, error: 'Webhook URL пустой - нажмите "Настроить Webhook"' };
+      }
     } else {
-      console.warn('⚠️ Telegram webhook не настроен:', data);
-      return { status: 'error', data };
+      console.warn('⚠️ Ошибка Telegram API:', data.description);
+      return { status: 'error', data, error: data.description };
     }
   } catch (error) {
     console.error('❌ Ошибка проверки Telegram webhook:', error);
@@ -3175,7 +3481,16 @@ async function testWebhookServer() {
 // Настройка webhook для Telegram
 async function setupTelegramWebhook() {
   try {
-    const webhookUrl = `${WEBHOOK_SERVER_URL}/telegram-webhook`;
+    // Проверяем, что у нас есть правильный URL
+    if (WEBHOOK_SERVER_URL.includes('localhost') || WEBHOOK_SERVER_URL.includes('your-railway-app')) {
+      showError('❌ Необходимо настроить URL webhook сервера!');
+      showError('📝 Используйте кнопку "Настроить URL сервера" в админ панели');
+      showError('💡 Введите ваш Railway URL (например: https://your-app.railway.app)');
+      return;
+    }
+    
+    const webhookUrl = `${WEBHOOK_SERVER_URL.replace(/\/+$/, '')}/telegram-webhook`;
+    console.log('🔗 Настраиваем webhook для URL:', webhookUrl);
     
     const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook`, {
       method: 'POST',
@@ -3189,15 +3504,25 @@ async function setupTelegramWebhook() {
     });
     
     const data = await response.json();
+    console.log('📡 Ответ от Telegram API:', data);
     
     if (data.ok) {
       showSuccess('✅ Webhook успешно настроен!');
+      showSuccess(`🔗 URL: ${webhookUrl}`);
       displayTelegramInfo();
+      
+      // Автоматически проверяем систему после настройки webhook
+      setTimeout(async () => {
+        const statusData = await monitorSystem();
+        displaySystemStatus(statusData);
+      }, 1000);
     } else {
       showError(`❌ Ошибка настройки webhook: ${data.description}`);
+      console.error('❌ Детали ошибки:', data);
     }
   } catch (error) {
     showError(`❌ Ошибка настройки webhook: ${error.message}`);
+    console.error('❌ Полная ошибка:', error);
   }
 }
 

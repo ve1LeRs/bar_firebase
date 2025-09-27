@@ -5600,6 +5600,65 @@ body.modal-open {
   border-color: #c82333;
 }
 
+/* === СТИЛИ ДЛЯ КНОПКИ АВТОНАСТРОЙКИ === */
+.admin-btn.success {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  border-color: #28a745;
+  color: white;
+}
+
+.admin-btn.success:hover {
+  background: linear-gradient(135deg, #20c997, #17a2b8);
+  border-color: #20c997;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.admin-btn.success:active {
+  transform: translateY(0);
+}
+
+/* Стили для темной темы */
+.dark-theme .admin-btn.success {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  border-color: #28a745;
+}
+
+.dark-theme .admin-btn.success:hover {
+  background: linear-gradient(135deg, #20c997, #17a2b8);
+  border-color: #20c997;
+}
+
+/* === СТИЛИ ДЛЯ КНОПКИ СБРОСА === */
+.admin-btn.warning {
+  background: linear-gradient(135deg, #ffc107, #fd7e14);
+  border-color: #ffc107;
+  color: #212529;
+}
+
+.admin-btn.warning:hover {
+  background: linear-gradient(135deg, #fd7e14, #e8590c);
+  border-color: #fd7e14;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+}
+
+.admin-btn.warning:active {
+  transform: translateY(0);
+}
+
+/* Стили для темной темы */
+.dark-theme .admin-btn.warning {
+  background: linear-gradient(135deg, #ffc107, #fd7e14);
+  border-color: #ffc107;
+  color: #212529;
+}
+
+.dark-theme .admin-btn.warning:hover {
+  background: linear-gradient(135deg, #fd7e14, #e8590c);
+  border-color: #fd7e14;
+}
+
 .orders-list,
 .admin-list,
 .form-group {

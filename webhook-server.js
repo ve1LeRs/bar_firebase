@@ -7,17 +7,57 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://railway.com', 
+    'https://*.railway.app', 
+    'http://localhost:3000', 
+    'http://127.0.0.1:3000', 
+    'https://ve1lers.github.io',
+    'https://*.github.io',
+    'null'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 app.use(express.json());
 
 // Firebase Admin SDK инициализация
-const serviceAccount = require('./service-private-key.json');
+let serviceAccount;
+
+// Проверяем, есть ли файл service-private-key.json (для локальной разработки)
+try {
+  serviceAccount = require('./service-private-key.json');
+  console.log('📁 Используем локальный файл service-private-key.json');
+} catch (error) {
+  // Если файла нет, используем переменные окружения
+  console.log('🔧 Используем переменные окружения для Firebase');
+  serviceAccount = {
+    type: "service_account",
+    project_id: "bar-menu-6145c",
+    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    client_email: process.env.FIREBASE_CLIENT_EMAIL,
+    client_id: process.env.FIREBASE_CLIENT_ID,
+    auth_uri: "https://accounts.google.com/o/oauth2/auth",
+    token_uri: "https://oauth2.googleapis.com/token",
+    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+    client_x509_cert_url: process.env.FIREBASE_CLIENT_X509_CERT_URL
+  };
+}
 
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    projectId: 'bar-menu-6145c'
-  });
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      projectId: 'bar-menu-6145c'
+    });
+    console.log('✅ Firebase Admin SDK инициализирован успешно');
+  } catch (error) {
+    console.error('❌ Ошибка инициализации Firebase:', error);
+    console.error('🔍 Проверьте переменные окружения Firebase в Railway');
+  }
 }
 
 const db = admin.firestore();
@@ -35,20 +75,91 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Диагностика переменных окружения
+app.get('/diagnose', (req, res) => {
+  try {
+    console.log('🔍 Запуск диагностики переменных окружения...');
+    
+    const envVars = {
+      PORT: process.env.PORT,
+      RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN,
+      TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN ? 'SET' : 'NOT SET',
+      TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID ? 'SET' : 'NOT SET',
+      FIREBASE_PRIVATE_KEY_ID: process.env.FIREBASE_PRIVATE_KEY_ID ? 'SET' : 'NOT SET',
+      FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL ? 'SET' : 'NOT SET',
+      FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY ? 'SET' : 'NOT SET'
+    };
+    
+    console.log('📊 Переменные окружения:', envVars);
+    
+    res.json({
+      success: true,
+      environment: envVars,
+      timestamp: new Date().toISOString(),
+      service: 'Asafiev Bar Webhook Server'
+    });
+  } catch (error) {
+    console.error('❌ Ошибка диагностики:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Test Firebase connection
 app.get('/test-firebase', async (req, res) => {
   try {
+    console.log('🔥 Тестируем подключение к Firebase...');
+    
+    // Проверяем переменные окружения Firebase
+    const envCheck = {
+      FIREBASE_PRIVATE_KEY_ID: process.env.FIREBASE_PRIVATE_KEY_ID ? 'SET' : 'NOT SET',
+      FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY ? 'SET' : 'NOT SET',
+      FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL ? 'SET' : 'NOT SET',
+      FIREBASE_CLIENT_ID: process.env.FIREBASE_CLIENT_ID ? 'SET' : 'NOT SET',
+      FIREBASE_CLIENT_X509_CERT_URL: process.env.FIREBASE_CLIENT_X509_CERT_URL ? 'SET' : 'NOT SET'
+    };
+    
+    console.log('🔍 Проверка переменных окружения Firebase:', envCheck);
+    
+    // Проверяем, что Firebase инициализирован
+    if (!db) {
+      throw new Error('Firebase не инициализирован');
+    }
+    
+    // Пробуем создать тестовый документ
     const testDoc = await db.collection('test').doc('connection').get();
+    
+    console.log('✅ Firebase подключение успешно');
     res.json({ 
       success: true, 
       message: 'Firebase connection successful',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      projectId: 'bar-menu-6145c',
+      environment: envCheck
     });
   } catch (error) {
-    console.error('Firebase test error:', error);
+    console.error('❌ Firebase test error:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
+    
     res.status(500).json({ 
       success: false, 
-      error: error.message 
+      error: error.message,
+      code: error.code,
+      details: 'Проверьте переменные окружения Firebase в Railway',
+      environment: {
+        FIREBASE_PRIVATE_KEY_ID: process.env.FIREBASE_PRIVATE_KEY_ID ? 'SET' : 'NOT SET',
+        FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY ? 'SET' : 'NOT SET',
+        FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL ? 'SET' : 'NOT SET',
+        FIREBASE_CLIENT_ID: process.env.FIREBASE_CLIENT_ID ? 'SET' : 'NOT SET',
+        FIREBASE_CLIENT_X509_CERT_URL: process.env.FIREBASE_CLIENT_X509_CERT_URL ? 'SET' : 'NOT SET'
+      }
     });
   }
 });
@@ -473,10 +584,10 @@ function getStatusText(status) {
 }
 
 // Запуск сервера
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Webhook сервер запущен на порту ${PORT}`);
-  console.log(`📱 Telegram webhook: http://localhost:${PORT}/telegram-webhook`);
-  console.log(`🔍 Health check: http://localhost:${PORT}/health`);
+  console.log(`📱 Telegram webhook: ${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://your-railway-app.railway.app'}/telegram-webhook`);
+  console.log(`🔍 Health check: ${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://your-railway-app.railway.app'}/health`);
 });
 
 module.exports = app;
