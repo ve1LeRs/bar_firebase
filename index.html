@@ -28,12 +28,17 @@
       <div class="auth-buttons">
         <button id="loginBtn"><i class="fas fa-sign-in-alt"></i> Войти</button>
         <button id="registerBtn"><i class="fas fa-user-plus"></i> Регистрация</button>
-        <button id="profileBtn" style="display:none" class="profile-btn">
-          <i class="fas fa-user-circle"></i> 
-          <span id="profileUserName">Профиль</span>
-          <span id="profileBonusPreview" class="bonus-preview">💎 0</span>
-        </button>
-        <button id="adminBtn" style="display:none"><i class="fas fa-cog"></i> Админка</button>
+        <div class="user-actions" style="display:none" id="userActions">
+          <button id="profileBtn" class="profile-btn">
+            <i class="fas fa-user-circle"></i> 
+            <span id="profileUserName">Профиль</span>
+            <span id="profileBonusPreview" class="bonus-preview">💎 0</span>
+          </button>
+          <button id="adminBtn" style="display:none" class="admin-btn-header">
+            <i class="fas fa-cog"></i> 
+            <span>Админка</span>
+          </button>
+        </div>
       </div>
     </header>
     <!-- Модальное окно входа -->

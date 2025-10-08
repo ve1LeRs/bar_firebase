@@ -8499,6 +8499,13 @@ body.dark-theme .total-value {
    ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ
    ============================================ */
 
+/* Контейнер кнопок пользователя */
+.user-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
 /* Кнопка профиля в шапке */
 .profile-btn {
   display: flex;
@@ -8533,7 +8540,33 @@ body.dark-theme .total-value {
   font-weight: 700;
 }
 
-/* Темная тема для кнопки профиля */
+/* Кнопка админки в шапке */
+.admin-btn-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.2rem;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+  color: white;
+  border: none;
+  border-radius: 25px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(238, 90, 36, 0.3);
+}
+
+.admin-btn-header:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(238, 90, 36, 0.4);
+}
+
+.admin-btn-header i {
+  font-size: 1.2rem;
+}
+
+/* Темная тема для кнопок в шапке */
 body.dark-theme .profile-btn {
   background: linear-gradient(135deg, #b48c5a 0%, #8b6f47 100%);
   box-shadow: 0 4px 12px rgba(180, 140, 90, 0.3);
@@ -8541,6 +8574,15 @@ body.dark-theme .profile-btn {
 
 body.dark-theme .profile-btn:hover {
   box-shadow: 0 6px 16px rgba(180, 140, 90, 0.4);
+}
+
+body.dark-theme .admin-btn-header {
+  background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%);
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+}
+
+body.dark-theme .admin-btn-header:hover {
+  box-shadow: 0 6px 16px rgba(231, 76, 60, 0.4);
 }
 
 /* Модальное окно профиля */
@@ -8722,16 +8764,17 @@ body.dark-theme .profile-tab.active::after {
 
 /* Темная тема для карточки бонусов */
 body.dark-theme .bonus-card-large {
-  background: linear-gradient(135deg, #b48c5a 0%, #d4af37 100%);
+  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  border: 2px solid #b48c5a;
   box-shadow: 0 8px 24px rgba(180, 140, 90, 0.3);
 }
 
 body.dark-theme .bonus-amount {
-  color: #1a1a2e;
+  color: #ffd700;
 }
 
 body.dark-theme .bonus-label {
-  color: #333;
+  color: #95a5a6;
 }
 
 /* Сетка статистики бонусов */
@@ -8959,17 +9002,33 @@ body.dark-theme .danger-zone {
 
 /* Адаптивность для профиля */
 @media (max-width: 768px) {
+  .user-actions {
+    gap: 0.5rem;
+  }
+  
   .profile-btn {
     font-size: 0.9rem;
     padding: 0.6rem 1rem;
   }
   
-  .profile-btn span {
+  .profile-btn span#profileUserName {
     display: none;
   }
   
   .bonus-preview {
     font-size: 0.8rem;
+  }
+  
+  .admin-btn-header {
+    padding: 0.6rem 1rem;
+  }
+  
+  .admin-btn-header span {
+    display: none;
+  }
+  
+  .profile-bill-items-grid {
+    grid-template-columns: 1fr;
   }
   
   .profile-header {
@@ -9082,74 +9141,147 @@ body.dark-theme .hint {
   color: #4caf50;
 }
 
-.bill-items {
-  display: flex;
-  flex-direction: column;
+/* Сетка позиций в счете профиля */
+.profile-bill-items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
 
-.bill-item {
+.profile-bill-item {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.profile-bill-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: #667eea;
+}
+
+.profile-bill-item-main {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  background: #f5f5f5;
-  border-radius: 8px;
+  gap: 0.8rem;
 }
 
-.bill-item-image {
-  width: 50px;
-  height: 50px;
+.profile-bill-item-image {
+  width: 60px;
+  height: 60px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.bill-item-info {
+.profile-bill-item-placeholder {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  color: white;
+  font-size: 1.5rem;
+}
+
+.profile-bill-item-info {
   flex: 1;
+  min-width: 0;
 }
 
-.bill-item-name {
+.profile-bill-item-name {
   font-weight: 600;
   color: #2c3e50;
   margin-bottom: 0.3rem;
+  font-size: 1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.bill-item-status {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.bill-item-price {
+.profile-bill-item-price {
   font-weight: 700;
   font-size: 1.1rem;
   color: #4caf50;
 }
 
-.view-full-bill-btn {
-  width: 100%;
-  padding: 1rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
+.profile-bill-item-status {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  transition: all 0.3s ease;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
-.view-full-bill-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+.profile-bill-item-status.status-confirmed {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  color: #e65100;
 }
 
+.profile-bill-item-status.status-preparing {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  color: #1565c0;
+}
+
+.profile-bill-item-status.status-ready {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  color: #2e7d32;
+}
+
+.profile-bill-item-status.status-completed {
+  background: linear-gradient(135deg, #f1f8e9 0%, #dcedc8 100%);
+  color: #558b2f;
+}
+
+.profile-bill-item-status.status-cancelled {
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+  color: #c62828;
+}
+
+/* Итоговая информация по счету */
+.bill-summary {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.bill-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  color: #1565c0;
+}
+
+.bill-summary-row.total {
+  padding-top: 1rem;
+  margin-top: 0.5rem;
+  border-top: 2px solid #1976d2;
+  font-size: 1.1rem;
+}
+
+.bill-summary-row strong {
+  font-size: 1.2rem;
+}
+
+.bill-summary-row.total strong {
+  font-size: 1.5rem;
+  color: #0d47a1;
+}
+
+/* Темная тема для счетов */
 body.dark-theme .current-bill-card {
   background: #2c3e50;
 }
@@ -9162,20 +9294,61 @@ body.dark-theme .bill-header h4 {
   color: #ecf0f1;
 }
 
-body.dark-theme .bill-item {
-  background: #34495e;
+body.dark-theme .profile-bill-item {
+  background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
 }
 
-body.dark-theme .bill-item-name {
+body.dark-theme .profile-bill-item:hover {
+  border-color: #b48c5a;
+}
+
+body.dark-theme .profile-bill-item-placeholder {
+  background: linear-gradient(135deg, #b48c5a 0%, #8b6f47 100%);
+}
+
+body.dark-theme .profile-bill-item-name {
   color: #ecf0f1;
 }
 
-body.dark-theme .bill-item-status {
-  color: #95a5a6;
+body.dark-theme .profile-bill-item-status.status-confirmed {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.3) 0%, rgba(255, 152, 0, 0.2) 100%);
+  color: #ff9800;
 }
 
-body.dark-theme .view-full-bill-btn {
-  background: linear-gradient(135deg, #b48c5a 0%, #8b6f47 100%);
+body.dark-theme .profile-bill-item-status.status-preparing {
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.3) 0%, rgba(33, 150, 243, 0.2) 100%);
+  color: #64b5f6;
+}
+
+body.dark-theme .profile-bill-item-status.status-ready {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.3) 0%, rgba(76, 175, 80, 0.2) 100%);
+  color: #81c784;
+}
+
+body.dark-theme .profile-bill-item-status.status-completed {
+  background: linear-gradient(135deg, rgba(139, 195, 74, 0.3) 0%, rgba(139, 195, 74, 0.2) 100%);
+  color: #aed581;
+}
+
+body.dark-theme .profile-bill-item-status.status-cancelled {
+  background: linear-gradient(135deg, rgba(244, 67, 54, 0.3) 0%, rgba(244, 67, 54, 0.2) 100%);
+  color: #ef5350;
+}
+
+body.dark-theme .bill-summary {
+  background: linear-gradient(135deg, rgba(180, 140, 90, 0.2) 0%, rgba(180, 140, 90, 0.1) 100%);
+}
+
+body.dark-theme .bill-summary-row {
+  color: #b48c5a;
+}
+
+body.dark-theme .bill-summary-row.total {
+  border-color: #b48c5a;
+}
+
+body.dark-theme .bill-summary-row.total strong {
+  color: #d4af37;
 }
 
 /* История счетов */
