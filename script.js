@@ -3089,6 +3089,13 @@ function showSuccess(message) {
 function showStatusUpdateNotification(orderData = null, newStatus = null) {
   console.log('🔔 showStatusUpdateNotification вызвана:', { orderData, newStatus });
   
+  // Не показываем уведомления для статусов "ready" и "completed"
+  // Для "ready" показывается окно оценки, для "completed" заказ уже завершен
+  if (newStatus === 'ready' || newStatus === 'completed') {
+    console.log('⏭️ Уведомление пропущено для статуса:', newStatus);
+    return;
+  }
+  
   // Проверяем, что уведомление показывается только владельцу заказа
   const currentUser = auth.currentUser;
   if (!currentUser || !orderData || orderData.userId !== currentUser.uid) {
