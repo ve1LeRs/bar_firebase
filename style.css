@@ -8702,12 +8702,13 @@ body.dark-theme .profile-tab:hover {
 }
 
 body.dark-theme .profile-tab.active {
-  color: #b48c5a;
-  background: #34495e;
+  color: #1a1a2e;
+  background: linear-gradient(135deg, #b48c5a 0%, #d4af37 100%);
+  font-weight: 700;
 }
 
 body.dark-theme .profile-tab.active::after {
-  background: linear-gradient(90deg, #b48c5a 0%, #8b6f47 100%);
+  background: linear-gradient(90deg, #8b6f47 0%, #6b5537 100%);
 }
 
 /* Контент вкладок */
