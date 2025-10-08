@@ -150,84 +150,222 @@ async function createBillCard(bill) {
 
 // Отметить счет как оплаченный
 window.markBillAsPaid = async function(billId) {
-  // Спрашиваем способ оплаты
-  const paymentMethod = prompt('Способ оплаты:\n1 - Наличные\n2 - Карта\n3 - Перевод', '1');
-  
-  if (!paymentMethod) return;
-  
-  const paymentMethods = {
-    '1': 'Наличные',
-    '2': 'Карта',
-    '3': 'Перевод'
-  };
-  
-  const method = paymentMethods[paymentMethod] || 'Наличные';
-  
-  if (!confirm(`Отметить счет как оплаченный?\nСпособ оплаты: ${method}`)) {
-    return;
-  }
-  
   try {
-    await db.collection('bills').doc(billId).update({
-      status: 'paid',
-      paidAt: firebase.firestore.FieldValue.serverTimestamp(),
-      paymentMethod: method,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    // Получаем данные счета
+    const billDoc = await db.collection('bills').doc(billId).get();
     
-    showSuccess(`✅ Счет отмечен как оплаченный (${method})`);
+    if (!billDoc.exists) {
+      showError('Счет не найден');
+      return;
+    }
     
-    // Перезагружаем список
-    loadAdminBills(currentBillFilter);
+    const billData = billDoc.data();
+    
+    // Показываем модальное окно подтверждения оплаты
+    showPaymentConfirmModal(billId, billData);
     
   } catch (error) {
-    console.error('❌ Ошибка отметки счета:', error);
-    showError('❌ Не удалось отметить счет');
+    console.error('❌ Ошибка:', error);
+    showError('❌ Не удалось загрузить данные счета');
+  }
+};
+
+// Показать модальное окно подтверждения оплаты
+function showPaymentConfirmModal(billId, billData) {
+  const modal = document.getElementById('paymentConfirmModal');
+  const paymentBillInfo = document.getElementById('paymentBillInfo');
+  
+  if (!modal || !paymentBillInfo) return;
+  
+  const itemsCount = billData.items ? billData.items.length : 0;
+  const totalAmount = billData.totalAmount || 0;
+  const userName = billData.userName || 'Неизвестный';
+  
+  // Формируем информацию о счете
+  paymentBillInfo.innerHTML = `
+    <div class="payment-bill-info-row">
+      <span><i class="fas fa-user"></i> Клиент:</span>
+      <strong>${userName}</strong>
+    </div>
+    <div class="payment-bill-info-row">
+      <span><i class="fas fa-cocktail"></i> Позиций:</span>
+      <strong>${itemsCount}</strong>
+    </div>
+    ${billData.discount && billData.discount > 0 ? `
+      <div class="payment-bill-info-row">
+        <span><i class="fas fa-tag"></i> Скидка:</span>
+        <strong>${billData.discount}% ${billData.promoCode ? `(${billData.promoCode})` : ''}</strong>
+      </div>
+    ` : ''}
+    <div class="payment-bill-info-row">
+      <span>Итого к оплате:</span>
+      <strong>${totalAmount} ₽</strong>
+    </div>
+  `;
+  
+  // Показываем модальное окно
+  modal.style.display = 'block';
+  document.body.classList.add('modal-open');
+  
+  // Обработчик подтверждения
+  const confirmBtn = document.getElementById('confirmPaymentBtn');
+  
+  // Удаляем старые обработчики
+  const newConfirmBtn = confirmBtn.cloneNode(true);
+  confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+  
+  newConfirmBtn.addEventListener('click', async () => {
+    const selectedMethod = document.querySelector('input[name="paymentMethod"]:checked');
+    
+    if (!selectedMethod) {
+      showError('Выберите способ оплаты');
+      return;
+    }
+    
+    const paymentMethod = selectedMethod.value;
+    
+    try {
+      // Отключаем кнопку
+      newConfirmBtn.disabled = true;
+      newConfirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Обработка...';
+      
+      await db.collection('bills').doc(billId).update({
+        status: 'paid',
+        paidAt: firebase.firestore.FieldValue.serverTimestamp(),
+        paymentMethod: paymentMethod,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      
+      showSuccess(`✅ Счет отмечен как оплаченный (${paymentMethod})`);
+      
+      // Закрываем модальное окно
+      closePaymentConfirmModal();
+      
+      // Перезагружаем список
+      loadAdminBills(currentBillFilter);
+      
+    } catch (error) {
+      console.error('❌ Ошибка отметки счета:', error);
+      showError('❌ Не удалось отметить счет');
+      
+      // Восстанавливаем кнопку
+      newConfirmBtn.disabled = false;
+      newConfirmBtn.innerHTML = '<i class="fas fa-check"></i> Подтвердить оплату';
+    }
+  });
+}
+
+// Закрыть модальное окно подтверждения оплаты
+window.closePaymentConfirmModal = function() {
+  const modal = document.getElementById('paymentConfirmModal');
+  if (modal) {
+    modal.style.display = 'none';
+    document.body.classList.remove('modal-open');
+  }
+  
+  // Сбрасываем выбор на "Наличные"
+  const cashRadio = document.querySelector('input[name="paymentMethod"][value="Наличные"]');
+  if (cashRadio) {
+    cashRadio.checked = true;
   }
 };
 
 // Открыть счет заново
 window.reopenBill = async function(billId) {
-  if (!confirm('Открыть счет заново? Он станет активным.')) {
-    return;
-  }
-  
-  try {
-    await db.collection('bills').doc(billId).update({
-      status: 'open',
-      paidAt: null,
-      paymentMethod: null,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    
-    showSuccess('✅ Счет открыт заново');
-    
-    // Перезагружаем список
-    loadAdminBills(currentBillFilter);
-    
-  } catch (error) {
-    console.error('❌ Ошибка открытия счета:', error);
-    showError('❌ Не удалось открыть счет');
-  }
+  showConfirmAction(
+    'Открыть счет заново?',
+    'Счет станет активным и вернётся в список открытых счетов.',
+    'success',
+    '🔄',
+    async () => {
+      try {
+        await db.collection('bills').doc(billId).update({
+          status: 'open',
+          paidAt: null,
+          paymentMethod: null,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        showSuccess('✅ Счет открыт заново');
+        loadAdminBills(currentBillFilter);
+        
+      } catch (error) {
+        console.error('❌ Ошибка открытия счета:', error);
+        showError('❌ Не удалось открыть счет');
+      }
+    }
+  );
 };
 
 // Удалить счет
 window.deleteBill = async function(billId) {
-  if (!confirm('Вы уверены, что хотите удалить этот счет? Это действие необратимо.')) {
-    return;
+  showConfirmAction(
+    'Удалить счет?',
+    'Вы уверены, что хотите удалить этот счет? Это действие необратимо.',
+    'danger',
+    '🗑️',
+    async () => {
+      try {
+        await db.collection('bills').doc(billId).delete();
+        
+        showSuccess('✅ Счет удален');
+        loadAdminBills(currentBillFilter);
+        
+      } catch (error) {
+        console.error('❌ Ошибка удаления счета:', error);
+        showError('❌ Не удалось удалить счет');
+      }
+    }
+  );
+};
+
+// Универсальная функция показа подтверждения
+function showConfirmAction(title, message, type = 'warning', icon = '⚠️', onConfirm) {
+  const modal = document.getElementById('confirmActionModal');
+  const header = document.getElementById('confirmActionHeader');
+  const iconEl = document.getElementById('confirmIcon');
+  const titleEl = document.getElementById('confirmActionTitle');
+  const messageEl = document.getElementById('confirmActionMessage');
+  const confirmBtn = document.getElementById('confirmActionBtn');
+  
+  if (!modal) return;
+  
+  // Устанавливаем тип (для цветов)
+  header.className = `confirm-action-header ${type}`;
+  
+  // Устанавливаем содержимое
+  if (iconEl) iconEl.textContent = icon;
+  if (titleEl) titleEl.textContent = title;
+  if (messageEl) messageEl.textContent = message;
+  
+  // Обновляем кнопку подтверждения
+  if (confirmBtn) {
+    confirmBtn.className = `confirm-btn confirm ${type}`;
   }
   
-  try {
-    await db.collection('bills').doc(billId).delete();
-    
-    showSuccess('✅ Счет удален');
-    
-    // Перезагружаем список
-    loadAdminBills(currentBillFilter);
-    
-  } catch (error) {
-    console.error('❌ Ошибка удаления счета:', error);
-    showError('❌ Не удалось удалить счет');
+  // Показываем модальное окно
+  modal.style.display = 'block';
+  document.body.classList.add('modal-open');
+  
+  // Удаляем старые обработчики
+  const newConfirmBtn = confirmBtn.cloneNode(true);
+  confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+  
+  // Добавляем обработчик подтверждения
+  newConfirmBtn.addEventListener('click', async () => {
+    closeConfirmActionModal();
+    if (onConfirm) {
+      await onConfirm();
+    }
+  });
+}
+
+// Закрыть модальное окно подтверждения
+window.closeConfirmActionModal = function() {
+  const modal = document.getElementById('confirmActionModal');
+  if (modal) {
+    modal.style.display = 'none';
+    document.body.classList.remove('modal-open');
   }
 };
 

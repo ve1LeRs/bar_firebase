@@ -839,6 +839,76 @@
         </div>
       </div>
     </div>
+    <!-- Модальное окно подтверждения действий -->
+    <div id="confirmActionModal" class="modal confirm-action-modal">
+      <div class="modal-content confirm-action-content">
+        <div class="confirm-action-header" id="confirmActionHeader">
+          <div class="confirm-icon" id="confirmIcon">⚠️</div>
+          <h3 id="confirmActionTitle">Подтвердите действие</h3>
+        </div>
+        <div class="confirm-action-body">
+          <p id="confirmActionMessage">Вы уверены?</p>
+        </div>
+        <div class="confirm-action-buttons">
+          <button class="confirm-btn cancel" onclick="closeConfirmActionModal()">
+            <i class="fas fa-times"></i> Отмена
+          </button>
+          <button class="confirm-btn confirm" id="confirmActionBtn">
+            <i class="fas fa-check"></i> Подтвердить
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Модальное окно подтверждения оплаты счета -->
+    <div id="paymentConfirmModal" class="modal payment-confirm-modal">
+      <div class="modal-content payment-confirm-content">
+        <span class="close" onclick="closePaymentConfirmModal()">&times;</span>
+        <div class="payment-confirm-header">
+          <div class="payment-icon">💳</div>
+          <h3>Подтвердите оплату счета</h3>
+        </div>
+        
+        <div class="payment-bill-info" id="paymentBillInfo">
+          <!-- Информация о счете будет здесь -->
+        </div>
+        
+        <div class="payment-method-section">
+          <h4><i class="fas fa-wallet"></i> Выберите способ оплаты:</h4>
+          <div class="payment-methods">
+            <label class="payment-method-option">
+              <input type="radio" name="paymentMethod" value="Наличные" checked>
+              <div class="payment-method-card">
+                <i class="fas fa-money-bill-wave"></i>
+                <span>Наличные</span>
+              </div>
+            </label>
+            <label class="payment-method-option">
+              <input type="radio" name="paymentMethod" value="Карта">
+              <div class="payment-method-card">
+                <i class="fas fa-credit-card"></i>
+                <span>Карта</span>
+              </div>
+            </label>
+            <label class="payment-method-option">
+              <input type="radio" name="paymentMethod" value="Перевод">
+              <div class="payment-method-card">
+                <i class="fas fa-exchange-alt"></i>
+                <span>Перевод</span>
+              </div>
+            </label>
+          </div>
+        </div>
+        
+        <div class="payment-confirm-actions">
+          <button class="payment-btn cancel" onclick="closePaymentConfirmModal()">
+            <i class="fas fa-times"></i> Отмена
+          </button>
+          <button class="payment-btn confirm" id="confirmPaymentBtn">
+            <i class="fas fa-check"></i> Подтвердить оплату
+          </button>
+        </div>
+      </div>
+    </div>
     <!-- Модальное окно оценки коктейля -->
     <div id="ratingModal" class="modal rating-modal">
       <div class="modal-content rating-modal-content">

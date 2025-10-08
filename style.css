@@ -9816,6 +9816,390 @@ body.dark-theme .bill-detail-total strong:last-child {
   color: #81c784;
 }
 
+/* Модальное окно подтверждения оплаты */
+.payment-confirm-content {
+  max-width: 600px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.payment-confirm-header {
+  background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
+  color: white;
+  padding: 2rem;
+  text-align: center;
+}
+
+.payment-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.payment-confirm-header h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.payment-bill-info {
+  padding: 1.5rem 2rem;
+  background: #f8f9fa;
+}
+
+.payment-bill-info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.payment-bill-info-row:last-child {
+  border-bottom: none;
+  padding-top: 1rem;
+  margin-top: 0.5rem;
+  border-top: 2px solid #4caf50;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.payment-method-section {
+  padding: 1.5rem 2rem;
+}
+
+.payment-method-section h4 {
+  margin: 0 0 1rem 0;
+  color: #2c3e50;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.payment-methods {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.payment-method-option {
+  cursor: pointer;
+}
+
+.payment-method-option input[type="radio"] {
+  display: none;
+}
+
+.payment-method-card {
+  background: #f8f9fa;
+  border: 3px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.payment-method-card i {
+  font-size: 2.5rem;
+  color: #666;
+  transition: all 0.3s ease;
+}
+
+.payment-method-card span {
+  font-weight: 600;
+  color: #666;
+  transition: all 0.3s ease;
+}
+
+.payment-method-card:hover {
+  border-color: #4caf50;
+  background: #f1f8f4;
+}
+
+.payment-method-option input[type="radio"]:checked + .payment-method-card {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border-color: #4caf50;
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.payment-method-option input[type="radio"]:checked + .payment-method-card i {
+  color: #4caf50;
+  transform: scale(1.1);
+}
+
+.payment-method-option input[type="radio"]:checked + .payment-method-card span {
+  color: #2e7d32;
+}
+
+.payment-confirm-actions {
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem 2rem;
+  background: #f8f9fa;
+}
+
+.payment-btn {
+  flex: 1;
+  padding: 1rem 1.5rem;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+}
+
+.payment-btn.cancel {
+  background: #e0e0e0;
+  color: #666;
+}
+
+.payment-btn.cancel:hover {
+  background: #bdbdbd;
+  transform: translateY(-2px);
+}
+
+.payment-btn.confirm {
+  background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.payment-btn.confirm:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+}
+
+/* Темная тема для модального окна оплаты */
+body.dark-theme .payment-confirm-header {
+  background: linear-gradient(135deg, #2e7d32 0%, #388e3c 100%);
+}
+
+body.dark-theme .payment-bill-info {
+  background: #2c3e50;
+  color: #ecf0f1;
+}
+
+body.dark-theme .payment-bill-info-row {
+  border-color: rgba(180, 140, 90, 0.2);
+}
+
+body.dark-theme .payment-bill-info-row:last-child {
+  border-color: #4caf50;
+}
+
+body.dark-theme .payment-method-section {
+  background: #34495e;
+}
+
+body.dark-theme .payment-method-section h4 {
+  color: #ecf0f1;
+}
+
+body.dark-theme .payment-method-card {
+  background: #2c3e50;
+  border-color: rgba(180, 140, 90, 0.3);
+}
+
+body.dark-theme .payment-method-card i,
+body.dark-theme .payment-method-card span {
+  color: #95a5a6;
+}
+
+body.dark-theme .payment-method-card:hover {
+  border-color: #4caf50;
+  background: #34495e;
+}
+
+body.dark-theme .payment-method-option input[type="radio"]:checked + .payment-method-card {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.3) 0%, rgba(76, 175, 80, 0.2) 100%);
+  border-color: #4caf50;
+}
+
+body.dark-theme .payment-method-option input[type="radio"]:checked + .payment-method-card i,
+body.dark-theme .payment-method-option input[type="radio"]:checked + .payment-method-card span {
+  color: #81c784;
+}
+
+body.dark-theme .payment-confirm-actions {
+  background: #2c3e50;
+}
+
+body.dark-theme .payment-btn.cancel {
+  background: #34495e;
+  color: #95a5a6;
+}
+
+body.dark-theme .payment-btn.cancel:hover {
+  background: #3d566e;
+}
+
+/* Адаптивность для модального окна оплаты */
+@media (max-width: 768px) {
+  .payment-methods {
+    grid-template-columns: 1fr;
+  }
+  
+  .payment-confirm-actions {
+    flex-direction: column;
+  }
+}
+
+/* Модальное окно подтверждения действий */
+.confirm-action-content {
+  max-width: 500px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.confirm-action-header {
+  padding: 2rem;
+  text-align: center;
+  background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%);
+  color: white;
+}
+
+.confirm-action-header.danger {
+  background: linear-gradient(135deg, #f44336 0%, #e53935 100%);
+}
+
+.confirm-action-header.success {
+  background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
+}
+
+.confirm-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.confirm-action-header h3 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.confirm-action-body {
+  padding: 2rem;
+  text-align: center;
+}
+
+.confirm-action-body p {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #2c3e50;
+  line-height: 1.6;
+}
+
+.confirm-action-buttons {
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem 2rem;
+  background: #f8f9fa;
+}
+
+.confirm-btn {
+  flex: 1;
+  padding: 1rem 1.5rem;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+}
+
+.confirm-btn.cancel {
+  background: #e0e0e0;
+  color: #666;
+}
+
+.confirm-btn.cancel:hover {
+  background: #bdbdbd;
+  transform: translateY(-2px);
+}
+
+.confirm-btn.confirm {
+  background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+}
+
+.confirm-btn.confirm.danger {
+  background: linear-gradient(135deg, #f44336 0%, #e53935 100%);
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+}
+
+.confirm-btn.confirm.success {
+  background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.confirm-btn.confirm:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 152, 0, 0.4);
+}
+
+.confirm-btn.confirm.danger:hover {
+  box-shadow: 0 6px 16px rgba(244, 67, 54, 0.4);
+}
+
+.confirm-btn.confirm.success:hover {
+  box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+}
+
+/* Темная тема для модального окна подтверждения */
+body.dark-theme .confirm-action-header {
+  background: linear-gradient(135deg, #e65100 0%, #f57c00 100%);
+}
+
+body.dark-theme .confirm-action-header.danger {
+  background: linear-gradient(135deg, #c62828 0%, #d32f2f 100%);
+}
+
+body.dark-theme .confirm-action-header.success {
+  background: linear-gradient(135deg, #2e7d32 0%, #388e3c 100%);
+}
+
+body.dark-theme .confirm-action-body {
+  background: #2c3e50;
+}
+
+body.dark-theme .confirm-action-body p {
+  color: #ecf0f1;
+}
+
+body.dark-theme .confirm-action-buttons {
+  background: #2c3e50;
+}
+
+body.dark-theme .confirm-btn.cancel {
+  background: #34495e;
+  color: #95a5a6;
+}
+
+body.dark-theme .confirm-btn.cancel:hover {
+  background: #3d566e;
+}
+
+@media (max-width: 768px) {
+  .confirm-action-buttons {
+    flex-direction: column;
+  }
+}
+
 /* Адаптивность для мобильных */
 @media (max-width: 768px) {
   .bills-stats {
