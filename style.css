@@ -3025,48 +3025,25 @@ body.dark-theme #billHistoryBtn:hover {
 
 .admin-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
-  margin-bottom: 2rem;
-  border-bottom: 1px solid #eee;
-  overflow-x: auto;
-  overflow-y: hidden;
-  white-space: nowrap;
-  scrollbar-width: thin;
-  scrollbar-color: #b48c5a #f5f5f5;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid #eee;
   padding-bottom: 0.5rem;
 }
 
-.admin-tabs::-webkit-scrollbar {
-  height: 6px;
-}
-
-.admin-tabs::-webkit-scrollbar-track {
-  background: #f5f5f5;
-  border-radius: 3px;
-}
-
-.admin-tabs::-webkit-scrollbar-thumb {
-  background: #b48c5a;
-  border-radius: 3px;
-}
-
-.admin-tabs::-webkit-scrollbar-thumb:hover {
-  background: #8b6f47;
-}
-
 .tab-btn {
-  padding: 0.7rem 1rem;
+  padding: 0.6rem 0.9rem;
   background: none;
   border: none;
   border-bottom: 3px solid transparent;
   cursor: pointer;
   font-family: 'Inter', sans-serif;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 500;
   color: #6b5c47;
   transition: all 0.3s ease;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .tab-btn:hover {
@@ -3076,19 +3053,6 @@ body.dark-theme #billHistoryBtn:hover {
 /* Темная тема для вкладок админки */
 body.dark-theme .admin-tabs {
   border-color: rgba(180, 140, 90, 0.3);
-  scrollbar-color: #d4af37 #2c3e50;
-}
-
-body.dark-theme .admin-tabs::-webkit-scrollbar-track {
-  background: #2c3e50;
-}
-
-body.dark-theme .admin-tabs::-webkit-scrollbar-thumb {
-  background: #d4af37;
-}
-
-body.dark-theme .admin-tabs::-webkit-scrollbar-thumb:hover {
-  background: #b48c5a;
 }
 
 .tab-btn.active {
