@@ -173,17 +173,37 @@ async function loadProfileCurrentBill(userId) {
 // Загрузка истории счетов в профиле
 async function loadProfileHistory(userId) {
   try {
+    // Упрощённый запрос без составного индекса
     const billsSnapshot = await db.collection('bills')
       .where('userId', '==', userId)
-      .where('status', '==', 'paid')
-      .orderBy('paidAt', 'desc')
-      .limit(5)
       .get();
+    
+    // Фильтруем и сортируем на клиенте
+    const paidBills = [];
+    billsSnapshot.forEach(doc => {
+      const billData = doc.data();
+      if (billData.status === 'paid' && billData.paidAt) {
+        paidBills.push({
+          id: doc.id,
+          ...billData
+        });
+      }
+    });
+    
+    // Сортируем по дате оплаты (новые первыми)
+    paidBills.sort((a, b) => {
+      const dateA = a.paidAt?.toDate() || new Date(0);
+      const dateB = b.paidAt?.toDate() || new Date(0);
+      return dateB - dateA;
+    });
+    
+    // Берём только первые 5
+    const recentBills = paidBills.slice(0, 5);
     
     const profileBillHistory = document.getElementById('profileBillHistory');
     if (!profileBillHistory) return;
     
-    if (billsSnapshot.empty) {
+    if (recentBills.length === 0) {
       profileBillHistory.innerHTML = `
         <div class="no-history-message">
           <i class="fas fa-history"></i>
@@ -196,9 +216,9 @@ async function loadProfileHistory(userId) {
     
     let historyHTML = '<div class="history-list">';
     
-    billsSnapshot.forEach(doc => {
-      const billData = doc.data();
-      const billId = doc.id;
+    recentBills.forEach(bill => {
+      const billData = bill;
+      const billId = bill.id;
       const paidDate = billData.paidAt ? billData.paidAt.toDate().toLocaleDateString('ru-RU') : 'Неизвестно';
       const totalAmount = billData.totalAmount || 0;
       const itemsCount = billData.items ? billData.items.length : 0;
