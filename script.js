@@ -1817,6 +1817,7 @@ cocktailForm?.addEventListener('submit', async (e) => {
   const cocktailIngredients = document.getElementById('cocktailIngredients');
   const cocktailMood = document.getElementById('cocktailMood');
   const cocktailAlcohol = document.getElementById('cocktailAlcohol');
+  const cocktailPrice = document.getElementById('cocktailPrice');
   const cocktailCategory = document.getElementById('cocktailCategory');
   const cocktailImage = document.getElementById('cocktailImage');
 
@@ -1830,6 +1831,7 @@ cocktailForm?.addEventListener('submit', async (e) => {
   const ingredients = cocktailIngredients.value;
   const mood = cocktailMood ? cocktailMood.value : '';
   const alcohol = cocktailAlcohol ? cocktailAlcohol.value : '';
+  const price = cocktailPrice ? parseInt(cocktailPrice.value) : 500;
   const category = cocktailCategory ? cocktailCategory.value : '';
   const imageFile = cocktailImage ? cocktailImage.files[0] : null;
   
@@ -1849,6 +1851,7 @@ cocktailForm?.addEventListener('submit', async (e) => {
       ingredients: ingredients,
       mood: mood,
       alcohol: alcohol ? parseInt(alcohol) : null,
+      price: price,
       category: category || 'signature', // По умолчанию авторский, если не выбрано
       updatedAt: new Date()
     };
@@ -2275,6 +2278,7 @@ document.addEventListener('click', (e) => {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Загружаем...';
     
     const name = btn.getAttribute('data-name');
+    const price = parseInt(btn.getAttribute('data-price')) || 500;
     // 👇 Безопасное получение изображения коктейля из родительской карточки
     const card = btn.closest('.cocktail-card');
     const imgElement = card?.querySelector('img');
@@ -2289,7 +2293,11 @@ document.addEventListener('click', (e) => {
       userId: user.uid,
       displayTime: new Date().toLocaleString('ru-RU'),
       image: hasRealImage ? imgSrc : '',
-      status: 'pending' // Статус по умолчанию
+      status: 'pending', // Статус по умолчанию
+      price: price,
+      originalPrice: price,
+      discount: 0,
+      promoCode: null
     };
     if (orderSummary) {
         orderSummary.innerHTML = `
@@ -2297,6 +2305,23 @@ document.addEventListener('click', (e) => {
         <strong>📬 Ваше имя:</strong> ${currentOrder.user}
         `;
     }
+    
+    // Отображаем цену
+    const orderPriceEl = document.getElementById('orderPrice');
+    const totalPriceEl = document.getElementById('totalPrice');
+    if (orderPriceEl) orderPriceEl.textContent = `${price} ₽`;
+    if (totalPriceEl) totalPriceEl.textContent = `${price} ₽`;
+    
+    // Сбрасываем промокод
+    const promoCodeInput = document.getElementById('promoCodeInput');
+    const promoMessage = document.getElementById('promoMessage');
+    const discountInfo = document.getElementById('discountInfo');
+    if (promoCodeInput) promoCodeInput.value = '';
+    if (promoMessage) {
+      promoMessage.textContent = '';
+      promoMessage.classList.remove('success', 'error');
+    }
+    if (discountInfo) discountInfo.style.display = 'none';
     // 👇 Показываем и подставляем изображение или заглушку
     const orderImagePreview = document.getElementById('orderImagePreview');
     if (orderImagePreview) {
@@ -2359,12 +2384,30 @@ confirmOrderBtn?.addEventListener('click', async () => {
       createdAt: firebase.firestore.FieldValue.serverTimestamp ? firebase.firestore.FieldValue.serverTimestamp() : now
     };
     const docRef = await db.collection('orders').add(orderData);
+    
+    // Если использован промокод, увеличиваем счетчик использований
+    if (currentOrder.promoCode) {
+      try {
+        await db.collection('promocodes').doc(currentOrder.promoCode).update({
+          usedCount: firebase.firestore.FieldValue.increment(1),
+          lastUsedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        console.log(`✅ Промокод ${currentOrder.promoCode} использован`);
+      } catch (error) {
+        console.error('❌ Ошибка обновления счетчика промокода:', error);
+      }
+    }
 
+    const promoInfo = currentOrder.promoCode ? `\n💳 *Промокод:* ${currentOrder.promoCode} (-${currentOrder.promoDiscount}%)` : '';
+    const priceInfo = currentOrder.discount > 0 
+      ? `\n💰 *Цена:* ~~${currentOrder.originalPrice}₽~~ → ${currentOrder.price}₽`
+      : `\n💰 *Цена:* ${currentOrder.price}₽`;
+    
     const message = `
 🆕 *Новый заказ в Asafiev Bar!*
 🍸 *Коктейль:* ${currentOrder.name}
 👤 *Имя клиента:* ${currentOrder.user}
-🕒 *Время:* ${currentOrder.displayTime}
+🕒 *Время:* ${currentOrder.displayTime}${priceInfo}${promoInfo}
 🆔 *ID заказа:* ${docRef.id}
         `.trim();
 
@@ -2473,6 +2516,123 @@ function showSuccess(message) {
   if (successContent) successContent.textContent = message;
   openModal(successModal); // Используем новую функцию
 }
+
+// ============================================
+// СИСТЕМА ПРОМОКОДОВ
+// ============================================
+
+// Применение промокода
+const applyPromoBtn = document.getElementById('applyPromoBtn');
+applyPromoBtn?.addEventListener('click', async () => {
+  const promoCodeInput = document.getElementById('promoCodeInput');
+  const promoMessage = document.getElementById('promoMessage');
+  const promoCode = promoCodeInput?.value.trim().toUpperCase();
+  
+  if (!promoCode) {
+    if (promoMessage) {
+      promoMessage.textContent = '⚠️ Введите промокод';
+      promoMessage.className = 'promo-message error';
+    }
+    return;
+  }
+  
+  if (!currentOrder) {
+    if (promoMessage) {
+      promoMessage.textContent = '❌ Ошибка: заказ не найден';
+      promoMessage.className = 'promo-message error';
+    }
+    return;
+  }
+  
+  // Проверяем промокод в Firebase
+  try {
+    const promoRef = await db.collection('promocodes').doc(promoCode).get();
+    
+    if (!promoRef.exists) {
+      if (promoMessage) {
+        promoMessage.textContent = '❌ Промокод не найден';
+        promoMessage.className = 'promo-message error';
+      }
+      return;
+    }
+    
+    const promoData = promoRef.data();
+    
+    // Проверяем активность промокода
+    if (!promoData.active) {
+      if (promoMessage) {
+        promoMessage.textContent = '❌ Промокод неактивен';
+        promoMessage.className = 'promo-message error';
+      }
+      return;
+    }
+    
+    // Проверяем срок действия
+    if (promoData.expiryDate) {
+      const expiryDate = promoData.expiryDate.toDate();
+      if (expiryDate < new Date()) {
+        if (promoMessage) {
+          promoMessage.textContent = '❌ Срок действия промокода истек';
+          promoMessage.className = 'promo-message error';
+        }
+        return;
+      }
+    }
+    
+    // Проверяем количество использований
+    if (promoData.maxUses && promoData.maxUses > 0) {
+      const usedCount = promoData.usedCount || 0;
+      if (usedCount >= promoData.maxUses) {
+        if (promoMessage) {
+          promoMessage.textContent = '❌ Промокод исчерпан';
+          promoMessage.className = 'promo-message error';
+        }
+        return;
+      }
+    }
+    
+    // Применяем скидку
+    const discount = promoData.discount || 0;
+    const originalPrice = currentOrder.originalPrice;
+    const discountAmount = Math.round(originalPrice * discount / 100);
+    const newPrice = originalPrice - discountAmount;
+    
+    // Обновляем currentOrder
+    currentOrder.price = newPrice;
+    currentOrder.discount = discountAmount;
+    currentOrder.promoCode = promoCode;
+    currentOrder.promoDiscount = discount;
+    
+    // Обновляем UI
+    const discountInfo = document.getElementById('discountInfo');
+    const discountAmountEl = document.getElementById('discountAmount');
+    const totalPriceEl = document.getElementById('totalPrice');
+    
+    if (discountInfo) discountInfo.style.display = 'block';
+    if (discountAmountEl) discountAmountEl.textContent = `-${discountAmount} ₽ (${discount}%)`;
+    if (totalPriceEl) totalPriceEl.textContent = `${newPrice} ₽`;
+    
+    if (promoMessage) {
+      promoMessage.textContent = `✅ Промокод применен! Скидка ${discount}%`;
+      promoMessage.className = 'promo-message success';
+    }
+    
+    // Отключаем кнопку применения
+    if (applyPromoBtn) {
+      applyPromoBtn.disabled = true;
+      applyPromoBtn.style.opacity = '0.5';
+    }
+    
+    console.log('✅ Промокод применен:', { promoCode, discount, newPrice });
+    
+  } catch (error) {
+    console.error('❌ Ошибка применения промокода:', error);
+    if (promoMessage) {
+      promoMessage.textContent = '❌ Ошибка проверки промокода';
+      promoMessage.className = 'promo-message error';
+    }
+  }
+});
 
 // Уведомление об обновлении статуса заказа для пользователей
 function showStatusUpdateNotification(orderData = null, newStatus = null) {
@@ -5143,3 +5303,186 @@ window.testNewOrderNotification = function() {
   console.log('   - Современный дизайн с градиентами');
   console.log('   - Адаптивность для мобильных устройств');
 };
+
+// ============================================
+// АДМИН-ПАНЕЛЬ ПРОМОКОДОВ
+// ============================================
+
+// Создание промокода
+const createPromoBtn = document.getElementById('createPromoBtn');
+createPromoBtn?.addEventListener('click', async () => {
+  const promoCode = document.getElementById('promoCode')?.value.trim().toUpperCase();
+  const promoDiscount = parseInt(document.getElementById('promoDiscount')?.value || '0');
+  const promoDescription = document.getElementById('promoDescription')?.value.trim();
+  const promoMaxUses = parseInt(document.getElementById('promoMaxUses')?.value || '0');
+  const promoExpiryDate = document.getElementById('promoExpiryDate')?.value;
+  const promoActive = document.getElementById('promoActive')?.checked;
+  
+  if (!promoCode || !promoDiscount) {
+    showError('❌ Заполните обязательные поля: код и скидка');
+    return;
+  }
+  
+  if (promoDiscount < 1 || promoDiscount > 100) {
+    showError('❌ Скидка должна быть от 1 до 100%');
+    return;
+  }
+  
+  try {
+    // Проверяем, существует ли уже такой промокод
+    const existingPromo = await db.collection('promocodes').doc(promoCode).get();
+    if (existingPromo.exists) {
+      showError('❌ Промокод с таким кодом уже существует');
+      return;
+    }
+    
+    // Создаем промокод
+    const promoData = {
+      code: promoCode,
+      discount: promoDiscount,
+      description: promoDescription || '',
+      maxUses: promoMaxUses,
+      usedCount: 0,
+      active: promoActive,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    
+    if (promoExpiryDate) {
+      promoData.expiryDate = firebase.firestore.Timestamp.fromDate(new Date(promoExpiryDate));
+    }
+    
+    await db.collection('promocodes').doc(promoCode).set(promoData);
+    
+    showSuccess(`✅ Промокод ${promoCode} создан успешно!`);
+    
+    // Очищаем форму
+    document.getElementById('promoCode').value = '';
+    document.getElementById('promoDiscount').value = '';
+    document.getElementById('promoDescription').value = '';
+    document.getElementById('promoMaxUses').value = '0';
+    document.getElementById('promoExpiryDate').value = '';
+    document.getElementById('promoActive').checked = true;
+    
+    // Перезагружаем список промокодов
+    loadPromocodes();
+    
+  } catch (error) {
+    console.error('❌ Ошибка создания промокода:', error);
+    showError('❌ Ошибка создания промокода');
+  }
+});
+
+// Загрузка списка промокодов
+async function loadPromocodes() {
+  try {
+    const promocodesSnapshot = await db.collection('promocodes')
+      .orderBy('createdAt', 'desc')
+      .get();
+    
+    const promocodesList = document.getElementById('promocodesList');
+    if (!promocodesList) return;
+    
+    if (promocodesSnapshot.empty) {
+      promocodesList.innerHTML = '<p style="text-align: center; color: #999;">Промокоды не найдены</p>';
+      return;
+    }
+    
+    promocodesList.innerHTML = '';
+    
+    promocodesSnapshot.forEach(doc => {
+      const promo = doc.data();
+      const promoCode = doc.id;
+      
+      const expiryDate = promo.expiryDate ? promo.expiryDate.toDate().toLocaleDateString('ru-RU') : 'Без ограничений';
+      const maxUsesText = promo.maxUses > 0 ? promo.maxUses : '∞';
+      const usedCount = promo.usedCount || 0;
+      
+      const promoItem = document.createElement('div');
+      promoItem.className = 'promo-item';
+      promoItem.innerHTML = `
+        <div class="promo-item-header">
+          <div class="promo-code-display">${promoCode}</div>
+          <div class="promo-discount">-${promo.discount}%</div>
+        </div>
+        <div class="promo-item-details">
+          <div class="promo-detail">
+            <div class="promo-detail-label">Описание:</div>
+            <div class="promo-detail-value">${promo.description || 'Нет описания'}</div>
+          </div>
+          <div class="promo-detail">
+            <div class="promo-detail-label">Статус:</div>
+            <div class="promo-detail-value">
+              <span class="promo-status ${promo.active ? 'active' : 'inactive'}">
+                ${promo.active ? 'Активен' : 'Неактивен'}
+              </span>
+            </div>
+          </div>
+          <div class="promo-detail">
+            <div class="promo-detail-label">Использовано:</div>
+            <div class="promo-detail-value">${usedCount} / ${maxUsesText}</div>
+          </div>
+          <div class="promo-detail">
+            <div class="promo-detail-label">Срок действия:</div>
+            <div class="promo-detail-value">${expiryDate}</div>
+          </div>
+        </div>
+        <div class="promo-item-actions">
+          <button class="admin-btn ${promo.active ? 'warning' : 'primary'}" onclick="togglePromoStatus('${promoCode}', ${!promo.active})">
+            <i class="fas fa-${promo.active ? 'ban' : 'check'}"></i> ${promo.active ? 'Деактивировать' : 'Активировать'}
+          </button>
+          <button class="admin-btn danger" onclick="deletePromo('${promoCode}')">
+            <i class="fas fa-trash"></i> Удалить
+          </button>
+        </div>
+      `;
+      
+      promocodesList.appendChild(promoItem);
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка загрузки промокодов:', error);
+  }
+}
+
+// Переключение статуса промокода
+window.togglePromoStatus = async function(promoCode, newStatus) {
+  try {
+    await db.collection('promocodes').doc(promoCode).update({
+      active: newStatus,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    showSuccess(`✅ Промокод ${promoCode} ${newStatus ? 'активирован' : 'деактивирован'}`);
+    loadPromocodes();
+    
+  } catch (error) {
+    console.error('❌ Ошибка изменения статуса промокода:', error);
+    showError('❌ Ошибка изменения статуса');
+  }
+};
+
+// Удаление промокода
+window.deletePromo = async function(promoCode) {
+  if (!confirm(`Вы уверены, что хотите удалить промокод ${promoCode}?`)) {
+    return;
+  }
+  
+  try {
+    await db.collection('promocodes').doc(promoCode).delete();
+    showSuccess(`✅ Промокод ${promoCode} удален`);
+    loadPromocodes();
+    
+  } catch (error) {
+    console.error('❌ Ошибка удаления промокода:', error);
+    showError('❌ Ошибка удаления промокода');
+  }
+};
+
+// Загружаем промокоды при открытии вкладки
+const promocodesTab = document.querySelector('[data-tab="promocodes"]');
+promocodesTab?.addEventListener('click', () => {
+  loadPromocodes();
+});
+
+console.log('💳 Система промокодов инициализирована');

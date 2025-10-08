@@ -347,6 +347,121 @@ app.delete('/cleanup-orders', async (req, res) => {
   }
 });
 
+// Валидация промокода
+app.post('/validate-promo', async (req, res) => {
+  try {
+    const { promoCode } = req.body;
+    
+    if (!promoCode) {
+      return res.status(400).json({
+        success: false,
+        error: 'Промокод не указан'
+      });
+    }
+    
+    const promoRef = await db.collection('promocodes').doc(promoCode.toUpperCase()).get();
+    
+    if (!promoRef.exists) {
+      return res.json({
+        success: false,
+        error: 'Промокод не найден'
+      });
+    }
+    
+    const promoData = promoRef.data();
+    
+    // Проверяем активность
+    if (!promoData.active) {
+      return res.json({
+        success: false,
+        error: 'Промокод неактивен'
+      });
+    }
+    
+    // Проверяем срок действия
+    if (promoData.expiryDate) {
+      const expiryDate = promoData.expiryDate.toDate();
+      if (expiryDate < new Date()) {
+        return res.json({
+          success: false,
+          error: 'Срок действия промокода истек'
+        });
+      }
+    }
+    
+    // Проверяем количество использований
+    if (promoData.maxUses && promoData.maxUses > 0) {
+      const usedCount = promoData.usedCount || 0;
+      if (usedCount >= promoData.maxUses) {
+        return res.json({
+          success: false,
+          error: 'Промокод исчерпан'
+        });
+      }
+    }
+    
+    res.json({
+      success: true,
+      promo: {
+        code: promoCode.toUpperCase(),
+        discount: promoData.discount,
+        description: promoData.description
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка валидации промокода:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Использование промокода (увеличение счетчика)
+app.post('/use-promo', async (req, res) => {
+  try {
+    const { promoCode } = req.body;
+    
+    if (!promoCode) {
+      return res.status(400).json({
+        success: false,
+        error: 'Промокод не указан'
+      });
+    }
+    
+    const promoRef = db.collection('promocodes').doc(promoCode.toUpperCase());
+    const promoDoc = await promoRef.get();
+    
+    if (!promoDoc.exists) {
+      return res.json({
+        success: false,
+        error: 'Промокод не найден'
+      });
+    }
+    
+    // Увеличиваем счетчик использований
+    await promoRef.update({
+      usedCount: admin.firestore.FieldValue.increment(1),
+      lastUsedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    
+    console.log(`✅ Промокод ${promoCode} использован`);
+    
+    res.json({
+      success: true,
+      message: 'Промокод использован'
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка использования промокода:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Очистка только тестовых заказов (по статусу или названию)
 app.delete('/cleanup-test-orders', async (req, res) => {
   try {
