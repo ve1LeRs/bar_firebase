@@ -6793,7 +6793,72 @@ sendToTelegramBtn?.addEventListener('click', async () => {
     
   } catch (error) {
     console.error('❌ Ошибка отправки в Telegram:', error);
-    showError('❌ Ошибка отправки списка в Telegram');
+    
+    // Предлагаем скопировать список вручную
+    const copyManually = confirm(
+      '❌ Не удалось отправить через сервер.\n\n' +
+      '💡 Хотите скопировать список в буфер обмена?\n' +
+      'Вы сможете вставить его в Telegram вручную.'
+    );
+    
+    if (copyManually) {
+      try {
+        // Копируем текст сообщения в буфер обмена
+        await navigator.clipboard.writeText(message);
+        showSuccess('✅ Список скопирован в буфер обмена! Вставьте его в Telegram.');
+      } catch (clipboardError) {
+        // Если clipboard API не работает, показываем текст
+        prompt('📋 Скопируйте этот текст и отправьте в Telegram:', message);
+      }
+    } else {
+      showError('❌ Проверьте, что Railway сервер запущен и URL правильный');
+    }
+  }
+});
+
+// Проверка и обновление Railway URL
+const checkRailwayUrlBtn = document.getElementById('checkRailwayUrlBtn');
+checkRailwayUrlBtn?.addEventListener('click', async () => {
+  const currentUrl = localStorage.getItem('railwayUrl') || 'https://asafiev-bar-production.up.railway.app';
+  
+  const newUrl = prompt(
+    '🔧 Проверьте и обновите Railway URL\n\n' +
+    'Текущий URL:\n' + currentUrl + '\n\n' +
+    'Чтобы найти правильный URL:\n' +
+    '1. Откройте https://railway.app/\n' +
+    '2. Зайдите в ваш проект\n' +
+    '3. Settings → Domains\n' +
+    '4. Скопируйте публичный URL\n\n' +
+    'Введите новый URL (или оставьте пустым для сброса):',
+    currentUrl
+  );
+  
+  if (newUrl !== null) {
+    if (newUrl.trim()) {
+      // Проверяем формат URL
+      if (!newUrl.startsWith('http')) {
+        showError('❌ URL должен начинаться с https://');
+        return;
+      }
+      
+      localStorage.setItem('railwayUrl', newUrl.trim());
+      showSuccess('✅ Railway URL обновлен: ' + newUrl.trim());
+      
+      // Проверяем доступность
+      try {
+        const response = await fetch(`${newUrl.trim()}/health`);
+        if (response.ok) {
+          showSuccess('✅ Сервер отвечает! URL правильный.');
+        } else {
+          showError('⚠️ Сервер недоступен. Проверьте, что приложение запущено в Railway.');
+        }
+      } catch (error) {
+        showError('⚠️ Не удалось подключиться к серверу. Проверьте URL и статус Railway.');
+      }
+    } else {
+      localStorage.removeItem('railwayUrl');
+      showSuccess('✅ Railway URL сброшен на стандартный');
+    }
   }
 });
 
