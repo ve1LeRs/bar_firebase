@@ -7330,3 +7330,510 @@ body.dark-theme .thank-you-message {
     font-size: 1rem;
   }
 }
+
+/* ============================================
+   СИСТЕМА ЗАКУПОК
+   ============================================ */
+
+/* Статистика по ингредиентам */
+.purchases-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border: 1px solid rgba(180, 140, 90, 0.2);
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(180, 140, 90, 0.15);
+}
+
+.stat-card i {
+  font-size: 2.5rem;
+  color: #b48c5a;
+}
+
+.stat-card.warning {
+  background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+  border-color: #ffa726;
+}
+
+.stat-card.warning i {
+  color: #f57c00;
+}
+
+.stat-card.danger {
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+  border-color: #ef5350;
+}
+
+.stat-card.danger i {
+  color: #d32f2f;
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2c3e50;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  color: #7f8c8d;
+  margin-top: 0.25rem;
+}
+
+/* Форма добавления ингредиента */
+.ingredient-add-section {
+  background: #ffffff;
+  border: 1px solid rgba(180, 140, 90, 0.2);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.ingredient-add-section h5 {
+  color: #b48c5a;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ingredient-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  font-size: 0.9rem;
+  color: #555;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.form-input,
+.form-select {
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  font-family: 'Inter', sans-serif;
+}
+
+.form-input:focus,
+.form-select:focus {
+  outline: none;
+  border-color: #b48c5a;
+  box-shadow: 0 0 0 3px rgba(180, 140, 90, 0.1);
+}
+
+/* Раздел списка ингредиентов */
+.ingredients-list-section {
+  background: #ffffff;
+  border: 1px solid rgba(180, 140, 90, 0.2);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.section-header h5 {
+  color: #b48c5a;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.purchases-controls {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Фильтры ингредиентов */
+.ingredients-filters {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.search-box {
+  flex: 1;
+  min-width: 200px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-box i {
+  position: absolute;
+  left: 1rem;
+  color: #999;
+}
+
+.search-box .form-input {
+  width: 100%;
+  padding-left: 2.5rem;
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.filter-btn {
+  padding: 0.6rem 1rem;
+  border: 1px solid #ddd;
+  background: #ffffff;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #555;
+}
+
+.filter-btn:hover {
+  background: #f8f9fa;
+  border-color: #b48c5a;
+}
+
+.filter-btn.active {
+  background: #b48c5a;
+  color: white;
+  border-color: #b48c5a;
+}
+
+/* Карточка ингредиента */
+.ingredient-card {
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.3s ease;
+  margin-bottom: 0.75rem;
+}
+
+.ingredient-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.ingredient-card.low-stock {
+  border-left: 4px solid #ffa726;
+  background: linear-gradient(90deg, #fff8e1 0%, #ffffff 10%);
+}
+
+.ingredient-card.out-of-stock {
+  border-left: 4px solid #ef5350;
+  background: linear-gradient(90deg, #ffebee 0%, #ffffff 10%);
+  opacity: 0.9;
+}
+
+.ingredient-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.ingredient-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.ingredient-details {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.9rem;
+  color: #7f8c8d;
+}
+
+.ingredient-stock {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.stock-value {
+  font-weight: 600;
+  color: #27ae60;
+}
+
+.stock-value.low {
+  color: #f57c00;
+}
+
+.stock-value.out {
+  color: #d32f2f;
+}
+
+.ingredient-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.ingredient-btn {
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.ingredient-btn.edit {
+  background: #3498db;
+  color: white;
+}
+
+.ingredient-btn.edit:hover {
+  background: #2980b9;
+}
+
+.ingredient-btn.delete {
+  background: #e74c3c;
+  color: white;
+}
+
+.ingredient-btn.delete:hover {
+  background: #c0392b;
+}
+
+.ingredient-btn.add-stock {
+  background: #27ae60;
+  color: white;
+}
+
+.ingredient-btn.add-stock:hover {
+  background: #229954;
+}
+
+/* Предпросмотр списка закупок */
+.purchase-list-preview {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  border: 2px solid #ff9800;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-top: 2rem;
+}
+
+.purchase-list-preview h5 {
+  color: #e65100;
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.purchase-list-content {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.purchase-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.purchase-item:last-child {
+  border-bottom: none;
+}
+
+.purchase-item-name {
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.purchase-item-amount {
+  color: #e65100;
+  font-weight: 600;
+}
+
+/* Темная тема для системы закупок */
+body.dark-theme .stat-card {
+  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  border-color: rgba(180, 140, 90, 0.3);
+}
+
+body.dark-theme .stat-card i,
+body.dark-theme .stat-value,
+body.dark-theme .section-header h5,
+body.dark-theme .ingredient-add-section h5 {
+  color: #b48c5a;
+}
+
+body.dark-theme .stat-label {
+  color: #95a5a6;
+}
+
+body.dark-theme .ingredient-add-section,
+body.dark-theme .ingredients-list-section {
+  background: #34495e;
+  border-color: rgba(180, 140, 90, 0.3);
+}
+
+body.dark-theme .form-input,
+body.dark-theme .form-select {
+  background: #2c3e50;
+  border-color: rgba(180, 140, 90, 0.3);
+  color: #ecf0f1;
+}
+
+body.dark-theme .ingredient-card {
+  background: #2c3e50;
+  border-color: rgba(180, 140, 90, 0.3);
+}
+
+body.dark-theme .ingredient-card.low-stock {
+  background: linear-gradient(90deg, rgba(255, 167, 38, 0.2) 0%, #2c3e50 10%);
+}
+
+body.dark-theme .ingredient-card.out-of-stock {
+  background: linear-gradient(90deg, rgba(239, 83, 80, 0.2) 0%, #2c3e50 10%);
+}
+
+body.dark-theme .ingredient-name {
+  color: #ecf0f1;
+}
+
+body.dark-theme .ingredient-details {
+  color: #95a5a6;
+}
+
+body.dark-theme .filter-btn {
+  background: #2c3e50;
+  color: #ecf0f1;
+  border-color: rgba(180, 140, 90, 0.3);
+}
+
+body.dark-theme .filter-btn:hover {
+  background: #34495e;
+}
+
+body.dark-theme .filter-btn.active {
+  background: #b48c5a;
+  color: white;
+}
+
+body.dark-theme .purchase-list-preview {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.2) 0%, rgba(255, 224, 178, 0.1) 100%);
+  border-color: #ff9800;
+}
+
+body.dark-theme .purchase-list-preview h5 {
+  color: #ff9800;
+}
+
+body.dark-theme .purchase-list-content {
+  background: #2c3e50;
+}
+
+body.dark-theme .purchase-item {
+  border-color: rgba(180, 140, 90, 0.2);
+}
+
+body.dark-theme .purchase-item-name {
+  color: #ecf0f1;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .purchases-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .purchases-controls {
+    width: 100%;
+  }
+  
+  .purchases-controls .admin-btn {
+    flex: 1;
+    justify-content: center;
+  }
+  
+  .ingredients-filters {
+    flex-direction: column;
+  }
+  
+  .ingredient-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .ingredient-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

@@ -6385,3 +6385,423 @@ firebase.auth().onAuthStateChanged(async (user) => {
     ratedCocktails.clear();
   }
 });
+
+// ============================================
+// СИСТЕМА ЗАКУПОК
+// ============================================
+
+console.log('🛒 Инициализация системы закупок...');
+
+// Переменные для фильтрации ингредиентов
+let currentIngredientFilter = 'all';
+let currentIngredientSearch = '';
+let allIngredients = [];
+
+// Добавление нового ингредиента
+const addIngredientBtn = document.getElementById('addIngredientBtn');
+addIngredientBtn?.addEventListener('click', async () => {
+  const name = document.getElementById('ingredientName')?.value.trim();
+  const unit = document.getElementById('ingredientUnit')?.value;
+  const stock = parseFloat(document.getElementById('ingredientStock')?.value || '0');
+  const minStock = parseFloat(document.getElementById('ingredientMinStock')?.value || '0');
+  
+  if (!name) {
+    showError('❌ Укажите название ингредиента');
+    return;
+  }
+  
+  if (stock < 0 || minStock < 0) {
+    showError('❌ Остатки не могут быть отрицательными');
+    return;
+  }
+  
+  try {
+    const ingredientData = {
+      name: name,
+      unit: unit,
+      stock: stock,
+      minStock: minStock,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    
+    await db.collection('ingredients').add(ingredientData);
+    
+    showSuccess(`✅ Ингредиент "${name}" добавлен успешно!`);
+    
+    // Очищаем форму
+    document.getElementById('ingredientName').value = '';
+    document.getElementById('ingredientStock').value = '';
+    document.getElementById('ingredientMinStock').value = '';
+    
+    // Перезагружаем список
+    loadIngredients();
+    
+  } catch (error) {
+    console.error('❌ Ошибка добавления ингредиента:', error);
+    showError('❌ Ошибка добавления ингредиента');
+  }
+});
+
+// Загрузка списка ингредиентов
+async function loadIngredients() {
+  try {
+    const ingredientsSnapshot = await db.collection('ingredients')
+      .orderBy('name', 'asc')
+      .get();
+    
+    const ingredientsList = document.getElementById('ingredientsList');
+    if (!ingredientsList) return;
+    
+    allIngredients = [];
+    
+    if (ingredientsSnapshot.empty) {
+      ingredientsList.innerHTML = '<p style="text-align: center; color: #999; padding: 2rem;">Ингредиенты не найдены. Добавьте первый ингредиент.</p>';
+      updateIngredientsStats(0, 0, 0);
+      return;
+    }
+    
+    ingredientsSnapshot.forEach(doc => {
+      const ingredient = { id: doc.id, ...doc.data() };
+      allIngredients.push(ingredient);
+    });
+    
+    // Применяем фильтры и отображаем
+    filterAndDisplayIngredients();
+    
+    // Обновляем статистику
+    updateIngredientsStats();
+    
+  } catch (error) {
+    console.error('❌ Ошибка загрузки ингредиентов:', error);
+    showError('❌ Ошибка загрузки ингредиентов');
+  }
+}
+
+// Фильтрация и отображение ингредиентов
+function filterAndDisplayIngredients() {
+  const ingredientsList = document.getElementById('ingredientsList');
+  if (!ingredientsList) return;
+  
+  let filteredIngredients = [...allIngredients];
+  
+  // Применяем текстовый поиск
+  if (currentIngredientSearch) {
+    filteredIngredients = filteredIngredients.filter(ing => 
+      ing.name.toLowerCase().includes(currentIngredientSearch.toLowerCase())
+    );
+  }
+  
+  // Применяем фильтр по статусу
+  if (currentIngredientFilter === 'low') {
+    filteredIngredients = filteredIngredients.filter(ing => 
+      ing.stock > 0 && ing.stock <= ing.minStock
+    );
+  } else if (currentIngredientFilter === 'out') {
+    filteredIngredients = filteredIngredients.filter(ing => ing.stock === 0);
+  }
+  
+  // Отображаем
+  ingredientsList.innerHTML = '';
+  
+  if (filteredIngredients.length === 0) {
+    ingredientsList.innerHTML = '<p style="text-align: center; color: #999; padding: 2rem;">Ничего не найдено</p>';
+    return;
+  }
+  
+  filteredIngredients.forEach(ingredient => {
+    const card = createIngredientCard(ingredient);
+    ingredientsList.appendChild(card);
+  });
+}
+
+// Создание карточки ингредиента
+function createIngredientCard(ingredient) {
+  const card = document.createElement('div');
+  card.className = 'ingredient-card';
+  
+  // Определяем статус
+  let statusClass = '';
+  let stockClass = '';
+  if (ingredient.stock === 0) {
+    statusClass = 'out-of-stock';
+    stockClass = 'out';
+  } else if (ingredient.stock <= ingredient.minStock) {
+    statusClass = 'low-stock';
+    stockClass = 'low';
+  }
+  
+  card.classList.add(statusClass);
+  
+  card.innerHTML = `
+    <div class="ingredient-info">
+      <div class="ingredient-name">${ingredient.name}</div>
+      <div class="ingredient-details">
+        <span>Единица: ${ingredient.unit}</span>
+        <span class="ingredient-stock">
+          Остаток: <span class="stock-value ${stockClass}">${ingredient.stock} ${ingredient.unit}</span>
+        </span>
+        <span>Минимум: ${ingredient.minStock} ${ingredient.unit}</span>
+      </div>
+    </div>
+    <div class="ingredient-actions">
+      <button class="ingredient-btn add-stock" onclick="addStock('${ingredient.id}')">
+        <i class="fas fa-plus"></i> Добавить
+      </button>
+      <button class="ingredient-btn edit" onclick="editIngredient('${ingredient.id}')">
+        <i class="fas fa-edit"></i>
+      </button>
+      <button class="ingredient-btn delete" onclick="deleteIngredient('${ingredient.id}', '${ingredient.name}')">
+        <i class="fas fa-trash"></i>
+      </button>
+    </div>
+  `;
+  
+  return card;
+}
+
+// Обновление статистики
+function updateIngredientsStats(total = null, low = null, out = null) {
+  if (total === null) {
+    total = allIngredients.length;
+    low = allIngredients.filter(ing => ing.stock > 0 && ing.stock <= ing.minStock).length;
+    out = allIngredients.filter(ing => ing.stock === 0).length;
+  }
+  
+  const totalCount = document.getElementById('totalIngredientsCount');
+  const lowCount = document.getElementById('lowStockCount');
+  const outCount = document.getElementById('outOfStockCount');
+  
+  if (totalCount) totalCount.textContent = total;
+  if (lowCount) lowCount.textContent = low;
+  if (outCount) outCount.textContent = out;
+}
+
+// Добавление остатка
+window.addStock = async function(ingredientId) {
+  const ingredient = allIngredients.find(ing => ing.id === ingredientId);
+  if (!ingredient) return;
+  
+  const amount = prompt(`Сколько ${ingredient.unit} добавить к "${ingredient.name}"?`, '100');
+  if (!amount || isNaN(amount)) return;
+  
+  const addAmount = parseFloat(amount);
+  if (addAmount <= 0) {
+    showError('❌ Количество должно быть больше 0');
+    return;
+  }
+  
+  try {
+    const newStock = ingredient.stock + addAmount;
+    await db.collection('ingredients').doc(ingredientId).update({
+      stock: newStock,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    showSuccess(`✅ Добавлено ${addAmount} ${ingredient.unit} к "${ingredient.name}"`);
+    loadIngredients();
+    
+  } catch (error) {
+    console.error('❌ Ошибка добавления остатка:', error);
+    showError('❌ Ошибка добавления остатка');
+  }
+};
+
+// Редактирование ингредиента
+window.editIngredient = async function(ingredientId) {
+  const ingredient = allIngredients.find(ing => ing.id === ingredientId);
+  if (!ingredient) return;
+  
+  const newStock = prompt(`Текущий остаток "${ingredient.name}": ${ingredient.stock} ${ingredient.unit}\nУкажите новый остаток:`, ingredient.stock);
+  if (newStock === null || isNaN(newStock)) return;
+  
+  const newMinStock = prompt(`Минимальный остаток для "${ingredient.name}": ${ingredient.minStock} ${ingredient.unit}\nУкажите новый минимум:`, ingredient.minStock);
+  if (newMinStock === null || isNaN(newMinStock)) return;
+  
+  try {
+    await db.collection('ingredients').doc(ingredientId).update({
+      stock: parseFloat(newStock),
+      minStock: parseFloat(newMinStock),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    showSuccess(`✅ Ингредиент "${ingredient.name}" обновлен`);
+    loadIngredients();
+    
+  } catch (error) {
+    console.error('❌ Ошибка обновления ингредиента:', error);
+    showError('❌ Ошибка обновления ингредиента');
+  }
+};
+
+// Удаление ингредиента
+window.deleteIngredient = async function(ingredientId, ingredientName) {
+  if (!confirm(`Вы уверены, что хотите удалить ингредиент "${ingredientName}"?`)) {
+    return;
+  }
+  
+  try {
+    await db.collection('ingredients').doc(ingredientId).delete();
+    showSuccess(`✅ Ингредиент "${ingredientName}" удален`);
+    loadIngredients();
+    
+  } catch (error) {
+    console.error('❌ Ошибка удаления ингредиента:', error);
+    showError('❌ Ошибка удаления ингредиента');
+  }
+};
+
+// Инициализация фильтров ингредиентов
+function initIngredientsFilters() {
+  const searchInput = document.getElementById('ingredientsSearch');
+  const filterButtons = document.querySelectorAll('#purchases-tab .filter-btn');
+  
+  // Обработчик поиска
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      currentIngredientSearch = e.target.value.toLowerCase();
+      filterAndDisplayIngredients();
+    });
+  }
+  
+  // Обработчик фильтров
+  filterButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const filter = btn.getAttribute('data-filter');
+      currentIngredientFilter = filter;
+      
+      // Обновляем активную кнопку
+      filterButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      filterAndDisplayIngredients();
+    });
+  });
+}
+
+// Генерация списка закупок
+const generatePurchaseListBtn = document.getElementById('generatePurchaseListBtn');
+generatePurchaseListBtn?.addEventListener('click', async () => {
+  try {
+    const ingredientsSnapshot = await db.collection('ingredients').get();
+    
+    const purchaseList = [];
+    
+    ingredientsSnapshot.forEach(doc => {
+      const ingredient = doc.data();
+      // Добавляем в список, если остаток меньше или равен минимуму
+      if (ingredient.stock <= ingredient.minStock) {
+        const needed = ingredient.minStock * 2 - ingredient.stock; // Закупаем в 2 раза больше минимума
+        purchaseList.push({
+          name: ingredient.name,
+          current: ingredient.stock,
+          min: ingredient.minStock,
+          needed: Math.max(needed, ingredient.minStock),
+          unit: ingredient.unit
+        });
+      }
+    });
+    
+    // Отображаем список закупок
+    const purchaseListPreview = document.getElementById('purchaseListPreview');
+    const purchaseListContent = document.getElementById('purchaseListContent');
+    
+    if (!purchaseListPreview || !purchaseListContent) return;
+    
+    if (purchaseList.length === 0) {
+      purchaseListContent.innerHTML = '<p style="text-align: center; color: #27ae60; padding: 2rem; font-weight: 600;">✅ Все ингредиенты в норме! Закупки не требуются.</p>';
+      purchaseListPreview.style.display = 'block';
+      return;
+    }
+    
+    purchaseListContent.innerHTML = '';
+    
+    purchaseList.forEach(item => {
+      const purchaseItem = document.createElement('div');
+      purchaseItem.className = 'purchase-item';
+      purchaseItem.innerHTML = `
+        <div class="purchase-item-name">
+          <strong>${item.name}</strong>
+          <span style="font-size: 0.9rem; color: #666; margin-left: 0.5rem;">
+            (остаток: ${item.current} ${item.unit})
+          </span>
+        </div>
+        <div class="purchase-item-amount">
+          <i class="fas fa-shopping-cart"></i> ${item.needed.toFixed(0)} ${item.unit}
+        </div>
+      `;
+      purchaseListContent.appendChild(purchaseItem);
+    });
+    
+    purchaseListPreview.style.display = 'block';
+    showSuccess(`✅ Список закупок сгенерирован! Требуется ${purchaseList.length} позиций`);
+    
+    // Сохраняем список для отправки в Telegram
+    window.currentPurchaseList = purchaseList;
+    
+  } catch (error) {
+    console.error('❌ Ошибка генерации списка закупок:', error);
+    showError('❌ Ошибка генерации списка закупок');
+  }
+});
+
+// Отправка списка закупок в Telegram
+const sendToTelegramBtn = document.getElementById('sendToTelegramBtn');
+sendToTelegramBtn?.addEventListener('click', async () => {
+  if (!window.currentPurchaseList || window.currentPurchaseList.length === 0) {
+    showError('❌ Сначала сгенерируйте список закупок');
+    return;
+  }
+  
+  try {
+    // Формируем текст сообщения
+    let message = '🛒 *СПИСОК ЗАКУПОК*\n\n';
+    message += `📅 Дата: ${new Date().toLocaleDateString('ru-RU')}\n`;
+    message += `⏰ Время: ${new Date().toLocaleTimeString('ru-RU')}\n\n`;
+    message += '📋 *Требуется закупить:*\n\n';
+    
+    window.currentPurchaseList.forEach((item, index) => {
+      message += `${index + 1}. *${item.name}*\n`;
+      message += `   └ Остаток: ${item.current} ${item.unit}\n`;
+      message += `   └ Закупить: *${item.needed.toFixed(0)} ${item.unit}*\n\n`;
+    });
+    
+    message += `\n📊 Всего позиций: ${window.currentPurchaseList.length}`;
+    
+    // Отправляем запрос на сервер
+    const railwayUrl = localStorage.getItem('railwayUrl');
+    const serverUrl = railwayUrl || 'https://asafiev-bar-production.up.railway.app';
+    
+    const response = await fetch(`${serverUrl}/send-purchase-list`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: message,
+        purchaseList: window.currentPurchaseList
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      showSuccess('✅ Список закупок отправлен в Telegram!');
+    } else {
+      showError('❌ Ошибка отправки: ' + (result.error || 'Неизвестная ошибка'));
+    }
+    
+  } catch (error) {
+    console.error('❌ Ошибка отправки в Telegram:', error);
+    showError('❌ Ошибка отправки списка в Telegram');
+  }
+});
+
+// Загружаем ингредиенты при открытии вкладки закупок
+const purchasesTab = document.querySelector('[data-tab="purchases"]');
+purchasesTab?.addEventListener('click', () => {
+  loadIngredients();
+  initIngredientsFilters();
+});
+
+console.log('✅ Система закупок инициализирована');

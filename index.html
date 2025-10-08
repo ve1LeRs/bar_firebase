@@ -156,6 +156,7 @@
           <button class="tab-btn" data-tab="orders">Заказы</button>
           <button class="tab-btn" data-tab="stoplist">Стоп-лист</button>
           <button class="tab-btn" data-tab="promocodes">Промокоды</button>
+          <button class="tab-btn" data-tab="purchases">Закупки</button>
           <button class="tab-btn" data-tab="monitoring">Мониторинг</button>
         </div>
         <!-- Содержимое вкладок -->
@@ -302,6 +303,116 @@
             <h5><i class="fas fa-list"></i> Активные промокоды</h5>
             <div id="promocodesList" class="admin-list">
               <!-- Список промокодов будет загружен сюда -->
+            </div>
+          </div>
+        </div>
+        <div class="tab-content" id="purchases-tab">
+          <h4><i class="fas fa-shopping-cart"></i> Система закупок</h4>
+          
+          <!-- Статистика по ингредиентам -->
+          <div class="purchases-stats">
+            <div class="stat-card">
+              <i class="fas fa-box"></i>
+              <div class="stat-info">
+                <span class="stat-value" id="totalIngredientsCount">0</span>
+                <span class="stat-label">Всего ингредиентов</span>
+              </div>
+            </div>
+            <div class="stat-card warning">
+              <i class="fas fa-exclamation-triangle"></i>
+              <div class="stat-info">
+                <span class="stat-value" id="lowStockCount">0</span>
+                <span class="stat-label">Заканчиваются</span>
+              </div>
+            </div>
+            <div class="stat-card danger">
+              <i class="fas fa-ban"></i>
+              <div class="stat-info">
+                <span class="stat-value" id="outOfStockCount">0</span>
+                <span class="stat-label">Закончились</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Форма добавления ингредиента -->
+          <div class="ingredient-add-section">
+            <h5><i class="fas fa-plus-circle"></i> Добавить ингредиент</h5>
+            <div class="ingredient-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="ingredientName">Название ингредиента:</label>
+                  <input type="text" id="ingredientName" placeholder="Например: Водка" class="form-input">
+                </div>
+                <div class="form-group">
+                  <label for="ingredientUnit">Единица измерения:</label>
+                  <select id="ingredientUnit" class="form-select">
+                    <option value="мл">мл</option>
+                    <option value="г">г</option>
+                    <option value="шт">шт</option>
+                    <option value="л">л</option>
+                    <option value="кг">кг</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="ingredientStock">Текущий остаток:</label>
+                  <input type="number" id="ingredientStock" placeholder="1000" class="form-input" min="0">
+                </div>
+                <div class="form-group">
+                  <label for="ingredientMinStock">Минимальный остаток:</label>
+                  <input type="number" id="ingredientMinStock" placeholder="200" class="form-input" min="0">
+                </div>
+              </div>
+              <button id="addIngredientBtn" class="admin-btn primary">
+                <i class="fas fa-plus"></i> Добавить ингредиент
+              </button>
+            </div>
+          </div>
+          
+          <!-- Список ингредиентов -->
+          <div class="ingredients-list-section">
+            <div class="section-header">
+              <h5><i class="fas fa-list"></i> Список ингредиентов</h5>
+              <div class="purchases-controls">
+                <button id="generatePurchaseListBtn" class="admin-btn success">
+                  <i class="fas fa-clipboard-list"></i> Сгенерировать список закупок
+                </button>
+                <button id="sendToTelegramBtn" class="admin-btn primary">
+                  <i class="fab fa-telegram"></i> Отправить в Telegram
+                </button>
+              </div>
+            </div>
+            
+            <!-- Фильтры -->
+            <div class="ingredients-filters">
+              <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="ingredientsSearch" placeholder="Поиск по названию..." class="form-input">
+              </div>
+              <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">
+                  <i class="fas fa-list"></i> Все
+                </button>
+                <button class="filter-btn" data-filter="low">
+                  <i class="fas fa-exclamation-triangle"></i> Заканчиваются
+                </button>
+                <button class="filter-btn" data-filter="out">
+                  <i class="fas fa-ban"></i> Закончились
+                </button>
+              </div>
+            </div>
+            
+            <div id="ingredientsList" class="admin-list">
+              <!-- Список ингредиентов будет загружен сюда -->
+            </div>
+          </div>
+          
+          <!-- Предпросмотр списка закупок -->
+          <div id="purchaseListPreview" class="purchase-list-preview" style="display: none;">
+            <h5><i class="fas fa-clipboard-check"></i> Список закупок</h5>
+            <div id="purchaseListContent" class="purchase-list-content">
+              <!-- Список закупок будет сгенерирован сюда -->
             </div>
           </div>
         </div>

@@ -514,6 +514,57 @@ app.delete('/cleanup-test-orders', async (req, res) => {
   }
 });
 
+// Отправка списка закупок в Telegram
+app.post('/send-purchase-list', async (req, res) => {
+  try {
+    console.log('🛒 Получен запрос на отправку списка закупок...');
+    
+    const { message, purchaseList } = req.body;
+    
+    if (!message || !purchaseList) {
+      return res.status(400).json({
+        success: false,
+        error: 'Отсутствуют необходимые данные'
+      });
+    }
+    
+    // Отправляем сообщение в Telegram
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: message,
+        parse_mode: 'Markdown'
+      })
+    });
+    
+    const telegramResult = await response.json();
+    
+    if (telegramResult.ok) {
+      console.log('✅ Список закупок успешно отправлен в Telegram');
+      res.json({
+        success: true,
+        message: 'Список закупок отправлен',
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      console.error('❌ Ошибка отправки в Telegram:', telegramResult);
+      res.status(500).json({
+        success: false,
+        error: telegramResult.description || 'Ошибка Telegram API'
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Ошибка отправки списка закупок:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Основной webhook для Telegram
 app.post('/telegram-webhook', async (req, res) => {
   try {

@@ -63,6 +63,27 @@ service cloud.firestore {
       allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
     
+    // Правила для коллекции промокодов (promocodes)
+    match /promocodes/{promoId} {
+      // Разрешить всем читать промокоды (для проверки)
+      allow read: if true;
+      
+      // Разрешить создавать, обновлять и удалять только админам
+      allow create, update, delete: if request.auth != null && 
+                                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Правила для коллекции ингредиентов (ingredients) - Система закупок
+    match /ingredients/{ingredientId} {
+      // Разрешить читать только админам
+      allow read: if request.auth != null && 
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      
+      // Разрешить создавать, обновлять и удалять только админам
+      allow create, update, delete: if request.auth != null && 
+                                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
     // Правила для категорий и других коллекций
     match /{document=**} {
       // Разрешить всем читать
