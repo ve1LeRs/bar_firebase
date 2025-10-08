@@ -2415,19 +2415,15 @@ confirmOrderBtn?.addEventListener('click', async () => {
 🆔 *ID заказа:* ${docRef.id}
         `.trim();
 
-    // Создаем inline-кнопки для управления заказом
+    // Создаем inline-кнопки для управления заказом (только актуальные статусы)
     const inlineKeyboard = {
       inline_keyboard: [
-        [
-          { text: "✅ Подтвердить", callback_data: `confirmed_${docRef.id}` },
-          { text: "❌ Отменить", callback_data: `cancelled_${docRef.id}` }
-        ],
         [
           { text: "👨‍🍳 Готовится", callback_data: `preparing_${docRef.id}` },
           { text: "🍸 Готов", callback_data: `ready_${docRef.id}` }
         ],
         [
-          { text: "✅ Выполнен", callback_data: `completed_${docRef.id}` }
+          { text: "❌ Отменить", callback_data: `cancelled_${docRef.id}` }
         ]
       ]
     };

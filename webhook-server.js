@@ -418,6 +418,80 @@ app.post('/validate-promo', async (req, res) => {
   }
 });
 
+// Отправка уведомления в Telegram о новом заказе
+app.post('/notify-telegram', async (req, res) => {
+  try {
+    const { orderId, orderData } = req.body;
+    
+    if (!orderId || !orderData) {
+      return res.status(400).json({
+        success: false,
+        error: 'Отсутствуют данные заказа'
+      });
+    }
+    
+    const queuePosition = orderData.queuePosition || 0;
+    const queueInfoText = queuePosition > 0 ? `🎯 *Позиция в очереди:* #${queuePosition}\n` : '';
+    
+    const message = `
+🍸 *Новый заказ!*
+
+🍸 *Коктейль:* ${orderData.name}
+👤 *Клиент:* ${orderData.user}
+📊 *Статус:* Подтверждён
+${queueInfoText}🕒 *Время:* ${orderData.displayTime || new Date().toLocaleString('ru-RU')}
+🆔 *ID заказа:* ${orderId}
+    `.trim();
+    
+    // Отправляем с упрощёнными кнопками
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [
+          { text: "👨‍🍳 Готовится", callback_data: `preparing_${orderId}` },
+          { text: "🍸 Готов", callback_data: `ready_${orderId}` }
+        ],
+        [
+          { text: "❌ Отменить", callback_data: `cancelled_${orderId}` }
+        ]
+      ]
+    };
+    
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: message,
+        parse_mode: 'Markdown',
+        reply_markup: inlineKeyboard
+      })
+    });
+    
+    const telegramResult = await response.json();
+    
+    if (telegramResult.ok) {
+      console.log('✅ Уведомление отправлено в Telegram');
+      res.json({
+        success: true,
+        message: 'Уведомление отправлено'
+      });
+    } else {
+      console.error('❌ Ошибка Telegram API:', telegramResult);
+      res.status(500).json({
+        success: false,
+        error: telegramResult.description || 'Ошибка Telegram API'
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Ошибка отправки в Telegram:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Использование промокода (увеличение счетчика)
 app.post('/use-promo', async (req, res) => {
   try {

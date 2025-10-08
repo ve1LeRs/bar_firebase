@@ -109,12 +109,14 @@ async function loadProfileCurrentBill(userId) {
       profileBillListener = null;
     }
     
-    // Устанавливаем real-time listener
+    // Устанавливаем real-time listener с логированием
     profileBillListener = db.collection('bills')
       .where('userId', '==', userId)
       .where('status', '==', 'open')
       .limit(1)
       .onSnapshot(snapshot => {
+        console.log('📊 Обновление счета в профиле');
+        
         if (snapshot.empty) {
           profileCurrentBill.innerHTML = `
             <div class="no-bill-message">
@@ -130,7 +132,10 @@ async function loadProfileCurrentBill(userId) {
         const billData = billDoc.data();
         const billId = billDoc.id;
         
+        console.log('🔄 Обновляем отображение счета, позиций:', billData.items?.length);
         renderProfileBill(billData, billId);
+      }, (error) => {
+        console.error('❌ Ошибка real-time обновления счета:', error);
       });
     
   } catch (error) {
