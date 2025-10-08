@@ -1,11 +1,11 @@
 // 🔥 ТВОИ КЛЮЧИ FIREBASE
 const firebaseConfig = {
-  apiKey: "AIzaSyB4bD8UAu0Aj5IRK5H-uZg6kxNAIbkZc9k",
-  authDomain: "bar-menu-6145c.firebaseapp.com",
-  projectId: "bar-menu-6145c",
-  storageBucket: "bar-menu-6145c.appspot.com",
-  messagingSenderId: "493608422842",
-  appId: "1:493608422842:web:3b4b6bd8a4cb681c436183"
+  apiKey: "AIzaSyDx_YOUR_NEW_API_KEY", // ⚠️ Замените на ключ из Firebase Console проекта bar-menu-2
+  authDomain: "bar-menu-2.firebaseapp.com",
+  projectId: "bar-menu-2",
+  storageBucket: "bar-menu-2.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID", // ⚠️ Замените на ID из Firebase Console
+  appId: "YOUR_APP_ID" // ⚠️ Замените на App ID из Firebase Console
 };
 // 🤖 TELEGRAM
 const TELEGRAM_BOT_TOKEN = "8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo";
@@ -44,18 +44,17 @@ if (window.location.hostname === 'localhost' || window.location.hostname === '12
       // Сохраняем для будущего использования
       localStorage.setItem('webhook_server_url', WEBHOOK_SERVER_URL);
     } else if (currentHost.includes('github.io')) {
-      // Для GitHub Pages используем дефолтный Railway URL или просим пользователя настроить
-      console.log('🌐 GitHub Pages обнаружен, необходимо настроить URL webhook сервера');
-      console.log('💡 Используйте кнопку "Настроить URL сервера" в админ панели');
-      console.log('🔗 Введите ваш Railway URL (например: https://your-app.railway.app)');
-      // Показываем уведомление пользователю
-      showError('⚠️ Необходимо настроить URL webhook сервера для GitHub Pages!');
-      showError('💡 Используйте кнопку "Настроить URL сервера" в админ панели');
-      showError('🔗 Введите ваш Railway URL (например: https://your-app.railway.app)');
+      // Для GitHub Pages используем дефолтный Railway URL
+      WEBHOOK_SERVER_URL = "https://lucid-cat-production.up.railway.app";
+      console.log('🌐 GitHub Pages обнаружен, используем дефолтный Railway URL:', WEBHOOK_SERVER_URL);
+      // Сохраняем для будущего использования
+      localStorage.setItem('webhook_server_url', WEBHOOK_SERVER_URL);
     } else {
-      console.log('🚀 Продакшн режим: необходимо настроить URL webhook сервера');
-      console.log('💡 Используйте кнопку "Настроить URL сервера" в админ панели');
-      console.log('💡 Или кнопку "Автонастройка" для быстрого решения');
+      // Для локальных файлов и других случаев используем дефолтный Railway URL
+      WEBHOOK_SERVER_URL = "https://lucid-cat-production.up.railway.app";
+      console.log('🚀 Используем дефолтный Railway URL:', WEBHOOK_SERVER_URL);
+      // Сохраняем для будущего использования
+      localStorage.setItem('webhook_server_url', WEBHOOK_SERVER_URL);
     }
   }
 }
@@ -84,7 +83,7 @@ function resetWebhookServerUrl() {
 
 // Функция для принудительной настройки Railway URL
 function forceRailwayUrl() {
-  const railwayUrl = prompt('🌐 Принудительная настройка Railway URL\n\nВведите ваш Railway URL (например: https://web-production-72014.up.railway.app):');
+  const railwayUrl = prompt('🌐 Принудительная настройка Railway URL\n\nВведите ваш Railway URL (например: https://lucid-cat-production.up.railway.app):');
   
   if (railwayUrl && railwayUrl.startsWith('https://')) {
     updateWebhookServerUrl(railwayUrl);
