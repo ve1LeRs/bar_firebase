@@ -2606,14 +2606,29 @@ async function showMyBill() {
 function showBillModal(billData, billId) {
   const items = billData.items || [];
   
-  // Сортируем по времени (новые сверху)
-  items.sort((a, b) => {
-    if (!a.timestamp || !b.timestamp) return 0;
-    return b.timestamp - a.timestamp;
+  // Группируем одинаковые коктейли
+  const groupedItems = {};
+  items.forEach(item => {
+    const key = item.cocktailName;
+    if (!groupedItems[key]) {
+      groupedItems[key] = {
+        ...item,
+        quantity: 0,
+        totalPrice: 0
+      };
+    }
+    groupedItems[key].quantity += 1;
+    groupedItems[key].totalPrice += item.price;
   });
+  
+  // Преобразуем в массив
+  const groupedArray = Object.values(groupedItems);
+  
+  // Сортируем по количеству (больше сверху)
+  groupedArray.sort((a, b) => b.quantity - a.quantity);
 
   // Создаем HTML для элементов счета
-  const itemsHTML = items.map(item => {
+  const itemsHTML = groupedArray.map(item => {
     const statusText = getStatusText(item.status);
     const statusIcon = getStatusIcon(item.status);
 
@@ -2621,13 +2636,16 @@ function showBillModal(billData, billId) {
       <div class="bill-item" data-status="${item.status}">
         ${item.cocktailImage ? `<img src="${item.cocktailImage}" alt="${item.cocktailName}" class="bill-item-image">` : ''}
         <div class="bill-item-info">
-          <div class="bill-item-name">${item.cocktailName}</div>
+          <div class="bill-item-name">
+            ${item.cocktailName}
+            ${item.quantity > 1 ? `<span class="item-quantity">x${item.quantity}</span>` : ''}
+          </div>
           <div class="bill-item-status">
             <span class="status-icon">${statusIcon}</span>
             <span class="status-text">${statusText}</span>
           </div>
         </div>
-        <div class="bill-item-price">${item.price} ₽</div>
+        <div class="bill-item-price">${item.totalPrice} ₽</div>
       </div>
     `;
   }).join('');
@@ -2648,7 +2666,7 @@ function showBillModal(billData, billId) {
           <i class="fas fa-user"></i> ${billData.userName}
         </div>
         <div class="bill-items-count">
-          <i class="fas fa-shopping-bag"></i> ${items.length} ${getItemsWord(items.length)}
+          <i class="fas fa-shopping-bag"></i> ${groupedArray.length} ${getItemsWord(groupedArray.length)} (${items.length} ${items.length === 1 ? 'коктейль' : items.length < 5 ? 'коктейля' : 'коктейлей'})
         </div>
       </div>
 
