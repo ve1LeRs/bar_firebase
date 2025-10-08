@@ -2332,20 +2332,7 @@ document.addEventListener('click', (e) => {
     
     // Отображаем цену
     const orderPriceEl = document.getElementById('orderPrice');
-    const totalPriceEl = document.getElementById('totalPrice');
     if (orderPriceEl) orderPriceEl.textContent = `${price} ₽`;
-    if (totalPriceEl) totalPriceEl.textContent = `${price} ₽`;
-    
-    // Сбрасываем промокод
-    const promoCodeInput = document.getElementById('promoCodeInput');
-    const promoMessage = document.getElementById('promoMessage');
-    const discountInfo = document.getElementById('discountInfo');
-    if (promoCodeInput) promoCodeInput.value = '';
-    if (promoMessage) {
-      promoMessage.textContent = '';
-      promoMessage.classList.remove('success', 'error');
-    }
-    if (discountInfo) discountInfo.style.display = 'none';
     // 👇 Показываем и подставляем изображение или заглушку
     const orderImagePreview = document.getElementById('orderImagePreview');
     if (orderImagePreview) {
@@ -2411,30 +2398,14 @@ confirmOrderBtn?.addEventListener('click', async () => {
     
     // Создаем или обновляем счет пользователя
     await createOrUpdateBill(currentOrder, docRef.id);
-    
-    // Если использован промокод, увеличиваем счетчик использований
-    if (currentOrder.promoCode) {
-      try {
-        await db.collection('promocodes').doc(currentOrder.promoCode).update({
-          usedCount: firebase.firestore.FieldValue.increment(1),
-          lastUsedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        console.log(`✅ Промокод ${currentOrder.promoCode} использован`);
-      } catch (error) {
-        console.error('❌ Ошибка обновления счетчика промокода:', error);
-      }
-    }
 
-    const promoInfo = currentOrder.promoCode ? `\n💳 *Промокод:* ${currentOrder.promoCode} (-${currentOrder.promoDiscount}%)` : '';
-    const priceInfo = currentOrder.discount > 0 
-      ? `\n💰 *Цена:* ~~${currentOrder.originalPrice}₽~~ → ${currentOrder.price}₽`
-      : `\n💰 *Цена:* ${currentOrder.price}₽`;
+    const priceInfo = `\n💰 *Цена:* ${currentOrder.price}₽`;
     
     const message = `
 🆕 *Новый заказ в Asafiev Bar!*
 🍸 *Коктейль:* ${currentOrder.name}
 👤 *Имя клиента:* ${currentOrder.user}
-🕒 *Время:* ${currentOrder.displayTime}${priceInfo}${promoInfo}
+🕒 *Время:* ${currentOrder.displayTime}${priceInfo}
 🆔 *ID заказа:* ${docRef.id}
         `.trim();
 
@@ -2531,10 +2502,6 @@ async function createOrUpdateBill(orderData, orderId) {
       cocktailName: orderData.name,
       cocktailImage: orderData.image || '',
       price: orderData.price,
-      originalPrice: orderData.originalPrice || orderData.price,
-      discount: orderData.discount || 0,
-      promoCode: orderData.promoCode || null,
-      promoDiscount: orderData.promoDiscount || 0,
       timestamp: new Date(), // Используем new Date() вместо serverTimestamp() для элементов массива
       status: orderData.status || 'pending',
       rated: false
@@ -2649,22 +2616,18 @@ function showBillModal(billData, billId) {
   const itemsHTML = items.map(item => {
     const statusText = getStatusText(item.status);
     const statusIcon = getStatusIcon(item.status);
-    const priceDisplay = item.discount > 0 
-      ? `<span class="bill-item-original-price">${item.originalPrice} ₽</span> ${item.price} ₽`
-      : `${item.price} ₽`;
 
     return `
       <div class="bill-item" data-status="${item.status}">
         ${item.cocktailImage ? `<img src="${item.cocktailImage}" alt="${item.cocktailName}" class="bill-item-image">` : ''}
         <div class="bill-item-info">
           <div class="bill-item-name">${item.cocktailName}</div>
-          ${item.promoCode ? `<div class="bill-item-promo">🎫 ${item.promoCode} (-${item.promoDiscount}%)</div>` : ''}
           <div class="bill-item-status">
             <span class="status-icon">${statusIcon}</span>
             <span class="status-text">${statusText}</span>
           </div>
         </div>
-        <div class="bill-item-price">${priceDisplay}</div>
+        <div class="bill-item-price">${item.price} ₽</div>
       </div>
     `;
   }).join('');
@@ -2693,9 +2656,36 @@ function showBillModal(billData, billId) {
         ${itemsHTML || '<p class="no-items">Нет заказов</p>'}
       </div>
 
-      <div class="bill-total">
-        <span>Итого к оплате:</span>
-        <span class="total-amount">${billData.totalAmount} ₽</span>
+      <!-- Блок промокода -->
+      <div class="bill-promo-section">
+        <div class="promo-code-section">
+          <div class="promo-input-group">
+            <i class="fas fa-tag"></i>
+            <input type="text" id="billPromoCodeInput" placeholder="Введите промокод" maxlength="20" ${billData.promoCode ? 'value="' + billData.promoCode + '" disabled' : ''}>
+            <button id="applyBillPromoBtn" class="apply-promo-btn" ${billData.promoCode ? 'disabled' : ''}>
+              <i class="fas fa-check"></i> ${billData.promoCode ? 'Применен' : 'Применить'}
+            </button>
+          </div>
+          <div id="billPromoMessage" class="promo-message"></div>
+        </div>
+      </div>
+
+      <!-- Итоговая сумма -->
+      <div class="bill-total-section">
+        ${billData.discount > 0 ? `
+          <div class="bill-subtotal">
+            <span>Сумма без скидки:</span>
+            <span>${billData.originalTotal || billData.totalAmount} ₽</span>
+          </div>
+          <div class="bill-discount">
+            <span>Скидка (${billData.promoCode} -${billData.discount}%):</span>
+            <span class="discount-amount">-${Math.round((billData.originalTotal || billData.totalAmount) * billData.discount / 100)} ₽</span>
+          </div>
+        ` : ''}
+        <div class="bill-total">
+          <span>Итого к оплате:</span>
+          <span class="total-amount">${billData.totalAmount} ₽</span>
+        </div>
       </div>
 
       <div class="bill-footer-note">
@@ -2707,6 +2697,14 @@ function showBillModal(billData, billId) {
 
   document.body.appendChild(modal);
   document.body.classList.add('modal-open');
+
+  // Обработчик применения промокода к счету
+  const applyBillPromoBtn = modal.querySelector('#applyBillPromoBtn');
+  if (applyBillPromoBtn && !billData.promoCode) {
+    applyBillPromoBtn.addEventListener('click', async () => {
+      await applyPromoCodeToBill(billId, billData);
+    });
+  }
 
   // Обработчик закрытия
   const closeBtn = modal.querySelector('.close');
@@ -2722,6 +2720,109 @@ function showBillModal(billData, billId) {
       document.body.classList.remove('modal-open');
     }
   });
+}
+
+// Функция для применения промокода к счету
+async function applyPromoCodeToBill(billId, billData) {
+  const promoCodeInput = document.getElementById('billPromoCodeInput');
+  const promoMessageEl = document.getElementById('billPromoMessage');
+  const applyBillPromoBtn = document.getElementById('applyBillPromoBtn');
+  
+  const promoCode = promoCodeInput.value.trim().toUpperCase();
+  
+  if (!promoCode) {
+    promoMessageEl.textContent = 'Введите промокод';
+    promoMessageEl.className = 'promo-message error';
+    return;
+  }
+
+  try {
+    applyBillPromoBtn.disabled = true;
+    applyBillPromoBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Проверка...';
+    
+    // Проверяем промокод в Firebase
+    const promoDoc = await db.collection('promocodes').doc(promoCode).get();
+    
+    if (!promoDoc.exists) {
+      promoMessageEl.textContent = 'Промокод не найден';
+      promoMessageEl.className = 'promo-message error';
+      applyBillPromoBtn.disabled = false;
+      applyBillPromoBtn.innerHTML = '<i class="fas fa-check"></i> Применить';
+      return;
+    }
+    
+    const promoData = promoDoc.data();
+    
+    // Проверка активности
+    if (!promoData.active) {
+      promoMessageEl.textContent = 'Промокод неактивен';
+      promoMessageEl.className = 'promo-message error';
+      applyBillPromoBtn.disabled = false;
+      applyBillPromoBtn.innerHTML = '<i class="fas fa-check"></i> Применить';
+      return;
+    }
+    
+    // Проверка срока действия
+    if (promoData.expiryDate && promoData.expiryDate.toDate() < new Date()) {
+      promoMessageEl.textContent = 'Промокод истек';
+      promoMessageEl.className = 'promo-message error';
+      applyBillPromoBtn.disabled = false;
+      applyBillPromoBtn.innerHTML = '<i class="fas fa-check"></i> Применить';
+      return;
+    }
+    
+    // Проверка лимита использований
+    if (promoData.maxUses > 0 && promoData.usedCount >= promoData.maxUses) {
+      promoMessageEl.textContent = 'Промокод исчерпан';
+      promoMessageEl.className = 'promo-message error';
+      applyBillPromoBtn.disabled = false;
+      applyBillPromoBtn.innerHTML = '<i class="fas fa-check"></i> Применить';
+      return;
+    }
+    
+    // Применяем скидку
+    const discount = promoData.discount;
+    const originalTotal = billData.totalAmount;
+    const discountAmount = Math.round(originalTotal * discount / 100);
+    const newTotal = originalTotal - discountAmount;
+    
+    // Обновляем счет в Firebase
+    await db.collection('bills').doc(billId).update({
+      promoCode: promoCode,
+      discount: discount,
+      originalTotal: originalTotal,
+      totalAmount: newTotal,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    // Увеличиваем счетчик использований промокода
+    await db.collection('promocodes').doc(promoCode).update({
+      usedCount: firebase.firestore.FieldValue.increment(1),
+      lastUsedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    promoMessageEl.textContent = `Промокод применен! Скидка ${discount}%`;
+    promoMessageEl.className = 'promo-message success';
+    
+    // Закрываем модальное окно и открываем заново с обновленными данными
+    document.getElementById('billModal').remove();
+    document.body.classList.remove('modal-open');
+    
+    // Показываем успешное сообщение
+    showSuccess(`Промокод ${promoCode} применен! Скидка ${discount}%`);
+    
+    // Перезагружаем счет
+    setTimeout(() => {
+      showMyBill();
+    }, 500);
+    
+  } catch (error) {
+    console.error('❌ Ошибка применения промокода:', error);
+    promoMessageEl.textContent = 'Ошибка применения промокода';
+    promoMessageEl.className = 'promo-message error';
+    applyBillPromoBtn.disabled = false;
+    applyBillPromoBtn.innerHTML = '<i class="fas fa-check"></i> Применить';
+  }
 }
 
 // Вспомогательные функции
@@ -2981,119 +3082,8 @@ function showSuccess(message) {
 // ============================================
 // СИСТЕМА ПРОМОКОДОВ
 // ============================================
-
-// Применение промокода
-const applyPromoBtn = document.getElementById('applyPromoBtn');
-applyPromoBtn?.addEventListener('click', async () => {
-  const promoCodeInput = document.getElementById('promoCodeInput');
-  const promoMessage = document.getElementById('promoMessage');
-  const promoCode = promoCodeInput?.value.trim().toUpperCase();
-  
-  if (!promoCode) {
-    if (promoMessage) {
-      promoMessage.textContent = '⚠️ Введите промокод';
-      promoMessage.className = 'promo-message error';
-    }
-    return;
-  }
-  
-  if (!currentOrder) {
-    if (promoMessage) {
-      promoMessage.textContent = '❌ Ошибка: заказ не найден';
-      promoMessage.className = 'promo-message error';
-    }
-    return;
-  }
-  
-  // Проверяем промокод в Firebase
-  try {
-    const promoRef = await db.collection('promocodes').doc(promoCode).get();
-    
-    if (!promoRef.exists) {
-      if (promoMessage) {
-        promoMessage.textContent = '❌ Промокод не найден';
-        promoMessage.className = 'promo-message error';
-      }
-      return;
-    }
-    
-    const promoData = promoRef.data();
-    
-    // Проверяем активность промокода
-    if (!promoData.active) {
-      if (promoMessage) {
-        promoMessage.textContent = '❌ Промокод неактивен';
-        promoMessage.className = 'promo-message error';
-      }
-      return;
-    }
-    
-    // Проверяем срок действия
-    if (promoData.expiryDate) {
-      const expiryDate = promoData.expiryDate.toDate();
-      if (expiryDate < new Date()) {
-        if (promoMessage) {
-          promoMessage.textContent = '❌ Срок действия промокода истек';
-          promoMessage.className = 'promo-message error';
-        }
-        return;
-      }
-    }
-    
-    // Проверяем количество использований
-    if (promoData.maxUses && promoData.maxUses > 0) {
-      const usedCount = promoData.usedCount || 0;
-      if (usedCount >= promoData.maxUses) {
-        if (promoMessage) {
-          promoMessage.textContent = '❌ Промокод исчерпан';
-          promoMessage.className = 'promo-message error';
-        }
-        return;
-      }
-    }
-    
-    // Применяем скидку
-    const discount = promoData.discount || 0;
-    const originalPrice = currentOrder.originalPrice;
-    const discountAmount = Math.round(originalPrice * discount / 100);
-    const newPrice = originalPrice - discountAmount;
-    
-    // Обновляем currentOrder
-    currentOrder.price = newPrice;
-    currentOrder.discount = discountAmount;
-    currentOrder.promoCode = promoCode;
-    currentOrder.promoDiscount = discount;
-    
-    // Обновляем UI
-    const discountInfo = document.getElementById('discountInfo');
-    const discountAmountEl = document.getElementById('discountAmount');
-    const totalPriceEl = document.getElementById('totalPrice');
-    
-    if (discountInfo) discountInfo.style.display = 'block';
-    if (discountAmountEl) discountAmountEl.textContent = `-${discountAmount} ₽ (${discount}%)`;
-    if (totalPriceEl) totalPriceEl.textContent = `${newPrice} ₽`;
-    
-    if (promoMessage) {
-      promoMessage.textContent = `✅ Промокод применен! Скидка ${discount}%`;
-      promoMessage.className = 'promo-message success';
-    }
-    
-    // Отключаем кнопку применения
-    if (applyPromoBtn) {
-      applyPromoBtn.disabled = true;
-      applyPromoBtn.style.opacity = '0.5';
-    }
-    
-    console.log('✅ Промокод применен:', { promoCode, discount, newPrice });
-    
-  } catch (error) {
-    console.error('❌ Ошибка применения промокода:', error);
-    if (promoMessage) {
-      promoMessage.textContent = '❌ Ошибка проверки промокода';
-      promoMessage.className = 'promo-message error';
-    }
-  }
-});
+// Промокоды теперь применяются к счету в разделе "Мой счет"
+// См. функцию applyPromoCodeToBill()
 
 // Уведомление об обновлении статуса заказа для пользователей
 function showStatusUpdateNotification(orderData = null, newStatus = null) {
