@@ -1,11 +1,11 @@
 // 🔥 ТВОИ КЛЮЧИ FIREBASE
 const firebaseConfig = {
-  apiKey: "AIzaSyDx_YOUR_NEW_API_KEY", // ⚠️ Замените на ключ из Firebase Console проекта bar-menu-2
+  apiKey: "AIzaSyAIssqVqGL9125nkyXLGbXDYOiFsD7lCTo",
   authDomain: "bar-menu-2.firebaseapp.com",
   projectId: "bar-menu-2",
-  storageBucket: "bar-menu-2.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID", // ⚠️ Замените на ID из Firebase Console
-  appId: "YOUR_APP_ID" // ⚠️ Замените на App ID из Firebase Console
+  storageBucket: "bar-menu-2.firebasestorage.app",
+  messagingSenderId: "289761689575",
+  appId: "1:289761689575:web:fb65f4f7e5a89042f08742"
 };
 // 🤖 TELEGRAM
 const TELEGRAM_BOT_TOKEN = "8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo";
