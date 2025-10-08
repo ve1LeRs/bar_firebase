@@ -5982,8 +5982,8 @@ function startTrackingUserOrders(userId) {
         if (change.type === 'modified' && order.status === 'ready') {
           // Проверяем, не был ли этот заказ уже оценен или пропущен
           if (!ratedOrders.has(orderId)) {
-            console.log('🍸 Заказ готов! Показываем окно оценки:', order.cocktailName);
-            showRatingModal(orderId, order.cocktailName);
+            console.log('🍸 Заказ готов! Показываем окно оценки:', order.name);
+            showRatingModal(orderId, order.name);
           }
         }
       });
@@ -6003,11 +6003,20 @@ function stopTrackingUserOrders() {
 
 // Функция для показа модального окна оценки
 function showRatingModal(orderId, cocktailName) {
+  console.log('📝 showRatingModal вызвана:', { orderId, cocktailName });
+  
+  if (!cocktailName) {
+    console.error('❌ Название коктейля не передано!');
+    return;
+  }
+  
   currentRatingData = {
     orderId: orderId,
     cocktailName: cocktailName,
     timestamp: new Date()
   };
+  
+  console.log('💾 currentRatingData установлен:', currentRatingData);
   
   // Заполняем данные
   ratingCocktailName.textContent = cocktailName;
@@ -6027,7 +6036,7 @@ function showRatingModal(orderId, cocktailName) {
   // Показываем модальное окно
   ratingModal.style.display = 'flex';
   
-  console.log('📝 Показано окно оценки для:', cocktailName);
+  console.log('✅ Показано окно оценки для:', cocktailName);
 }
 
 // Функция для сброса звезд
@@ -6116,6 +6125,14 @@ async function saveRating() {
   
   try {
     console.log('💾 Начинаем сохранение оценки:', selectedRating);
+    console.log('📦 currentRatingData:', currentRatingData);
+    
+    // Проверяем что все данные есть
+    if (!currentRatingData.cocktailName) {
+      console.error('❌ Отсутствует название коктейля!');
+      showError('Ошибка: название коктейля не найдено');
+      return;
+    }
     
     // Отключаем кнопку отправки (если она видна)
     if (submitRatingBtn) {
@@ -6133,6 +6150,8 @@ async function saveRating() {
       orderId: currentRatingData.orderId,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
+    
+    console.log('📤 Данные для сохранения:', ratingData);
     
     await db.collection('ratings').add(ratingData);
     
