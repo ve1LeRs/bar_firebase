@@ -515,9 +515,11 @@ app.delete('/cleanup-test-orders', async (req, res) => {
 });
 
 // Отправка списка закупок в Telegram
+app.options('/send-purchase-list', cors()); // Явная обработка preflight
 app.post('/send-purchase-list', async (req, res) => {
   try {
     console.log('🛒 Получен запрос на отправку списка закупок...');
+    console.log('📨 Origin:', req.headers.origin);
     
     const { message, purchaseList } = req.body;
     
