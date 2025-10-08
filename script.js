@@ -3089,9 +3089,11 @@ function showSuccess(message) {
 function showStatusUpdateNotification(orderData = null, newStatus = null) {
   console.log('🔔 showStatusUpdateNotification вызвана:', { orderData, newStatus });
   
-  // Не показываем уведомления для статусов "ready" и "completed"
-  // Для "ready" показывается окно оценки, для "completed" заказ уже завершен
-  if (newStatus === 'ready' || newStatus === 'completed') {
+  // Не показываем уведомления для статусов "confirmed", "ready" и "completed"
+  // confirmed - не нужен, preparing - сразу после заказа
+  // ready - показывается окно оценки
+  // completed - заказ уже завершен
+  if (newStatus === 'confirmed' || newStatus === 'ready' || newStatus === 'completed') {
     console.log('⏭️ Уведомление пропущено для статуса:', newStatus);
     return;
   }
@@ -6028,7 +6030,6 @@ function showRatingModal(orderId, cocktailName) {
   // Заполняем данные
   ratingCocktailName.textContent = cocktailName;
   selectedRating = 0;
-  ratingComment.value = '';
   
   // Сбрасываем звезды
   resetStars();
@@ -6151,7 +6152,6 @@ async function saveRating() {
     const ratingData = {
       cocktailName: currentRatingData.cocktailName,
       rating: selectedRating,
-      comment: ratingComment.value.trim() || null,
       userId: user.uid,
       userName: user.displayName || 'Аноним',
       orderId: currentRatingData.orderId,
@@ -6298,7 +6298,6 @@ function closeRatingModal() {
   // Сбрасываем данные
   currentRatingData = null;
   selectedRating = 0;
-  ratingComment.value = '';
   resetStars();
   
   // Возвращаем кнопки в исходное состояние
@@ -6370,30 +6369,24 @@ function displayCocktailRating(cardElement, ratingData) {
     // Создаем новый индикатор рейтинга
     ratingBadge = document.createElement('div');
     ratingBadge.className = 'cocktail-rating';
-    cardElement.appendChild(ratingBadge);
-  }
-  
-  // Генерируем звезды
-  const fullStars = Math.floor(ratingData.average);
-  const hasHalfStar = ratingData.average % 1 >= 0.5;
-  
-  let starsHtml = '';
-  for (let i = 0; i < 5; i++) {
-    if (i < fullStars) {
-      starsHtml += '<i class="fas fa-star"></i>';
-    } else if (i === fullStars && hasHalfStar) {
-      starsHtml += '<i class="fas fa-star-half-alt"></i>';
+    
+    // Вставляем в image-container (правый верхний угол картинки)
+    const imageContainer = cardElement.querySelector('.image-container');
+    if (imageContainer) {
+      imageContainer.appendChild(ratingBadge);
     } else {
-      starsHtml += '<i class="far fa-star"></i>';
+      cardElement.appendChild(ratingBadge);
     }
   }
   
-  // Заполняем содержимое
+  // Показываем только цифру рейтинга
   ratingBadge.innerHTML = `
-    <div class="cocktail-rating-stars">${starsHtml}</div>
-    <div class="cocktail-rating-value">${ratingData.average.toFixed(1)}</div>
-    <div class="cocktail-rating-count">(${ratingData.count})</div>
+    <i class="fas fa-star"></i>
+    <span class="rating-value">${ratingData.average.toFixed(1)}</span>
   `;
+  
+  // Добавляем атрибут title для подсказки
+  ratingBadge.setAttribute('title', `Средняя оценка: ${ratingData.average.toFixed(1)} из 5 (${ratingData.count} ${ratingData.count === 1 ? 'оценка' : ratingData.count < 5 ? 'оценки' : 'оценок'})`);
 }
 
 console.log('✅ Система оценки коктейлей инициализирована');
