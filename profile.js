@@ -123,18 +123,22 @@ async function loadProfileCurrentBill(userId) {
     billItems.forEach(item => {
       const statusIcon = getOrderStatusIcon(item.status);
       const statusText = getOrderStatusText(item.status);
+      const statusClass = `status-${item.status}`;
+      const itemPrice = item.finalPrice || item.price || 0;
       
       itemsHTML += `
-        <div class="bill-item">
-          ${item.cocktailImage ? `<img src="${item.cocktailImage}" alt="${item.cocktailName}" class="bill-item-image">` : ''}
-          <div class="bill-item-info">
-            <div class="bill-item-name">${item.cocktailName}</div>
-            <div class="bill-item-status">
-              <span class="status-icon">${statusIcon}</span>
-              <span class="status-text">${statusText}</span>
+        <div class="profile-bill-item">
+          <div class="profile-bill-item-main">
+            ${item.cocktailImage ? `<img src="${item.cocktailImage}" alt="${item.cocktailName}" class="profile-bill-item-image">` : '<div class="profile-bill-item-placeholder"><i class="fas fa-cocktail"></i></div>'}
+            <div class="profile-bill-item-info">
+              <div class="profile-bill-item-name">${item.cocktailName}</div>
+              <div class="profile-bill-item-price">${itemPrice} ₽</div>
             </div>
           </div>
-          <div class="bill-item-price">${item.finalPrice || item.price || 0} ₽</div>
+          <div class="profile-bill-item-status ${statusClass}">
+            <span class="status-icon">${statusIcon}</span>
+            <span class="status-text">${statusText}</span>
+          </div>
         </div>
       `;
     });
@@ -145,12 +149,19 @@ async function loadProfileCurrentBill(userId) {
           <h4><i class="fas fa-receipt"></i> Текущий счет</h4>
           <div class="bill-total">${totalAmount} ₽</div>
         </div>
-        <div class="bill-items">
+        <div class="profile-bill-items-grid">
           ${itemsHTML}
         </div>
-        <button class="view-full-bill-btn" onclick="openMyBill()">
-          <i class="fas fa-expand"></i> Открыть полный счет
-        </button>
+        <div class="bill-summary">
+          <div class="bill-summary-row">
+            <span>Количество позиций:</span>
+            <strong>${billItems.length}</strong>
+          </div>
+          <div class="bill-summary-row total">
+            <span>Итого к оплате:</span>
+            <strong>${totalAmount} ₽</strong>
+          </div>
+        </div>
       </div>
     `;
     
@@ -314,15 +325,15 @@ profileLogoutBtn?.addEventListener('click', () => {
 
 // Обновление кнопки профиля при изменении пользователя
 firebase.auth().onAuthStateChanged(async (user) => {
-  const profileBtn = document.getElementById('profileBtn');
+  const userActions = document.getElementById('userActions');
   const profileUserName = document.getElementById('profileUserName');
   const profileBonusPreview = document.getElementById('profileBonusPreview');
   const loginBtn = document.getElementById('loginBtn');
   const registerBtn = document.getElementById('registerBtn');
   
   if (user) {
-    // Показываем кнопку профиля
-    if (profileBtn) profileBtn.style.display = 'flex';
+    // Показываем контейнер с кнопками пользователя
+    if (userActions) userActions.style.display = 'flex';
     if (loginBtn) loginBtn.style.display = 'none';
     if (registerBtn) registerBtn.style.display = 'none';
     
@@ -337,8 +348,8 @@ firebase.auth().onAuthStateChanged(async (user) => {
       profileBonusPreview.textContent = `💎 ${balance}`;
     }
   } else {
-    // Скрываем кнопку профиля
-    if (profileBtn) profileBtn.style.display = 'none';
+    // Скрываем контейнер с кнопками пользователя
+    if (userActions) userActions.style.display = 'none';
     if (loginBtn) loginBtn.style.display = 'inline-block';
     if (registerBtn) registerBtn.style.display = 'inline-block';
   }
