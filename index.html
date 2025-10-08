@@ -397,30 +397,49 @@
     <!-- Модальное окно оценки коктейля -->
     <div id="ratingModal" class="modal rating-modal">
       <div class="modal-content rating-modal-content">
-        <div class="rating-header">
-          <div class="rating-emoji">🍸</div>
-          <h3 class="rating-title">Оцените ваш коктейль</h3>
-          <p class="rating-subtitle" id="ratingCocktailName"></p>
-        </div>
-        <div class="rating-body">
-          <p class="rating-question">Как вам понравился коктейль?</p>
-          <div class="stars-container" id="starsContainer">
-            <i class="fas fa-star star" data-rating="1"></i>
-            <i class="fas fa-star star" data-rating="2"></i>
-            <i class="fas fa-star star" data-rating="3"></i>
-            <i class="fas fa-star star" data-rating="4"></i>
-            <i class="fas fa-star star" data-rating="5"></i>
+        <!-- Экран оценки -->
+        <div class="rating-screen" id="ratingScreen">
+          <div class="rating-header">
+            <div class="rating-emoji">🍸</div>
+            <h3 class="rating-title">Оцените ваш коктейль</h3>
+            <p class="rating-subtitle" id="ratingCocktailName"></p>
           </div>
-          <p class="rating-text" id="ratingText">Выберите оценку</p>
-          <textarea id="ratingComment" class="rating-comment" placeholder="Оставьте комментарий (необязательно)" rows="3"></textarea>
+          <div class="rating-body">
+            <p class="rating-question">Как вам понравился коктейль?</p>
+            <div class="stars-container" id="starsContainer">
+              <i class="fas fa-star star" data-rating="1"></i>
+              <i class="fas fa-star star" data-rating="2"></i>
+              <i class="fas fa-star star" data-rating="3"></i>
+              <i class="fas fa-star star" data-rating="4"></i>
+              <i class="fas fa-star star" data-rating="5"></i>
+            </div>
+            <p class="rating-text" id="ratingText">Выберите оценку</p>
+            <textarea id="ratingComment" class="rating-comment" placeholder="Оставьте комментарий (необязательно)" rows="3"></textarea>
+          </div>
+          <div class="rating-footer">
+            <button class="rating-btn rating-btn-submit" id="submitRating">
+              <i class="fas fa-check"></i> Отправить оценку
+            </button>
+            <button class="rating-btn rating-btn-skip" id="skipRating">
+              <i class="fas fa-times"></i> Пропустить
+            </button>
+          </div>
         </div>
-        <div class="rating-footer">
-          <button class="rating-btn rating-btn-submit" id="submitRating">
-            <i class="fas fa-check"></i> Отправить оценку
-          </button>
-          <button class="rating-btn rating-btn-skip" id="skipRating">
-            <i class="fas fa-times"></i> Пропустить
-          </button>
+        
+        <!-- Экран благодарности -->
+        <div class="thank-you-screen" id="thankYouScreen">
+          <div class="thank-you-content">
+            <div class="thank-you-emoji">🎉</div>
+            <h3 class="thank-you-title">Спасибо за оценку!</h3>
+            <div class="stars-container thank-you-stars" id="thankYouStars">
+              <i class="fas fa-star star-filled"></i>
+              <i class="fas fa-star star-filled"></i>
+              <i class="fas fa-star star-filled"></i>
+              <i class="fas fa-star star-filled"></i>
+              <i class="fas fa-star star-filled"></i>
+            </div>
+            <p class="thank-you-message">Ваше мнение очень важно для нас!</p>
+          </div>
         </div>
       </div>
     </div>

@@ -6096,6 +6096,10 @@ async function saveRating() {
   }
   
   try {
+    // Отключаем кнопку отправки
+    submitRatingBtn.disabled = true;
+    submitRatingBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Отправка...';
+    
     // Сохраняем оценку в коллекцию ratings
     const ratingData = {
       cocktailName: currentRatingData.cocktailName,
@@ -6121,19 +6125,62 @@ async function saveRating() {
     
     console.log('✅ Оценка сохранена:', ratingData);
     
-    // Показываем уведомление
-    showSuccess('Спасибо за вашу оценку! 🌟');
+    // Показываем экран благодарности с желтыми звездами
+    showThankYouScreen(selectedRating);
     
-    // Закрываем модальное окно
-    closeRatingModal();
-    
-    // Обновляем рейтинги на карточках
-    await loadCocktails();
+    // Обновляем рейтинги на карточках в фоне
+    loadCocktails();
     
   } catch (error) {
     console.error('❌ Ошибка сохранения оценки:', error);
     showError('Ошибка сохранения оценки');
+    submitRatingBtn.disabled = false;
+    submitRatingBtn.innerHTML = '<i class="fas fa-check"></i> Отправить оценку';
   }
+}
+
+// Функция для показа экрана благодарности
+function showThankYouScreen(rating) {
+  const ratingScreen = document.getElementById('ratingScreen');
+  const thankYouScreen = document.getElementById('thankYouScreen');
+  const thankYouStars = document.getElementById('thankYouStars');
+  
+  // Скрываем экран оценки
+  ratingScreen.classList.add('slide-out');
+  
+  // Показываем желтые звезды в зависимости от оценки
+  if (thankYouStars) {
+    const stars = thankYouStars.querySelectorAll('.star-filled');
+    stars.forEach((star, index) => {
+      if (index < rating) {
+        star.style.display = 'inline-block';
+        star.classList.add('active');
+      } else {
+        star.style.display = 'none';
+      }
+    });
+  }
+  
+  // Через 500ms показываем экран благодарности
+  setTimeout(() => {
+    ratingScreen.style.display = 'none';
+    thankYouScreen.classList.add('show');
+  }, 500);
+  
+  // Через 3 секунды начинаем плавное исчезновение
+  setTimeout(() => {
+    const modal = document.getElementById('ratingModal');
+    const modalContent = modal.querySelector('.rating-modal-content');
+    
+    // Добавляем классы для плавного исчезновения
+    modal.classList.add('fade-out');
+    modalContent.classList.add('fade-out');
+    
+    // Через 1 секунду полностью закрываем окно
+    setTimeout(() => {
+      closeRatingModal();
+    }, 1000);
+  }, 3000);
 }
 
 // Функция для пропуска оценки
@@ -6158,11 +6205,36 @@ function skipRating() {
 
 // Функция для закрытия модального окна оценки
 function closeRatingModal() {
-  ratingModal.style.display = 'none';
+  const modal = document.getElementById('ratingModal');
+  const modalContent = modal.querySelector('.rating-modal-content');
+  const ratingScreen = document.getElementById('ratingScreen');
+  const thankYouScreen = document.getElementById('thankYouScreen');
+  
+  // Скрываем модальное окно
+  modal.style.display = 'none';
+  
+  // Сбрасываем все классы анимации
+  modal.classList.remove('fade-out');
+  if (modalContent) modalContent.classList.remove('fade-out');
+  if (ratingScreen) {
+    ratingScreen.classList.remove('slide-out');
+    ratingScreen.style.display = 'block';
+  }
+  if (thankYouScreen) {
+    thankYouScreen.classList.remove('show');
+  }
+  
+  // Сбрасываем данные
   currentRatingData = null;
   selectedRating = 0;
   ratingComment.value = '';
   resetStars();
+  
+  // Возвращаем кнопку в исходное состояние
+  if (submitRatingBtn) {
+    submitRatingBtn.disabled = false;
+    submitRatingBtn.innerHTML = '<i class="fas fa-check"></i> Отправить оценку';
+  }
 }
 
 // Обработчики событий для кнопок
