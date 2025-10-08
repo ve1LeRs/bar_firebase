@@ -1,0 +1,41 @@
+// ВАЖНО: Скопируйте эти правила в Firebase Console!
+// https://console.firebase.google.com/project/bar-menu-2/firestore/rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Правила для коллекции заказов
+    match /orders/{orderId} {
+      // Разрешить всем читать заказы
+      allow read: if true;
+      
+      // Разрешить всем создавать заказы
+      allow create: if true;
+      
+      // Разрешить обновлять заказы (для webhook сервера и клиентов)
+      allow update: if true;
+      
+      // Разрешить удалять заказы
+      allow delete: if true;
+    }
+    
+    // Правила для стоп-листа
+    match /stoplist/{itemId} {
+      // Разрешить всем читать стоп-лист
+      allow read: if true;
+      
+      // Разрешить всем изменять стоп-лист
+      allow write: if true;
+    }
+    
+    // Правила для категорий и других коллекций
+    match /{document=**} {
+      // Разрешить всем читать
+      allow read: if true;
+      
+      // Разрешить всем записывать
+      allow write: if true;
+    }
+  }
+}
+
