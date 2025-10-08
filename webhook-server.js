@@ -102,7 +102,7 @@ try {
   
   serviceAccount = {
     type: "service_account",
-    project_id: process.env.FIREBASE_PROJECT_ID || "bar-menu-6145c",
+    project_id: process.env.FIREBASE_PROJECT_ID || "bar-menu-2",
     private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
     private_key: privateKey,
     client_email: process.env.FIREBASE_CLIENT_EMAIL,
