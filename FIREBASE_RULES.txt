@@ -28,6 +28,41 @@ service cloud.firestore {
       allow write: if true;
     }
     
+    // Правила для коллекции счетов (bills)
+    match /bills/{billId} {
+      // Разрешить пользователям читать только свои счета
+      allow read: if request.auth != null && 
+                     (resource.data.userId == request.auth.uid || 
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      
+      // Разрешить создавать счета авторизованным пользователям
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      
+      // Разрешить обновлять свои счета или админам
+      allow update: if request.auth != null && 
+                       (resource.data.userId == request.auth.uid || 
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      
+      // Разрешить удалять только админам
+      allow delete: if request.auth != null && 
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Правила для коллекции оценок (ratings) - для будущего
+    match /ratings/{ratingId} {
+      // Разрешить всем читать оценки
+      allow read: if true;
+      
+      // Разрешить создавать оценки авторизованным пользователям
+      allow create: if request.auth != null;
+      
+      // Разрешить обновлять только свои оценки
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      // Разрешить удалять только свои оценки
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    
     // Правила для категорий и других коллекций
     match /{document=**} {
       // Разрешить всем читать
