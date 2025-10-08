@@ -2584,7 +2584,35 @@ async function showMyBill() {
       .get();
 
     if (billsSnapshot.empty) {
-      showNotification('📋 У вас пока нет заказов в счете', 'info');
+      // Показываем модальное окно с информацией
+      const modal = document.createElement('div');
+      modal.className = 'modal';
+      modal.style.display = 'block';
+      modal.innerHTML = `
+        <div class="modal-content">
+          <span class="close">&times;</span>
+          <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">📋</div>
+            <h3>Счет пуст</h3>
+            <p style="color: #6c757d; margin-top: 1rem;">У вас пока нет заказов в счете</p>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      document.body.classList.add('modal-open');
+      
+      const closeBtn = modal.querySelector('.close');
+      closeBtn.addEventListener('click', () => {
+        modal.remove();
+        document.body.classList.remove('modal-open');
+      });
+      
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          modal.remove();
+          document.body.classList.remove('modal-open');
+        }
+      });
       return;
     }
 
