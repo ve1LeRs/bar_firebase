@@ -433,6 +433,7 @@ const themeToggle = document.getElementById('themeToggle');
 const loginBtn = document.getElementById('loginBtn');
 const registerBtn = document.getElementById('registerBtn');
 const logoutBtn = document.getElementById('logoutBtn');
+const myBillBtn = document.getElementById('myBillBtn');
 const ordersBtn = document.getElementById('ordersBtn');
 const adminBtn = document.getElementById('adminBtn');
 const userName = document.getElementById('userName');
@@ -588,6 +589,7 @@ auth.onAuthStateChanged(async user => {
   if (user) {
     loginBtn.style.display = 'none';
     registerBtn.style.display = 'none';
+    myBillBtn.style.display = 'inline-block';
     ordersBtn.style.display = 'inline-block';
     logoutBtn.style.display = 'inline-block';
     // Проверяем, является ли пользователь администратором
@@ -612,6 +614,7 @@ auth.onAuthStateChanged(async user => {
   } else {
     loginBtn.style.display = 'inline-block';
     registerBtn.style.display = 'inline-block';
+    myBillBtn.style.display = 'none';
     ordersBtn.style.display = 'none';
     adminBtn.style.display = 'none';
     logoutBtn.style.display = 'none';
@@ -1505,6 +1508,11 @@ ordersBtn?.addEventListener('click', async () => {
   }
 });
 
+// Открытие модального окна счета
+myBillBtn?.addEventListener('click', async () => {
+  await showMyBill();
+});
+
 // Открытие модалки админ-панели
 adminBtn?.addEventListener('click', async () => {
   if (isAdmin) {
@@ -2394,6 +2402,9 @@ confirmOrderBtn?.addEventListener('click', async () => {
     };
     const docRef = await db.collection('orders').add(orderData);
     
+    // Создаем или обновляем счет пользователя
+    await createOrUpdateBill(currentOrder, docRef.id);
+    
     // Если использован промокод, увеличиваем счетчик использований
     if (currentOrder.promoCode) {
       try {
@@ -2492,6 +2503,212 @@ confirmOrderBtn?.addEventListener('click', async () => {
     confirmOrderBtn.innerHTML = originalText;
   }
 });
+
+// === СИСТЕМА СЧЕТОВ ===
+
+// Функция для создания или обновления счета пользователя
+async function createOrUpdateBill(orderData, orderId) {
+  try {
+    const user = firebase.auth().currentUser;
+    if (!user) return;
+
+    // Ищем открытый счет пользователя
+    const billsSnapshot = await db.collection('bills')
+      .where('userId', '==', user.uid)
+      .where('status', '==', 'open')
+      .get();
+
+    const billItem = {
+      orderId: orderId,
+      cocktailId: orderData.cocktailId || '',
+      cocktailName: orderData.name,
+      cocktailImage: orderData.image || '',
+      price: orderData.price,
+      originalPrice: orderData.originalPrice || orderData.price,
+      discount: orderData.discount || 0,
+      promoCode: orderData.promoCode || null,
+      promoDiscount: orderData.promoDiscount || 0,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+      status: orderData.status || 'pending',
+      rated: false
+    };
+
+    if (billsSnapshot.empty) {
+      // Создаем новый счет
+      await db.collection('bills').add({
+        userId: user.uid,
+        userName: user.displayName || 'Гость',
+        userPhone: user.phoneNumber || user.email || '',
+        items: [billItem],
+        totalAmount: orderData.price,
+        status: 'open',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        paidAt: null,
+        paymentMethod: null,
+        paymentId: null
+      });
+      console.log('✅ Создан новый счет для пользователя');
+    } else {
+      // Обновляем существующий счет
+      const billDoc = billsSnapshot.docs[0];
+      const billData = billDoc.data();
+      const currentItems = billData.items || [];
+      const currentTotal = billData.totalAmount || 0;
+
+      await billDoc.ref.update({
+        items: firebase.firestore.FieldValue.arrayUnion(billItem),
+        totalAmount: currentTotal + orderData.price,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      console.log('✅ Счет пользователя обновлен');
+    }
+  } catch (error) {
+    console.error('❌ Ошибка создания/обновления счета:', error);
+  }
+}
+
+// Функция для отображения счета пользователя
+async function showMyBill() {
+  const user = firebase.auth().currentUser;
+  if (!user) {
+    showError('Войдите, чтобы увидеть свой счет');
+    return;
+  }
+
+  try {
+    // Получаем открытый счет пользователя
+    const billsSnapshot = await db.collection('bills')
+      .where('userId', '==', user.uid)
+      .where('status', '==', 'open')
+      .get();
+
+    if (billsSnapshot.empty) {
+      showNotification('📋 У вас пока нет заказов в счете', 'info');
+      return;
+    }
+
+    const billDoc = billsSnapshot.docs[0];
+    const billData = billDoc.data();
+    const billId = billDoc.id;
+
+    // Создаем модальное окно счета
+    showBillModal(billData, billId);
+  } catch (error) {
+    console.error('❌ Ошибка загрузки счета:', error);
+    showError('Ошибка загрузки счета');
+  }
+}
+
+// Функция для отображения модального окна счета
+function showBillModal(billData, billId) {
+  const items = billData.items || [];
+  
+  // Сортируем по времени (новые сверху)
+  items.sort((a, b) => {
+    if (!a.timestamp || !b.timestamp) return 0;
+    return b.timestamp - a.timestamp;
+  });
+
+  // Создаем HTML для элементов счета
+  const itemsHTML = items.map(item => {
+    const statusText = getStatusText(item.status);
+    const statusIcon = getStatusIcon(item.status);
+    const priceDisplay = item.discount > 0 
+      ? `<span class="bill-item-original-price">${item.originalPrice} ₽</span> ${item.price} ₽`
+      : `${item.price} ₽`;
+
+    return `
+      <div class="bill-item" data-status="${item.status}">
+        ${item.cocktailImage ? `<img src="${item.cocktailImage}" alt="${item.cocktailName}" class="bill-item-image">` : ''}
+        <div class="bill-item-info">
+          <div class="bill-item-name">${item.cocktailName}</div>
+          ${item.promoCode ? `<div class="bill-item-promo">🎫 ${item.promoCode} (-${item.promoDiscount}%)</div>` : ''}
+          <div class="bill-item-status">
+            <span class="status-icon">${statusIcon}</span>
+            <span class="status-text">${statusText}</span>
+          </div>
+        </div>
+        <div class="bill-item-price">${priceDisplay}</div>
+      </div>
+    `;
+  }).join('');
+
+  // Создаем модальное окно
+  const modal = document.createElement('div');
+  modal.id = 'billModal';
+  modal.className = 'modal bill-modal';
+  modal.style.display = 'block';
+
+  modal.innerHTML = `
+    <div class="modal-content bill-content">
+      <span class="close">&times;</span>
+      <h3><i class="fas fa-receipt"></i> Мой счет</h3>
+      
+      <div class="bill-header">
+        <div class="bill-user-info">
+          <i class="fas fa-user"></i> ${billData.userName}
+        </div>
+        <div class="bill-items-count">
+          <i class="fas fa-shopping-bag"></i> ${items.length} ${getItemsWord(items.length)}
+        </div>
+      </div>
+
+      <div class="bill-items">
+        ${itemsHTML || '<p class="no-items">Нет заказов</p>'}
+      </div>
+
+      <div class="bill-total">
+        <span>Итого к оплате:</span>
+        <span class="total-amount">${billData.totalAmount} ₽</span>
+      </div>
+
+      <div class="bill-footer-note">
+        <i class="fas fa-info-circle"></i>
+        Оплата счета будет доступна в конце вечера
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  document.body.classList.add('modal-open');
+
+  // Обработчик закрытия
+  const closeBtn = modal.querySelector('.close');
+  closeBtn.addEventListener('click', () => {
+    modal.remove();
+    document.body.classList.remove('modal-open');
+  });
+
+  // Закрытие по клику вне модального окна
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.remove();
+      document.body.classList.remove('modal-open');
+    }
+  });
+}
+
+// Вспомогательные функции
+function getStatusIcon(status) {
+  const icons = {
+    'pending': '⏳',
+    'confirmed': '✅',
+    'preparing': '👨‍🍳',
+    'ready': '🍸',
+    'completed': '✅',
+    'cancelled': '❌'
+  };
+  return icons[status] || '⏳';
+}
+
+function getItemsWord(count) {
+  if (count % 10 === 1 && count % 100 !== 11) return 'позиция';
+  if ([2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100)) return 'позиции';
+  return 'позиций';
+}
+
+// === КОНЕЦ СИСТЕМЫ СЧЕТОВ ===
 
 // Создание анимации шампанского
 function createChampagneAnimation() {
