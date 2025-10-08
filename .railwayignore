@@ -1,0 +1,39 @@
+# Игнорируем клиентские файлы, которые не нужны на Railway сервере
+
+# Клиентские JavaScript файлы
+script.js
+happy-hours-and-bonuses.js
+order-integration.js
+profile.js
+admin-bills.js
+setup-webhook.js
+
+# HTML и CSS
+index.html
+style.css
+
+# Изображения
+logo.png
+favicon.ico
+
+# Документация
+*.md
+*.txt
+
+# Firebase конфигурационные файлы (не нужны на Railway)
+check-firebase-config.js
+check-railway-env.js
+check-system.js
+test-*.js
+add-test-promocodes.js
+fix-*.js
+setup-*.js
+update-*.js
+
+# Railway использует только:
+# - webhook-server.js
+# - package.json
+# - package-lock.json
+# - node_modules/
+# - .env переменные из Railway UI
+
