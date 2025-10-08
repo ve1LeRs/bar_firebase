@@ -5955,7 +5955,7 @@ console.log('⭐ Инициализация системы оценки кокт
 // Глобальные переменные для системы оценки
 let currentRatingData = null;
 let ratedOrders = new Set(); // Множество ID заказов, которые уже были оценены или пропущены
-let userOrdersListener = null; // Слушатель для заказов пользователя
+// userOrdersListener уже объявлен выше (строка 1113)
 
 // Получаем элементы модального окна оценки
 const ratingModal = document.getElementById('ratingModal');
