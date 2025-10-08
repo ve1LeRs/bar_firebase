@@ -348,21 +348,27 @@ async function updateBillsStatistics(bills, filter) {
       openBillsCountEl.textContent = allBillsSnapshot.size;
     }
     
-    // Считаем оплаченные за сегодня
+    // Считаем оплаченные за сегодня - упрощённый запрос
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    const paidTodaySnapshot = await db.collection('bills')
+    // Получаем все оплаченные счета и фильтруем на клиенте
+    const allPaidBillsSnapshot = await db.collection('bills')
       .where('status', '==', 'paid')
-      .where('paidAt', '>=', today)
       .get();
     
     let paidCount = 0;
     let revenue = 0;
     
-    paidTodaySnapshot.forEach(doc => {
-      paidCount++;
-      revenue += doc.data().totalAmount || 0;
+    allPaidBillsSnapshot.forEach(doc => {
+      const billData = doc.data();
+      if (billData.paidAt) {
+        const paidDate = billData.paidAt.toDate();
+        if (paidDate >= today) {
+          paidCount++;
+          revenue += billData.totalAmount || 0;
+        }
+      }
     });
     
     if (paidBillsTodayEl) {
