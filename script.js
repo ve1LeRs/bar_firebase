@@ -6770,7 +6770,7 @@ sendToTelegramBtn?.addEventListener('click', async () => {
     
     // Отправляем запрос на сервер
     const railwayUrl = localStorage.getItem('railwayUrl');
-    const serverUrl = railwayUrl || 'https://asafiev-bar-production.up.railway.app';
+    const serverUrl = railwayUrl || 'https://lucid-cat-production.up.railway.app';
     
     const response = await fetch(`${serverUrl}/send-purchase-list`, {
       method: 'POST',
@@ -6819,7 +6819,7 @@ sendToTelegramBtn?.addEventListener('click', async () => {
 // Проверка и обновление Railway URL
 const checkRailwayUrlBtn = document.getElementById('checkRailwayUrlBtn');
 checkRailwayUrlBtn?.addEventListener('click', async () => {
-  const currentUrl = localStorage.getItem('railwayUrl') || 'https://asafiev-bar-production.up.railway.app';
+  const currentUrl = localStorage.getItem('railwayUrl') || 'https://lucid-cat-production.up.railway.app';
   
   const newUrl = prompt(
     '🔧 Проверьте и обновите Railway URL\n\n' +
