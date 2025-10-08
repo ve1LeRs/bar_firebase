@@ -6108,12 +6108,15 @@ async function saveRating() {
     return;
   }
   
-  if (!currentUser) {
+  const user = firebase.auth().currentUser;
+  if (!user) {
     console.warn('⚠️ Пользователь не авторизован');
     return;
   }
   
   try {
+    console.log('💾 Начинаем сохранение оценки:', selectedRating);
+    
     // Отключаем кнопку отправки (если она видна)
     if (submitRatingBtn) {
       submitRatingBtn.disabled = true;
@@ -6125,8 +6128,8 @@ async function saveRating() {
       cocktailName: currentRatingData.cocktailName,
       rating: selectedRating,
       comment: ratingComment.value.trim() || null,
-      userId: currentUser.uid,
-      userName: currentUser.displayName || 'Аноним',
+      userId: user.uid,
+      userName: user.displayName || 'Аноним',
       orderId: currentRatingData.orderId,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
