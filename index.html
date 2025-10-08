@@ -151,6 +151,7 @@
           <button class="tab-btn active" data-tab="cocktails">Коктейли</button>
           <button class="tab-btn" data-tab="orders">Заказы</button>
           <button class="tab-btn" data-tab="stoplist">Стоп-лист</button>
+          <button class="tab-btn" data-tab="promocodes">Промокоды</button>
           <button class="tab-btn" data-tab="monitoring">Мониторинг</button>
         </div>
         <!-- Содержимое вкладок -->
@@ -253,6 +254,53 @@
             </div>
           </div>
         </div>
+        <div class="tab-content" id="promocodes-tab">
+          <h4><i class="fas fa-tags"></i> Управление промокодами</h4>
+          
+          <!-- Форма создания промокода -->
+          <div class="promo-add-section">
+            <h5><i class="fas fa-plus-circle"></i> Создать новый промокод</h5>
+            <div class="promo-form">
+              <div class="form-group">
+                <label for="promoCode">Код промокода:</label>
+                <input type="text" id="promoCode" placeholder="Например: SUMMER2025" class="form-input" maxlength="20">
+              </div>
+              <div class="form-group">
+                <label for="promoDiscount">Размер скидки (%):</label>
+                <input type="number" id="promoDiscount" placeholder="Например: 10" class="form-input" min="1" max="100">
+              </div>
+              <div class="form-group">
+                <label for="promoDescription">Описание:</label>
+                <input type="text" id="promoDescription" placeholder="Описание промокода" class="form-input">
+              </div>
+              <div class="form-group">
+                <label for="promoMaxUses">Макс. количество использований:</label>
+                <input type="number" id="promoMaxUses" placeholder="0 = без ограничений" class="form-input" min="0">
+              </div>
+              <div class="form-group">
+                <label for="promoExpiryDate">Срок действия до:</label>
+                <input type="date" id="promoExpiryDate" class="form-input">
+              </div>
+              <div class="form-group">
+                <label>
+                  <input type="checkbox" id="promoActive" checked>
+                  Активен
+                </label>
+              </div>
+              <button id="createPromoBtn" class="admin-btn primary">
+                <i class="fas fa-plus"></i> Создать промокод
+              </button>
+            </div>
+          </div>
+          
+          <!-- Список промокодов -->
+          <div class="promo-list-section">
+            <h5><i class="fas fa-list"></i> Активные промокоды</h5>
+            <div id="promocodesList" class="admin-list">
+              <!-- Список промокодов будет загружен сюда -->
+            </div>
+          </div>
+        </div>
         <div class="tab-content" id="monitoring-tab">
           <h4>Мониторинг системы</h4>
           <div class="monitoring-controls">
@@ -304,6 +352,10 @@
           <div class="form-group">
             <label>Крепость (%):</label>
             <input type="number" id="cocktailAlcohol" min="0" max="100">
+          </div>
+          <div class="form-group">
+            <label>Цена (₽):</label>
+            <input type="number" id="cocktailPrice" min="0" step="10" placeholder="500" required>
           </div>
           <div class="form-group">
             <label>Категория:</label>
@@ -378,6 +430,41 @@
         <img id="orderImagePreview" src="" alt="Коктейль" class="order-image-preview">
       </div>
       <p id="orderSummary"></p>
+      
+      <!-- Блок оплаты -->
+      <div class="payment-section">
+        <div class="price-info">
+          <span class="price-label">Цена:</span>
+          <span class="price-value" id="orderPrice">0 ₽</span>
+        </div>
+        
+        <!-- Поле для промокода -->
+        <div class="promo-code-section">
+          <div class="promo-input-group">
+            <i class="fas fa-tag"></i>
+            <input type="text" id="promoCodeInput" placeholder="Введите промокод" maxlength="20">
+            <button id="applyPromoBtn" class="apply-promo-btn">
+              <i class="fas fa-check"></i> Применить
+            </button>
+          </div>
+          <div id="promoMessage" class="promo-message"></div>
+        </div>
+        
+        <!-- Информация о скидке -->
+        <div class="discount-info" id="discountInfo" style="display: none;">
+          <div class="discount-row">
+            <span class="discount-label">Скидка:</span>
+            <span class="discount-value" id="discountAmount">-0 ₽</span>
+          </div>
+        </div>
+        
+        <!-- Итоговая сумма -->
+        <div class="total-price">
+          <span class="total-label">Итого к оплате:</span>
+          <span class="total-value" id="totalPrice">0 ₽</span>
+        </div>
+      </div>
+      
       <button id="confirmOrder"><i class="fas fa-check"></i> Подтвердить заказ</button>
     </div>
   </div>

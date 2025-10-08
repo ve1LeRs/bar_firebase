@@ -1687,8 +1687,214 @@ header h1::after {
 
 /* Модальное окно заказа */
 .order-modal {
-  max-width: 450px;
+  max-width: 500px;
   padding: 2rem;
+}
+
+/* Секция оплаты */
+.payment-section {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f9f7f3 0%, #f0ece6 100%);
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border: 2px solid rgba(142, 111, 66, 0.2);
+}
+
+.price-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px dashed rgba(142, 111, 66, 0.2);
+}
+
+.price-label {
+  font-size: 1.1rem;
+  color: #6b5c47;
+  font-weight: 500;
+}
+
+.price-value {
+  font-size: 1.4rem;
+  color: #8e6f42;
+  font-weight: 700;
+  font-family: 'Cormorant Garamond', serif;
+}
+
+/* Промокод */
+.promo-code-section {
+  margin: 1rem 0;
+}
+
+.promo-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: white;
+  padding: 0.5rem;
+  border-radius: 12px;
+  border: 2px solid rgba(142, 111, 66, 0.3);
+  transition: all 0.3s ease;
+}
+
+.promo-input-group:focus-within {
+  border-color: #8e6f42;
+  box-shadow: 0 0 0 3px rgba(142, 111, 66, 0.1);
+}
+
+.promo-input-group i {
+  color: #8e6f42;
+  font-size: 1.1rem;
+  margin-left: 0.5rem;
+}
+
+#promoCodeInput {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 0.5rem;
+  font-size: 1rem;
+  color: #333;
+  outline: none;
+  text-transform: uppercase;
+}
+
+#promoCodeInput::placeholder {
+  color: #999;
+  text-transform: none;
+}
+
+.apply-promo-btn {
+  background: linear-gradient(135deg, #8e6f42 0%, #6b5c47 100%);
+  color: white;
+  border: none;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.apply-promo-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(142, 111, 66, 0.3);
+}
+
+.apply-promo-btn:active {
+  transform: translateY(0);
+}
+
+.promo-message {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: none;
+}
+
+.promo-message.success {
+  display: block;
+  background: rgba(76, 175, 80, 0.1);
+  color: #4caf50;
+  border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.promo-message.error {
+  display: block;
+  background: rgba(244, 67, 54, 0.1);
+  color: #f44336;
+  border: 1px solid rgba(244, 67, 54, 0.3);
+}
+
+/* Информация о скидке */
+.discount-info {
+  margin: 1rem 0;
+  padding: 0.8rem;
+  background: rgba(76, 175, 80, 0.1);
+  border-radius: 8px;
+  border: 2px solid rgba(76, 175, 80, 0.3);
+}
+
+.discount-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.discount-label {
+  font-size: 1rem;
+  color: #4caf50;
+  font-weight: 600;
+}
+
+.discount-value {
+  font-size: 1.2rem;
+  color: #4caf50;
+  font-weight: 700;
+  font-family: 'Cormorant Garamond', serif;
+}
+
+/* Итоговая сумма */
+.total-price {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 2px solid rgba(142, 111, 66, 0.3);
+}
+
+.total-label {
+  font-size: 1.2rem;
+  color: #6b5c47;
+  font-weight: 700;
+}
+
+.total-value {
+  font-size: 1.8rem;
+  color: #8e6f42;
+  font-weight: 900;
+  font-family: 'Cormorant Garamond', serif;
+}
+
+/* Темная тема для оплаты */
+body.dark-theme .payment-section {
+  background: linear-gradient(135deg, #2a2a3a 0%, #1a1a2e 100%);
+  border-color: rgba(200, 200, 200, 0.2);
+}
+
+body.dark-theme .price-label,
+body.dark-theme .total-label {
+  color: #e0e0e0;
+}
+
+body.dark-theme .price-value,
+body.dark-theme .total-value {
+  color: #ffd700;
+}
+
+body.dark-theme .promo-input-group {
+  background: rgba(40, 40, 60, 0.6);
+  border-color: rgba(200, 200, 200, 0.3);
+}
+
+body.dark-theme #promoCodeInput {
+  color: #e0e0e0;
+}
+
+body.dark-theme .apply-promo-btn {
+  background: linear-gradient(135deg, #ffd700 0%, #ffb800 100%);
+  color: #1a1a2e;
+}
+
+body.dark-theme .discount-info {
+  background: rgba(76, 175, 80, 0.2);
+  border-color: rgba(76, 175, 80, 0.4);
 }
 
 /* Заглушка для отсутствующего изображения в модальном окне заказа */
@@ -5665,4 +5871,196 @@ body.modal-open {
   flex-shrink: 0;
   /* Фиксированные размеры для предотвращения сдвигов */
   box-sizing: border-box;
+}
+
+/* Стили для админ-панели промокодов */
+.promo-add-section,
+.promo-list-section {
+  margin: 1.5rem 0;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 12px;
+  border: 2px solid rgba(142, 111, 66, 0.2);
+}
+
+.promo-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.promo-form .form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.promo-form .form-group:last-child {
+  grid-column: 1 / -1;
+}
+
+.promo-form label {
+  font-weight: 600;
+  color: #6b5c47;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.promo-form input[type="checkbox"] {
+  width: auto;
+  margin-right: 0.5rem;
+}
+
+.form-input {
+  padding: 0.8rem;
+  border: 2px solid rgba(142, 111, 66, 0.3);
+  border-radius: 8px;
+  font-size: 1rem;
+  background: white;
+  transition: all 0.3s ease;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #8e6f42;
+  box-shadow: 0 0 0 3px rgba(142, 111, 66, 0.1);
+}
+
+.admin-btn.primary {
+  background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+  color: white;
+  border: 2px solid #4caf50;
+}
+
+.admin-btn.primary:hover {
+  background: linear-gradient(135deg, #45a049 0%, #3d8b40 100%);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.promo-item {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 2px solid rgba(142, 111, 66, 0.2);
+  margin-bottom: 1rem;
+  transition: all 0.3s ease;
+}
+
+.promo-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.promo-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px dashed rgba(142, 111, 66, 0.2);
+}
+
+.promo-code-display {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #8e6f42;
+  font-family: 'Courier New', monospace;
+  background: rgba(142, 111, 66, 0.1);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+}
+
+.promo-discount {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #4caf50;
+}
+
+.promo-item-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+.promo-detail {
+  display: flex;
+  flex-direction: column;
+}
+
+.promo-detail-label {
+  font-size: 0.85rem;
+  color: #999;
+  margin-bottom: 0.3rem;
+}
+
+.promo-detail-value {
+  font-size: 1rem;
+  color: #333;
+  font-weight: 600;
+}
+
+.promo-status {
+  display: inline-block;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.promo-status.active {
+  background: rgba(76, 175, 80, 0.1);
+  color: #4caf50;
+  border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.promo-status.inactive {
+  background: rgba(244, 67, 54, 0.1);
+  color: #f44336;
+  border: 1px solid rgba(244, 67, 54, 0.3);
+}
+
+.promo-item-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.promo-item-actions .admin-btn {
+  flex: 1;
+  padding: 0.6rem;
+  font-size: 0.9rem;
+}
+
+/* Темная тема для промокодов */
+body.dark-theme .promo-add-section,
+body.dark-theme .promo-list-section {
+  background: rgba(40, 40, 60, 0.5);
+  border-color: rgba(200, 200, 200, 0.2);
+}
+
+body.dark-theme .promo-form label {
+  color: #e0e0e0;
+}
+
+body.dark-theme .form-input {
+  background: rgba(40, 40, 60, 0.6);
+  border-color: rgba(200, 200, 200, 0.3);
+  color: #e0e0e0;
+}
+
+body.dark-theme .promo-item {
+  background: rgba(40, 40, 60, 0.6);
+  border-color: rgba(200, 200, 200, 0.2);
+}
+
+body.dark-theme .promo-code-display {
+  background: rgba(255, 215, 0, 0.2);
+  color: #ffd700;
+}
+
+body.dark-theme .promo-detail-label {
+  color: #aaa;
+}
+
+body.dark-theme .promo-detail-value {
+  color: #e0e0e0;
 }
