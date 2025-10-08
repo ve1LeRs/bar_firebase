@@ -9453,3 +9453,343 @@ body.dark-theme .view-all-history-btn:hover {
   background: #b48c5a;
   color: white;
 }
+
+/* ============================================
+   УПРАВЛЕНИЕ СЧЕТАМИ (АДМИН)
+   ============================================ */
+
+/* Статистика по счетам */
+.bills-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.bills-filters {
+  margin-bottom: 2rem;
+}
+
+/* Карточка счета в админке */
+.admin-bill-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  border-left: 4px solid #667eea;
+}
+
+.admin-bill-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.admin-bill-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.bill-user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.bill-user-info i {
+  font-size: 2rem;
+  color: #667eea;
+}
+
+.bill-user-name {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #2c3e50;
+}
+
+.bill-date {
+  font-size: 0.9rem;
+  color: #666;
+  margin-top: 0.2rem;
+}
+
+.bill-status-badge {
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.bill-status-badge.open {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  color: #e65100;
+}
+
+.bill-status-badge.paid {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  color: #2e7d32;
+}
+
+.admin-bill-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+.bill-items-preview {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.8rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  color: #555;
+}
+
+.bill-items-preview i {
+  color: #667eea;
+  margin-top: 0.2rem;
+}
+
+.bill-amount-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border-radius: 8px;
+}
+
+.bill-amount-label {
+  font-weight: 600;
+  color: #1565c0;
+  font-size: 1.1rem;
+}
+
+.bill-amount-value {
+  font-weight: 700;
+  color: #0d47a1;
+  font-size: 1.5rem;
+}
+
+.bill-discount-info,
+.bill-payment-info,
+.bill-paid-date {
+  font-size: 0.9rem;
+  color: #666;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.bill-discount-info i,
+.bill-payment-info i,
+.bill-paid-date i {
+  color: #ff9800;
+}
+
+.admin-bill-actions {
+  display: flex;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.admin-bill-actions .admin-btn {
+  flex: 1;
+  min-width: 150px;
+}
+
+/* Темная тема для счетов в админке */
+body.dark-theme .admin-bill-card {
+  background: #2c3e50;
+  border-color: #b48c5a;
+}
+
+body.dark-theme .admin-bill-header {
+  border-color: rgba(180, 140, 90, 0.2);
+}
+
+body.dark-theme .bill-user-info i {
+  color: #b48c5a;
+}
+
+body.dark-theme .bill-user-name {
+  color: #ecf0f1;
+}
+
+body.dark-theme .bill-date {
+  color: #95a5a6;
+}
+
+body.dark-theme .bill-status-badge.open {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.3) 0%, rgba(255, 152, 0, 0.2) 100%);
+  color: #ff9800;
+}
+
+body.dark-theme .bill-status-badge.paid {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.3) 0%, rgba(76, 175, 80, 0.2) 100%);
+  color: #81c784;
+}
+
+body.dark-theme .bill-items-preview {
+  background: #34495e;
+  color: #95a5a6;
+}
+
+body.dark-theme .bill-items-preview i {
+  color: #b48c5a;
+}
+
+body.dark-theme .bill-amount-section {
+  background: linear-gradient(135deg, rgba(180, 140, 90, 0.2) 0%, rgba(180, 140, 90, 0.1) 100%);
+}
+
+body.dark-theme .bill-amount-label {
+  color: #b48c5a;
+}
+
+body.dark-theme .bill-amount-value {
+  color: #d4af37;
+}
+
+body.dark-theme .bill-discount-info,
+body.dark-theme .bill-payment-info,
+body.dark-theme .bill-paid-date {
+  color: #95a5a6;
+}
+
+/* Детали счета в модалке */
+.bill-details-modal-content {
+  padding: 1rem;
+}
+
+.bill-details-modal-content h3 {
+  margin: 0 0 1.5rem 0;
+  color: #2c3e50;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bill-details-modal-content h4 {
+  margin: 1.5rem 0 1rem 0;
+  color: #2c3e50;
+}
+
+.bill-detail-section {
+  padding: 0.7rem 0;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bill-detail-section:last-of-type {
+  border-bottom: none;
+}
+
+.bill-detail-section.highlight {
+  background: #fff3e0;
+  padding: 0.7rem 1rem;
+  border-radius: 6px;
+  border-bottom: none;
+  margin: 0.5rem 0;
+}
+
+.bill-details-items {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.bill-detail-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.bill-detail-item:last-child {
+  border-bottom: none;
+}
+
+.bill-detail-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border-radius: 8px;
+  font-size: 1.2rem;
+  margin-top: 1rem;
+}
+
+.bill-detail-total strong:last-child {
+  font-size: 1.5rem;
+  color: #2e7d32;
+}
+
+/* Темная тема для деталей счета */
+body.dark-theme .bill-details-modal-content h3,
+body.dark-theme .bill-details-modal-content h4 {
+  color: #ecf0f1;
+}
+
+body.dark-theme .bill-detail-section {
+  border-color: rgba(180, 140, 90, 0.2);
+  color: #ecf0f1;
+}
+
+body.dark-theme .bill-detail-section.highlight {
+  background: rgba(255, 152, 0, 0.2);
+}
+
+body.dark-theme .bill-details-items {
+  background: #34495e;
+}
+
+body.dark-theme .bill-detail-item {
+  border-color: rgba(180, 140, 90, 0.2);
+  color: #ecf0f1;
+}
+
+body.dark-theme .bill-detail-total {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.2) 0%, rgba(76, 175, 80, 0.1) 100%);
+  color: #ecf0f1;
+}
+
+body.dark-theme .bill-detail-total strong:last-child {
+  color: #81c784;
+}
+
+/* Адаптивность для мобильных */
+@media (max-width: 768px) {
+  .bills-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .admin-bill-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .admin-bill-actions {
+    flex-direction: column;
+  }
+  
+  .admin-bill-actions .admin-btn {
+    width: 100%;
+    min-width: auto;
+  }
+}
