@@ -2357,6 +2357,7 @@ body.dark-theme .order-image-placeholder i {
   padding: 2rem;
   max-height: 85vh;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .bill-modal h3 {
@@ -2389,6 +2390,7 @@ body.dark-theme .order-image-placeholder i {
 .bill-items {
   max-height: 400px;
   overflow-y: auto;
+  overflow-x: hidden;
   margin-bottom: 1.5rem;
 }
 
@@ -2403,6 +2405,8 @@ body.dark-theme .order-image-placeholder i {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   border-left: 4px solid #c9a87c;
   transition: all 0.3s ease;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .bill-item:hover {
@@ -2431,6 +2435,8 @@ body.dark-theme .order-image-placeholder i {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
+  word-break: break-word;
 }
 
 .item-quantity {
