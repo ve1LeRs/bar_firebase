@@ -434,14 +434,14 @@ const loginBtn = document.getElementById('loginBtn');
 const registerBtn = document.getElementById('registerBtn');
 const logoutBtn = document.getElementById('logoutBtn');
 const myBillBtn = document.getElementById('myBillBtn');
-const ordersBtn = document.getElementById('ordersBtn');
+const billHistoryBtn = document.getElementById('billHistoryBtn');
 const adminBtn = document.getElementById('adminBtn');
 const userName = document.getElementById('userName');
 const authModal = document.getElementById('authModal');
 const registerModal = document.getElementById('registerModal');
 const successModal = document.getElementById('successModal');
 const errorModal = document.getElementById('errorModal');
-const ordersModal = document.getElementById('ordersModal');
+const billHistoryModal = document.getElementById('billHistoryModal');
 const notificationModal = document.getElementById('notificationModal');
 const adminPanel = document.getElementById('adminPanel');
 const cocktailFormModal = document.getElementById('cocktailFormModal');
@@ -590,7 +590,7 @@ auth.onAuthStateChanged(async user => {
     loginBtn.style.display = 'none';
     registerBtn.style.display = 'none';
     myBillBtn.style.display = 'inline-block';
-    ordersBtn.style.display = 'inline-block';
+    billHistoryBtn.style.display = 'inline-block';
     logoutBtn.style.display = 'inline-block';
     // Проверяем, является ли пользователь администратором
     const userDoc = await db.collection('users').doc(user.uid).get();
@@ -615,7 +615,7 @@ auth.onAuthStateChanged(async user => {
     loginBtn.style.display = 'inline-block';
     registerBtn.style.display = 'inline-block';
     myBillBtn.style.display = 'none';
-    ordersBtn.style.display = 'none';
+    billHistoryBtn.style.display = 'none';
     adminBtn.style.display = 'none';
     logoutBtn.style.display = 'none';
     userName.textContent = '';
@@ -1500,17 +1500,17 @@ registerBtn?.addEventListener('click', () => {
   openModal(registerModal);
 });
 
-// Открытие модалки истории заказов
-ordersBtn?.addEventListener('click', async () => {
-  if (auth.currentUser) {
-    await loadOrderHistory(auth.currentUser.uid);
-    openModal(ordersModal);
-  }
-});
-
-// Открытие модального окна счета
+// Открытие модального окна текущего счета
 myBillBtn?.addEventListener('click', async () => {
   await showMyBill();
+});
+
+// Открытие модального окна истории счетов
+billHistoryBtn?.addEventListener('click', async () => {
+  if (auth.currentUser) {
+    await loadBillHistory(auth.currentUser.uid);
+    openModal(billHistoryModal);
+  }
 });
 
 // Открытие модалки админ-панели
@@ -2734,6 +2734,193 @@ function getItemsWord(count) {
   if (count % 10 === 1 && count % 100 !== 11) return 'позиция';
   if ([2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100)) return 'позиции';
   return 'позиций';
+}
+
+// Функция для загрузки истории счетов
+async function loadBillHistory(userId) {
+  try {
+    const billHistoryList = document.getElementById('billHistoryList');
+    if (!billHistoryList) return;
+    
+    billHistoryList.innerHTML = '<p style="text-align: center; padding: 2rem;">Загрузка...</p>';
+    
+    // Загружаем ВСЕ счета пользователя (и открытые, и оплаченные)
+    const billsSnapshot = await db.collection('bills')
+      .where('userId', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .get();
+    
+    if (billsSnapshot.empty) {
+      billHistoryList.innerHTML = '<p class="no-items">У вас пока нет счетов</p>';
+      return;
+    }
+    
+    billHistoryList.innerHTML = '';
+    
+    billsSnapshot.forEach(doc => {
+      const billData = doc.data();
+      const billId = doc.id;
+      
+      const billCard = createBillHistoryCard(billData, billId);
+      billHistoryList.appendChild(billCard);
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка загрузки истории счетов:', error);
+    const billHistoryList = document.getElementById('billHistoryList');
+    if (billHistoryList) {
+      billHistoryList.innerHTML = '<p class="error">Ошибка загрузки истории счетов</p>';
+    }
+  }
+}
+
+// Функция для создания карточки счета в истории
+function createBillHistoryCard(billData, billId) {
+  const card = document.createElement('div');
+  card.className = 'bill-history-card';
+  card.setAttribute('data-status', billData.status);
+  
+  const items = billData.items || [];
+  const createdDate = billData.createdAt?.toDate ? billData.createdAt.toDate().toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }) : 'Неизвестная дата';
+  
+  const statusText = billData.status === 'open' ? 'Открыт' : billData.status === 'paid' ? 'Оплачен' : 'Закрыт';
+  const statusIcon = billData.status === 'open' ? '🟢' : billData.status === 'paid' ? '✅' : '⚪';
+  
+  // Создаем краткий список коктейлей (первые 3)
+  const displayItems = items.slice(0, 3);
+  const moreCount = items.length - 3;
+  
+  const itemsHTML = displayItems.map(item => `
+    <div class="bill-history-item">
+      <span class="item-name">${item.cocktailName}</span>
+      <span class="item-price">${item.price} ₽</span>
+    </div>
+  `).join('');
+  
+  const moreText = moreCount > 0 ? `<div class="bill-history-more">+ еще ${moreCount} ${getItemsWord(moreCount)}</div>` : '';
+  
+  card.innerHTML = `
+    <div class="bill-history-header">
+      <div class="bill-history-date">${statusIcon} ${createdDate}</div>
+      <div class="bill-history-status">${statusText}</div>
+    </div>
+    
+    <div class="bill-history-items">
+      ${itemsHTML}
+      ${moreText}
+    </div>
+    
+    <div class="bill-history-footer">
+      <span class="bill-history-total-label">Итого:</span>
+      <span class="bill-history-total-amount">${billData.totalAmount} ₽</span>
+    </div>
+    
+    <button class="bill-history-details-btn" data-bill-id="${billId}">
+      <i class="fas fa-eye"></i> Подробнее
+    </button>
+  `;
+  
+  // Обработчик для кнопки "Подробнее"
+  const detailsBtn = card.querySelector('.bill-history-details-btn');
+  detailsBtn.addEventListener('click', () => {
+    showBillDetailsModal(billData, billId);
+  });
+  
+  return card;
+}
+
+// Функция для показа подробностей счета
+function showBillDetailsModal(billData, billId) {
+  const modal = document.createElement('div');
+  modal.className = 'modal bill-details-modal';
+  modal.style.display = 'block';
+  
+  const items = billData.items || [];
+  const createdDate = billData.createdAt?.toDate ? billData.createdAt.toDate().toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }) : 'Неизвестная дата';
+  
+  const statusText = billData.status === 'open' ? 'Открыт' : billData.status === 'paid' ? 'Оплачен' : 'Закрыт';
+  
+  // Создаем HTML для всех элементов
+  const itemsHTML = items.map(item => {
+    const statusIcon = getStatusIcon(item.status);
+    const statusText = getStatusText(item.status);
+    const priceDisplay = item.discount > 0 
+      ? `<span class="bill-item-original-price">${item.originalPrice} ₽</span> ${item.price} ₽`
+      : `${item.price} ₽`;
+    
+    return `
+      <div class="bill-item" data-status="${item.status}">
+        ${item.cocktailImage ? `<img src="${item.cocktailImage}" alt="${item.cocktailName}" class="bill-item-image">` : ''}
+        <div class="bill-item-info">
+          <div class="bill-item-name">${item.cocktailName}</div>
+          ${item.promoCode ? `<div class="bill-item-promo">🎫 ${item.promoCode} (-${item.promoDiscount}%)</div>` : ''}
+          <div class="bill-item-status">
+            <span class="status-icon">${statusIcon}</span>
+            <span class="status-text">${statusText}</span>
+          </div>
+        </div>
+        <div class="bill-item-price">${priceDisplay}</div>
+      </div>
+    `;
+  }).join('');
+  
+  modal.innerHTML = `
+    <div class="modal-content bill-content">
+      <span class="close">&times;</span>
+      <h3><i class="fas fa-file-invoice"></i> Счет #${billId.substring(0, 8)}</h3>
+      
+      <div class="bill-header">
+        <div class="bill-user-info">
+          <i class="fas fa-user"></i> ${billData.userName}
+        </div>
+        <div class="bill-items-count">
+          <i class="fas fa-calendar-alt"></i> ${createdDate}
+        </div>
+      </div>
+      
+      <div class="bill-status-badge ${billData.status}">
+        ${statusText}
+      </div>
+
+      <div class="bill-items">
+        ${itemsHTML}
+      </div>
+
+      <div class="bill-total">
+        <span>Итого:</span>
+        <span class="total-amount">${billData.totalAmount} ₽</span>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  document.body.classList.add('modal-open');
+  
+  // Обработчик закрытия
+  const closeBtn = modal.querySelector('.close');
+  closeBtn.addEventListener('click', () => {
+    modal.remove();
+    document.body.classList.remove('modal-open');
+  });
+  
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.remove();
+      document.body.classList.remove('modal-open');
+    }
+  });
 }
 
 // === КОНЕЦ СИСТЕМЫ СЧЕТОВ ===
