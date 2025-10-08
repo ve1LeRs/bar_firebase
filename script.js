@@ -2747,7 +2747,6 @@ async function loadBillHistory(userId) {
     // Загружаем ВСЕ счета пользователя (и открытые, и оплаченные)
     const billsSnapshot = await db.collection('bills')
       .where('userId', '==', userId)
-      .orderBy('createdAt', 'desc')
       .get();
     
     if (billsSnapshot.empty) {
@@ -2757,11 +2756,25 @@ async function loadBillHistory(userId) {
     
     billHistoryList.innerHTML = '';
     
+    // Собираем все счета и сортируем на клиенте
+    const bills = [];
     billsSnapshot.forEach(doc => {
-      const billData = doc.data();
-      const billId = doc.id;
-      
-      const billCard = createBillHistoryCard(billData, billId);
+      bills.push({
+        id: doc.id,
+        data: doc.data()
+      });
+    });
+    
+    // Сортируем по дате создания (новые сверху)
+    bills.sort((a, b) => {
+      const aTime = a.data.createdAt?.toDate ? a.data.createdAt.toDate().getTime() : 0;
+      const bTime = b.data.createdAt?.toDate ? b.data.createdAt.toDate().getTime() : 0;
+      return bTime - aTime;
+    });
+    
+    // Создаем карточки
+    bills.forEach(bill => {
+      const billCard = createBillHistoryCard(bill.data, bill.id);
       billHistoryList.appendChild(billCard);
     });
     
