@@ -1613,7 +1613,7 @@ body.dark-theme .cocktail-price:hover {
   border-radius: 18px;
   width: 90%;
   max-width: 500px;
-  max-height: 90vh;
+  max-height: 85vh;
   position: relative;
   box-shadow: 0 10px 40px rgba(0,0,0,0.2);
   text-align: center;
@@ -1622,7 +1622,6 @@ body.dark-theme .cocktail-price:hover {
   overflow-x: hidden;
   /* Фиксированные размеры для предотвращения сдвигов */
   box-sizing: border-box;
-  min-height: 300px;
   /* Плавная прокрутка */
   scroll-behavior: smooth;
 }
@@ -1770,6 +1769,14 @@ body.dark-theme .modal-content::-webkit-scrollbar-thumb:hover {
 .order-modal {
   max-width: 500px;
   padding: 2rem;
+  padding-bottom: 3rem;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.order-modal #confirmOrder {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
 }
 
 /* Секция оплаты */
@@ -4996,29 +5003,7 @@ body.dark-theme .telegram-info code {
   text-transform: none;
 }
 
-.notification-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(10px);
-}
-
-.notification-close:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: scale(1.05);
-}
+/* .notification-close стили перенесены ниже */
 
 /* Новые анимации для уведомлений */
 @keyframes notificationSlideIn {
@@ -5160,52 +5145,30 @@ body.dark-theme .telegram-info code {
 }
 
 .notification-close {
-  background: rgba(255, 255, 255, 0.25);
-  border: 2px solid rgba(255, 255, 255, 0.4);
+  background: transparent;
+  border: none;
   color: white;
   cursor: pointer;
-  padding: 0.8rem;
-  border-radius: 50%;
-  opacity: 0.9;
-  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  font-size: 1.2rem;
-  width: 48px;
-  height: 48px;
+  padding: 0;
+  border-radius: 0;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+  font-size: 1rem;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(15px);
-  box-shadow: 
-    0 6px 20px rgba(0, 0, 0, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  position: relative;
-  overflow: hidden;
-}
-
-.notification-close::before {
-  content: '';
   position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.6s ease;
-}
-
-.notification-close:hover::before {
-  left: 100%;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
 }
 
 .notification-close:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.35);
-  border-color: rgba(255, 255, 255, 0.6);
-  transform: scale(1.15) rotate(90deg);
+  transform: scale(1.1);
   color: white;
-  box-shadow: 
-    0 8px 25px rgba(0, 0, 0, 0.35),
-    inset 0 2px 0 rgba(255, 255, 255, 0.4);
 }
 
 /* Стили для прогресс-бара уведомлений */
@@ -5329,9 +5292,10 @@ body.dark-theme .notification-cocktail {
 }
 
 body.dark-theme .notification-close {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  border: none;
   color: white;
+  opacity: 0.7;
 }
 
 /* Светлая тема для уведомлений */
@@ -5375,9 +5339,10 @@ body:not(.dark-theme) .notification-cocktail {
 }
 
 body:not(.dark-theme) .notification-close {
-  background: rgba(45, 55, 72, 0.1);
-  border: 1px solid rgba(45, 55, 72, 0.2);
+  background: transparent;
+  border: none;
   color: #2d3748;
+  opacity: 0.6;
 }
 
 /* Специальные стили для разных статусов заказов */
@@ -5517,9 +5482,9 @@ body:not(.dark-theme) .notification-close {
   }
   
   .notification-close {
-    width: 42px;
-    height: 42px;
-    font-size: 1.1rem;
+    width: 20px;
+    height: 20px;
+    font-size: 0.9rem;
   }
 }
 
