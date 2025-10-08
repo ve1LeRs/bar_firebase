@@ -6041,27 +6041,33 @@ function resetStars() {
 stars.forEach((star, index) => {
   // Наведение мыши
   star.addEventListener('mouseenter', () => {
-    resetStars();
-    for (let i = 0; i <= index; i++) {
-      stars[i].classList.add('hovered');
+    if (selectedRating === 0) {
+      resetStars();
+      for (let i = 0; i <= index; i++) {
+        stars[i].classList.add('hovered');
+      }
     }
   });
   
-  // Клик по звезде
+  // Клик по звезде - заполняем желтым цветом
   star.addEventListener('click', () => {
     selectedRating = index + 1;
     resetStars();
+    
+    // Добавляем класс active с задержкой для каждой звезды
     for (let i = 0; i <= index; i++) {
-      stars[i].classList.add('active');
+      setTimeout(() => {
+        stars[i].classList.add('active');
+      }, i * 100); // Задержка 100ms между звездами
     }
     
     // Обновляем текст оценки
     const ratingTexts = [
-      'Ужасно',
-      'Плохо',
-      'Нормально',
-      'Хорошо',
-      'Отлично!'
+      '⭐ Ужасно',
+      '⭐⭐ Плохо', 
+      '⭐⭐⭐ Нормально',
+      '⭐⭐⭐⭐ Хорошо',
+      '⭐⭐⭐⭐⭐ Отлично!'
     ];
     ratingText.textContent = ratingTexts[selectedRating - 1];
     ratingText.classList.add('has-rating');
@@ -6069,7 +6075,7 @@ stars.forEach((star, index) => {
     // Включаем кнопку отправки
     submitRatingBtn.disabled = false;
     
-    console.log('⭐ Выбрана оценка:', selectedRating);
+    console.log('⭐ Выбрана оценка:', selectedRating, '- звезды заполняются желтым!');
   });
 });
 
