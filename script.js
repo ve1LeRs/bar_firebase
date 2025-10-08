@@ -5953,7 +5953,7 @@ console.log('⭐ Инициализация системы оценки кокт
 
 // Глобальные переменные для системы оценки
 let currentRatingData = null;
-let ratedOrders = new Set(); // Множество ID заказов, которые уже были оценены или пропущены
+let ratedCocktails = new Set(); // Множество названий коктейлей, которые пользователь уже оценивал
 // userOrdersListener уже объявлен выше (строка 1113)
 
 // Получаем элементы модального окна оценки
@@ -5961,22 +5961,36 @@ const ratingModal = document.getElementById('ratingModal');
 const ratingCocktailName = document.getElementById('ratingCocktailName');
 const starsContainer = document.getElementById('starsContainer');
 const ratingText = document.getElementById('ratingText');
-const ratingComment = document.getElementById('ratingComment');
-const submitRatingBtn = document.getElementById('submitRating');
-const skipRatingBtn = document.getElementById('skipRating');
 const stars = document.querySelectorAll('.star');
 
 // Переменная для хранения выбранного рейтинга
 let selectedRating = 0;
 
 // Функция для отслеживания заказов пользователя
-function startTrackingUserOrders(userId) {
+async function startTrackingUserOrders(userId) {
   console.log('🔍 Начинаем отслеживание заказов пользователя:', userId);
   
   // Отключаем предыдущий слушатель, если он есть
   if (userOrdersListener) {
     userOrdersListener();
     userOrdersListener = null;
+  }
+  
+  // Загружаем список коктейлей, которые пользователь уже оценивал
+  try {
+    const ratingsSnapshot = await db.collection('ratings')
+      .where('userId', '==', userId)
+      .get();
+    
+    ratedCocktails.clear();
+    ratingsSnapshot.forEach(doc => {
+      const rating = doc.data();
+      ratedCocktails.add(rating.cocktailName);
+    });
+    
+    console.log('📋 Коктейли уже оцененные пользователем:', Array.from(ratedCocktails));
+  } catch (error) {
+    console.error('❌ Ошибка загрузки оцененных коктейлей:', error);
   }
   
   // Устанавливаем слушатель для заказов текущего пользователя
@@ -5986,13 +6000,21 @@ function startTrackingUserOrders(userId) {
       snapshot.docChanges().forEach((change) => {
         const order = change.doc.data();
         const orderId = change.doc.id;
+        const cocktailName = order.name;
         
         // Проверяем, если заказ только что стал готов (статус "ready")
         if (change.type === 'modified' && order.status === 'ready') {
-          // Проверяем, не был ли этот заказ уже оценен или пропущен
-          if (!ratedOrders.has(orderId)) {
-            console.log('🍸 Заказ готов! Показываем окно оценки:', order.name);
-            showRatingModal(orderId, order.name);
+          // Проверяем, не оценивал ли пользователь этот коктейль раньше
+          if (!ratedCocktails.has(cocktailName)) {
+            console.log('🍸 Заказ готов! Показываем окно оценки:', cocktailName);
+            showRatingModal(orderId, cocktailName);
+          } else {
+            console.log('⏭️ Коктейль уже был оценен ранее:', cocktailName);
+            // Автоматически меняем статус на completed без оценки
+            db.collection('orders').doc(orderId).update({
+              status: 'completed',
+              rated: false
+            }).catch(err => console.error('Ошибка обновления статуса:', err));
           }
         }
       });
@@ -6037,9 +6059,6 @@ function showRatingModal(orderId, cocktailName) {
   // Обновляем текст
   ratingText.textContent = 'Выберите оценку';
   ratingText.classList.remove('has-rating');
-  
-  // Отключаем кнопку отправки
-  submitRatingBtn.disabled = true;
   
   // Показываем модальное окно
   ratingModal.style.display = 'flex';
@@ -6091,16 +6110,6 @@ stars.forEach((star, index) => {
     
     console.log('⭐ Выбрана оценка:', selectedRating, '- звезды заполняются желтым!');
     
-    // Скрываем кнопки
-    const ratingFooter = document.querySelector('.rating-footer');
-    if (ratingFooter) {
-      ratingFooter.style.opacity = '0';
-      ratingFooter.style.transform = 'translateY(20px)';
-      setTimeout(() => {
-        ratingFooter.style.display = 'none';
-      }, 300);
-    }
-    
     // Через 600ms (после заполнения всех звезд) автоматически сохраняем
     setTimeout(() => {
       saveRating();
@@ -6142,12 +6151,6 @@ async function saveRating() {
       return;
     }
     
-    // Отключаем кнопку отправки (если она видна)
-    if (submitRatingBtn) {
-      submitRatingBtn.disabled = true;
-      submitRatingBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Отправка...';
-    }
-    
     // Сохраняем оценку в коллекцию ratings
     const ratingData = {
       cocktailName: currentRatingData.cocktailName,
@@ -6162,8 +6165,8 @@ async function saveRating() {
     
     await db.collection('ratings').add(ratingData);
     
-    // Добавляем ID заказа в множество оцененных
-    ratedOrders.add(currentRatingData.orderId);
+    // Добавляем название коктейля в множество оцененных
+    ratedCocktails.add(currentRatingData.cocktailName);
     
     // Обновляем статус заказа на "completed"
     await db.collection('orders').doc(currentRatingData.orderId).update({
@@ -6173,6 +6176,7 @@ async function saveRating() {
     });
     
     console.log('✅ Оценка сохранена:', ratingData);
+    console.log('📋 Коктейль добавлен в оцененные:', currentRatingData.cocktailName);
     
     // Показываем экран благодарности с желтыми звездами
     showThankYouScreen(selectedRating);
@@ -6183,8 +6187,8 @@ async function saveRating() {
   } catch (error) {
     console.error('❌ Ошибка сохранения оценки:', error);
     showError('Ошибка сохранения оценки');
-    submitRatingBtn.disabled = false;
-    submitRatingBtn.innerHTML = '<i class="fas fa-check"></i> Отправить оценку';
+    // Закрываем окно оценки при ошибке
+    setTimeout(() => closeRatingModal(), 2000);
   }
 }
 
@@ -6254,25 +6258,7 @@ function showThankYouScreen(rating) {
   }, 4000);
 }
 
-// Функция для пропуска оценки
-function skipRating() {
-  if (currentRatingData) {
-    // Добавляем ID заказа в множество оцененных (чтобы не показывать снова)
-    ratedOrders.add(currentRatingData.orderId);
-    
-    // Обновляем статус заказа на "completed" без оценки
-    db.collection('orders').doc(currentRatingData.orderId).update({
-      status: 'completed',
-      rated: false
-    }).catch(error => {
-      console.error('❌ Ошибка обновления статуса заказа:', error);
-    });
-    
-    console.log('⏭️ Оценка пропущена');
-  }
-  
-  closeRatingModal();
-}
+// Функция skipRating удалена - кнопки больше нет
 
 // Функция для закрытия модального окна оценки
 function closeRatingModal() {
@@ -6299,31 +6285,9 @@ function closeRatingModal() {
   currentRatingData = null;
   selectedRating = 0;
   resetStars();
-  
-  // Возвращаем кнопки в исходное состояние
-  const ratingFooter = document.querySelector('.rating-footer');
-  if (ratingFooter) {
-    ratingFooter.style.display = 'flex';
-    ratingFooter.style.opacity = '1';
-    ratingFooter.style.transform = 'translateY(0)';
-  }
-  
-  if (submitRatingBtn) {
-    submitRatingBtn.disabled = false;
-    submitRatingBtn.innerHTML = '<i class="fas fa-check"></i> Отправить оценку';
-  }
 }
 
-// Обработчики событий для кнопок
-submitRatingBtn.addEventListener('click', saveRating);
-skipRatingBtn.addEventListener('click', skipRating);
-
-// Закрытие модального окна при клике вне его
-ratingModal.addEventListener('click', (e) => {
-  if (e.target === ratingModal) {
-    skipRating();
-  }
-});
+// Обработчики кнопок удалены - кнопок больше нет, оценка сохраняется автоматически при клике на звезду
 
 // Функция для получения среднего рейтинга коктейля
 async function getCocktailAverageRating(cocktailName) {
@@ -6400,6 +6364,6 @@ firebase.auth().onAuthStateChanged(async (user) => {
   } else {
     // Останавливаем отслеживание при выходе
     stopTrackingUserOrders();
-    ratedOrders.clear();
+    ratedCocktails.clear();
   }
 });
