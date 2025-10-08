@@ -7837,3 +7837,660 @@ body.dark-theme .purchase-item-name {
     justify-content: flex-end;
   }
 }
+
+/* ============================================
+   СЧАСТЛИВЫЕ ЧАСЫ (HAPPY HOURS)
+   ============================================ */
+
+/* Баннер счастливых часов */
+.happy-hour-banner {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+  border-radius: 16px;
+  padding: 1.5rem 2rem;
+  margin: 2rem 0;
+  box-shadow: 0 8px 32px rgba(238, 90, 36, 0.3);
+  animation: gentlePulse 2s ease-in-out infinite;
+}
+
+.happy-hour-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.happy-hour-icon {
+  font-size: 3rem;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.happy-hour-info {
+  flex: 1;
+}
+
+.happy-hour-title {
+  font-size: 1.8rem;
+  color: white;
+  margin: 0 0 0.5rem 0;
+  font-weight: 700;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.happy-hour-description {
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.95);
+  margin: 0;
+}
+
+.happy-hour-description span {
+  font-weight: 700;
+  font-size: 1.3rem;
+  color: #ffd700;
+}
+
+.happy-hour-timer {
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  text-align: center;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.timer-label {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.timer-countdown {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #ffd700;
+  font-family: 'Courier New', monospace;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Темная тема для баннера счастливых часов */
+body.dark-theme .happy-hour-banner {
+  background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%);
+  box-shadow: 0 8px 32px rgba(231, 76, 60, 0.4);
+}
+
+/* Happy Hours в админ-панели */
+.happy-hours-add-section,
+.happy-hours-list-section {
+  background: linear-gradient(135deg, #fff9f0 0%, #ffe8cc 100%);
+  border: 2px solid #ffa726;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.happy-hours-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.days-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 8px;
+}
+
+.days-selector label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #f5f5f5;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.days-selector label:hover {
+  background: #e0e0e0;
+}
+
+.days-selector input[type="checkbox"]:checked + label,
+.days-selector label:has(input[type="checkbox"]:checked) {
+  background: #ffa726;
+  color: white;
+}
+
+.happy-hour-item {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.happy-hour-item:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.happy-hour-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.happy-hour-name {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.happy-hour-discount {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+}
+
+.happy-hour-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.happy-hour-detail {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #555;
+}
+
+.happy-hour-detail i {
+  color: #ffa726;
+}
+
+.happy-hour-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.day-badge {
+  padding: 0.3rem 0.7rem;
+  background: #e3f2fd;
+  color: #1976d2;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.happy-hour-status {
+  display: inline-block;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.happy-hour-status.active {
+  background: #c8e6c9;
+  color: #2e7d32;
+}
+
+.happy-hour-status.inactive {
+  background: #ffcdd2;
+  color: #c62828;
+}
+
+/* Темная тема для счастливых часов в админке */
+body.dark-theme .happy-hours-add-section,
+body.dark-theme .happy-hours-list-section {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.2) 0%, rgba(255, 224, 178, 0.1) 100%);
+  border-color: #ff9800;
+}
+
+body.dark-theme .happy-hour-item {
+  background: #2c3e50;
+}
+
+body.dark-theme .happy-hour-name {
+  color: #ecf0f1;
+}
+
+body.dark-theme .days-selector {
+  background: #34495e;
+}
+
+body.dark-theme .days-selector label {
+  background: #2c3e50;
+  color: #ecf0f1;
+}
+
+body.dark-theme .happy-hour-detail {
+  color: #95a5a6;
+}
+
+/* ============================================
+   БОНУСНАЯ СИСТЕМА (CASHBACK)
+   ============================================ */
+
+/* Баланс бонусов в шапке */
+.bonus-balance {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.2rem;
+  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+  color: #2c3e50;
+  border-radius: 25px;
+  font-weight: 600;
+  font-size: 1rem;
+  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.bonus-balance:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 215, 0, 0.4);
+}
+
+.bonus-balance i {
+  font-size: 1.2rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+#bonusPoints {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+/* Темная тема для баланса бонусов */
+body.dark-theme .bonus-balance {
+  background: linear-gradient(135deg, #b48c5a 0%, #d4af37 100%);
+  color: #1a1a2e;
+}
+
+/* Секция бонусов в модальном окне заказа */
+.bonus-payment-section {
+  background: linear-gradient(135deg, #fff9e6 0%, #ffedcc 100%);
+  border: 2px solid #ffd700;
+  border-radius: 12px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.bonus-available {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.bonus-available span:last-child {
+  font-size: 1.2rem;
+  color: #d4af37;
+}
+
+.bonus-input-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.bonus-input-group input {
+  flex: 1;
+  padding: 0.8rem;
+  border: 2px solid #ffd700;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.bonus-input-group input:focus {
+  outline: none;
+  border-color: #d4af37;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
+}
+
+.apply-bonus-btn {
+  padding: 0.8rem 1.5rem;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  color: #2c3e50;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.apply-bonus-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+}
+
+.bonus-message {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.bonus-message.success {
+  background: #c8e6c9;
+  color: #2e7d32;
+}
+
+.bonus-message.error {
+  background: #ffcdd2;
+  color: #c62828;
+}
+
+/* Информация о начислении бонусов */
+.bonus-earn-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.8rem;
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border-left: 4px solid #4caf50;
+  border-radius: 8px;
+  margin-top: 1rem;
+  color: #2e7d32;
+  font-size: 0.95rem;
+}
+
+.bonus-earn-info i {
+  font-size: 1.2rem;
+}
+
+.bonus-earn-info strong {
+  color: #1b5e20;
+  font-size: 1.1rem;
+}
+
+/* Темная тема для бонусов в модальном окне */
+body.dark-theme .bonus-payment-section {
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(180, 140, 90, 0.1) 100%);
+  border-color: #b48c5a;
+}
+
+body.dark-theme .bonus-available {
+  color: #ecf0f1;
+}
+
+body.dark-theme .bonus-input-group input {
+  background: #2c3e50;
+  border-color: #b48c5a;
+  color: #ecf0f1;
+}
+
+body.dark-theme .apply-bonus-btn {
+  background: linear-gradient(135deg, #b48c5a 0%, #8b6f47 100%);
+  color: #ecf0f1;
+}
+
+body.dark-theme .bonus-earn-info {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.2) 0%, rgba(67, 160, 71, 0.1) 100%);
+  border-color: #4caf50;
+  color: #81c784;
+}
+
+body.dark-theme .bonus-earn-info strong {
+  color: #a5d6a7;
+}
+
+/* Бонусная система в админ-панели */
+.bonus-settings-section,
+.bonus-stats-section,
+.bonus-users-section {
+  background: linear-gradient(135deg, #fff9f0 0%, #ffe8cc 100%);
+  border: 2px solid #ffd700;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.bonus-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.bonus-settings-form small {
+  display: block;
+  margin-top: 0.3rem;
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.bonus-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.bonus-search {
+  position: relative;
+  margin-bottom: 1rem;
+}
+
+.bonus-search i {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #999;
+}
+
+.bonus-search input {
+  width: 100%;
+  padding: 0.8rem 1rem 0.8rem 3rem;
+  border: 2px solid #ffd700;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.bonus-user-item {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.bonus-user-item:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.bonus-user-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.bonus-user-name {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.bonus-user-points {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.1);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+}
+
+.bonus-user-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.bonus-user-detail {
+  display: flex;
+  flex-direction: column;
+}
+
+.bonus-user-detail strong {
+  color: #2c3e50;
+  margin-bottom: 0.3rem;
+}
+
+/* Темная тема для бонусной системы в админке */
+body.dark-theme .bonus-settings-section,
+body.dark-theme .bonus-stats-section,
+body.dark-theme .bonus-users-section {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(212, 175, 55, 0.1) 100%);
+  border-color: #b48c5a;
+}
+
+body.dark-theme .bonus-settings-form small {
+  color: #95a5a6;
+}
+
+body.dark-theme .bonus-user-item {
+  background: #2c3e50;
+}
+
+body.dark-theme .bonus-user-name,
+body.dark-theme .bonus-user-detail strong {
+  color: #ecf0f1;
+}
+
+body.dark-theme .bonus-user-details {
+  color: #95a5a6;
+}
+
+body.dark-theme .bonus-search input {
+  background: #2c3e50;
+  border-color: #b48c5a;
+  color: #ecf0f1;
+}
+
+/* Обновленные стили для модального окна заказа с новыми секциями */
+.discount-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem;
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  border-left: 4px solid #ff9800;
+  border-radius: 8px;
+  margin: 0.5rem 0;
+}
+
+.discount-label {
+  font-weight: 600;
+  color: #e65100;
+}
+
+.discount-value {
+  font-weight: 700;
+  color: #ff6b6b;
+  font-size: 1.1rem;
+}
+
+.total-price-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border-left: 4px solid #4caf50;
+  border-radius: 8px;
+  margin-top: 1rem;
+}
+
+.total-label {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2e7d32;
+}
+
+.total-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1b5e20;
+}
+
+/* Темная тема для информации о скидках и итоге */
+body.dark-theme .discount-info {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.2) 0%, rgba(255, 224, 178, 0.1) 100%);
+  border-color: #ff9800;
+}
+
+body.dark-theme .discount-label {
+  color: #ff9800;
+}
+
+body.dark-theme .total-price-info {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.2) 0%, rgba(67, 160, 71, 0.1) 100%);
+  border-color: #4caf50;
+}
+
+body.dark-theme .total-label {
+  color: #81c784;
+}
+
+body.dark-theme .total-value {
+  color: #a5d6a7;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .happy-hour-content {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .happy-hour-timer {
+    width: 100%;
+  }
+  
+  .timer-countdown {
+    font-size: 1.5rem;
+  }
+  
+  .bonus-balance {
+    font-size: 0.9rem;
+    padding: 0.6rem 1rem;
+  }
+  
+  .bonus-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .bonus-input-group {
+    flex-direction: column;
+  }
+  
+  .days-selector {
+    gap: 0.5rem;
+  }
+  
+  .days-selector label {
+    flex: 1;
+    min-width: calc(33.333% - 0.5rem);
+    justify-content: center;
+  }
+}

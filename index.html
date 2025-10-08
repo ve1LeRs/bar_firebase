@@ -30,6 +30,10 @@
         <button id="registerBtn"><i class="fas fa-user-plus"></i> Регистрация</button>
         <button id="myBillBtn" style="display:none"><i class="fas fa-receipt"></i> Мой счет</button>
         <button id="billHistoryBtn" style="display:none"><i class="fas fa-history"></i> История счетов</button>
+        <div id="bonusBalance" class="bonus-balance" style="display:none">
+          <i class="fas fa-gift"></i>
+          <span id="bonusPoints">0</span> баллов
+        </div>
         <button id="adminBtn" style="display:none"><i class="fas fa-cog"></i> Админка</button>
         <button id="logoutBtn" style="display:none"><i class="fas fa-sign-out-alt"></i> Выйти</button>
         <span id="userName" class="user-name"></span>
@@ -156,6 +160,8 @@
           <button class="tab-btn" data-tab="orders">Заказы</button>
           <button class="tab-btn" data-tab="stoplist">Стоп-лист</button>
           <button class="tab-btn" data-tab="promocodes">Промокоды</button>
+          <button class="tab-btn" data-tab="happyhours">Счастливые часы</button>
+          <button class="tab-btn" data-tab="bonuses">Бонусы</button>
           <button class="tab-btn" data-tab="purchases">Закупки</button>
           <button class="tab-btn" data-tab="monitoring">Мониторинг</button>
         </div>
@@ -306,6 +312,152 @@
             </div>
           </div>
         </div>
+        <div class="tab-content" id="happyhours-tab">
+          <h4><i class="fas fa-clock"></i> Управление "Счастливыми часами"</h4>
+          
+          <!-- Форма создания счастливых часов -->
+          <div class="happy-hours-add-section">
+            <h5><i class="fas fa-plus-circle"></i> Создать новые "Счастливые часы"</h5>
+            <div class="happy-hours-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="hhName">Название акции:</label>
+                  <input type="text" id="hhName" placeholder="Например: Вечерний Happy Hour" class="form-input">
+                </div>
+                <div class="form-group">
+                  <label for="hhDiscount">Размер скидки (%):</label>
+                  <input type="number" id="hhDiscount" placeholder="20" class="form-input" min="1" max="100">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="hhStartTime">Время начала:</label>
+                  <input type="time" id="hhStartTime" class="form-input">
+                </div>
+                <div class="form-group">
+                  <label for="hhEndTime">Время окончания:</label>
+                  <input type="time" id="hhEndTime" class="form-input">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="hhDays">Дни недели:</label>
+                  <div class="days-selector">
+                    <label><input type="checkbox" value="1" class="hh-day-checkbox"> Пн</label>
+                    <label><input type="checkbox" value="2" class="hh-day-checkbox"> Вт</label>
+                    <label><input type="checkbox" value="3" class="hh-day-checkbox"> Ср</label>
+                    <label><input type="checkbox" value="4" class="hh-day-checkbox"> Чт</label>
+                    <label><input type="checkbox" value="5" class="hh-day-checkbox"> Пт</label>
+                    <label><input type="checkbox" value="6" class="hh-day-checkbox"> Сб</label>
+                    <label><input type="checkbox" value="0" class="hh-day-checkbox"> Вс</label>
+                  </div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>
+                  <input type="checkbox" id="hhActive" checked>
+                  Активна
+                </label>
+              </div>
+              <button id="createHappyHourBtn" class="admin-btn primary">
+                <i class="fas fa-plus"></i> Создать акцию
+              </button>
+            </div>
+          </div>
+          
+          <!-- Список счастливых часов -->
+          <div class="happy-hours-list-section">
+            <h5><i class="fas fa-list"></i> Активные акции</h5>
+            <div id="happyHoursList" class="admin-list">
+              <!-- Список счастливых часов будет загружен сюда -->
+            </div>
+          </div>
+        </div>
+        
+        <div class="tab-content" id="bonuses-tab">
+          <h4><i class="fas fa-gift"></i> Управление бонусной системой</h4>
+          
+          <!-- Настройки бонусной системы -->
+          <div class="bonus-settings-section">
+            <h5><i class="fas fa-cog"></i> Настройки начисления бонусов</h5>
+            <div class="bonus-settings-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="bonusPercentage">Процент возврата (%):</label>
+                  <input type="number" id="bonusPercentage" placeholder="5" class="form-input" min="1" max="100">
+                  <small>Какой процент от суммы заказа начислять бонусами</small>
+                </div>
+                <div class="form-group">
+                  <label for="bonusMinOrder">Минимальная сумма заказа (₽):</label>
+                  <input type="number" id="bonusMinOrder" placeholder="300" class="form-input" min="0">
+                  <small>Минимальная сумма для начисления бонусов</small>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="bonusMaxUsage">Макс. % оплаты бонусами:</label>
+                  <input type="number" id="bonusMaxUsage" placeholder="50" class="form-input" min="1" max="100">
+                  <small>Максимальный процент от суммы, который можно оплатить бонусами</small>
+                </div>
+                <div class="form-group">
+                  <label for="bonusExpireDays">Срок действия бонусов (дни):</label>
+                  <input type="number" id="bonusExpireDays" placeholder="180" class="form-input" min="0">
+                  <small>0 = бессрочно</small>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>
+                  <input type="checkbox" id="bonusSystemActive" checked>
+                  Система активна
+                </label>
+              </div>
+              <button id="saveBonusSettingsBtn" class="admin-btn primary">
+                <i class="fas fa-save"></i> Сохранить настройки
+              </button>
+            </div>
+          </div>
+          
+          <!-- Статистика бонусов -->
+          <div class="bonus-stats-section">
+            <h5><i class="fas fa-chart-bar"></i> Статистика бонусной системы</h5>
+            <div class="bonus-stats">
+              <div class="stat-card">
+                <i class="fas fa-users"></i>
+                <div class="stat-info">
+                  <span class="stat-value" id="bonusUsersCount">0</span>
+                  <span class="stat-label">Пользователей с бонусами</span>
+                </div>
+              </div>
+              <div class="stat-card">
+                <i class="fas fa-coins"></i>
+                <div class="stat-info">
+                  <span class="stat-value" id="totalBonusPoints">0</span>
+                  <span class="stat-label">Всего бонусных баллов</span>
+                </div>
+              </div>
+              <div class="stat-card">
+                <i class="fas fa-chart-line"></i>
+                <div class="stat-info">
+                  <span class="stat-value" id="bonusIssuedToday">0</span>
+                  <span class="stat-label">Начислено сегодня</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Список пользователей с бонусами -->
+          <div class="bonus-users-section">
+            <h5><i class="fas fa-users"></i> Пользователи и их бонусы</h5>
+            <div class="bonus-search">
+              <i class="fas fa-search"></i>
+              <input type="text" id="bonusUserSearch" placeholder="Поиск по имени или телефону..." class="form-input">
+            </div>
+            <div id="bonusUsersList" class="admin-list">
+              <!-- Список пользователей с бонусами будет загружен сюда -->
+            </div>
+          </div>
+        </div>
+        
         <div class="tab-content" id="purchases-tab">
           <h4><i class="fas fa-shopping-cart"></i> Система закупок</h4>
           
@@ -545,6 +697,21 @@
         </div>
       </div>
     </div>
+    <!-- Баннер Счастливых часов -->
+    <div id="happyHourBanner" class="happy-hour-banner" style="display:none">
+      <div class="happy-hour-content">
+        <div class="happy-hour-icon">🎉</div>
+        <div class="happy-hour-info">
+          <h3 class="happy-hour-title" id="hhBannerTitle">Счастливые часы!</h3>
+          <p class="happy-hour-description">Скидка <span id="hhBannerDiscount">20%</span> на все коктейли</p>
+        </div>
+        <div class="happy-hour-timer">
+          <div class="timer-label">До конца акции:</div>
+          <div class="timer-countdown" id="hhBannerTimer">25:00</div>
+        </div>
+      </div>
+    </div>
+    
     <!-- Вкладки категорий коктейлей -->
     <div class="cocktails-categories">
         <div class="categories-tabs">
@@ -590,7 +757,46 @@
       <div class="payment-section">
         <div class="price-info">
           <span class="price-label">Цена:</span>
-          <span class="price-value" id="orderPrice">0 ₽</span>
+          <span class="price-value" id="orderOriginalPrice">0 ₽</span>
+        </div>
+        
+        <!-- Happy Hour скидка -->
+        <div id="orderHappyHourDiscount" class="discount-info" style="display:none">
+          <span class="discount-label">🎉 Счастливые часы (-<span id="orderHHPercent">20</span>%):</span>
+          <span class="discount-value">-<span id="orderHHAmount">0</span> ₽</span>
+        </div>
+        
+        <!-- Блок применения бонусов -->
+        <div id="orderBonusSection" class="bonus-payment-section" style="display:none">
+          <div class="bonus-available">
+            <span>💎 Доступно бонусов:</span>
+            <span id="orderAvailableBonuses">0</span>
+          </div>
+          <div class="bonus-input-group">
+            <input type="number" id="orderBonusInput" placeholder="Использовать бонусы" min="0" max="0">
+            <button id="applyBonusBtn" class="apply-bonus-btn">
+              <i class="fas fa-check"></i> Применить
+            </button>
+          </div>
+          <div id="orderBonusMessage" class="bonus-message"></div>
+        </div>
+        
+        <!-- Использованные бонусы -->
+        <div id="orderBonusDiscount" class="discount-info" style="display:none">
+          <span class="discount-label">💎 Оплата бонусами:</span>
+          <span class="discount-value">-<span id="orderBonusAmount">0</span> ₽</span>
+        </div>
+        
+        <!-- Итоговая сумма -->
+        <div class="total-price-info">
+          <span class="total-label">Итого к оплате:</span>
+          <span class="total-value" id="orderPrice">0 ₽</span>
+        </div>
+        
+        <!-- Начисление бонусов -->
+        <div id="orderBonusEarn" class="bonus-earn-info" style="display:none">
+          <i class="fas fa-gift"></i>
+          <span>Вы получите <strong id="orderBonusEarnAmount">0</strong> бонусов</span>
         </div>
       </div>
       
@@ -615,6 +821,8 @@
   <div id="champagneAnimation" class="champagne-animation"></div>
   <script src="setup-webhook.js"></script>
   <script src="script.js"></script>
+  <script src="happy-hours-and-bonuses.js"></script>
+  <script src="order-integration.js"></script>
   
   <!-- Инструкции для разработчиков -->
   <script>
