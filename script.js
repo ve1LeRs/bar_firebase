@@ -6161,20 +6161,36 @@ async function saveRating() {
 
 // Функция для показа экрана благодарности
 function showThankYouScreen(rating) {
+  console.log('🎉 Показываем экран благодарности с оценкой:', rating);
+  
   const ratingScreen = document.getElementById('ratingScreen');
   const thankYouScreen = document.getElementById('thankYouScreen');
   const thankYouStars = document.getElementById('thankYouStars');
   
+  console.log('📋 Элементы найдены:', {
+    ratingScreen: !!ratingScreen,
+    thankYouScreen: !!thankYouScreen,
+    thankYouStars: !!thankYouStars
+  });
+  
+  if (!ratingScreen || !thankYouScreen) {
+    console.error('❌ Элементы экранов не найдены!');
+    return;
+  }
+  
   // Скрываем экран оценки
   ratingScreen.classList.add('slide-out');
+  console.log('👈 Экран оценки скрывается');
   
   // Показываем желтые звезды в зависимости от оценки
   if (thankYouStars) {
     const stars = thankYouStars.querySelectorAll('.star-filled');
+    console.log('⭐ Найдено звезд для благодарности:', stars.length);
     stars.forEach((star, index) => {
       if (index < rating) {
         star.style.display = 'inline-block';
         star.classList.add('active');
+        console.log(`⭐ Звезда ${index + 1} показана и активна`);
       } else {
         star.style.display = 'none';
       }
@@ -6183,24 +6199,30 @@ function showThankYouScreen(rating) {
   
   // Через 500ms показываем экран благодарности
   setTimeout(() => {
+    console.log('👉 Показываем экран благодарности');
     ratingScreen.style.display = 'none';
+    thankYouScreen.style.display = 'block';
     thankYouScreen.classList.add('show');
   }, 500);
   
-  // Через 3 секунды начинаем плавное исчезновение
+  // Через 4 секунды начинаем плавное исчезновение
   setTimeout(() => {
+    console.log('✨ Начинаем плавное исчезновение');
     const modal = document.getElementById('ratingModal');
     const modalContent = modal.querySelector('.rating-modal-content');
     
-    // Добавляем классы для плавного исчезновения
-    modal.classList.add('fade-out');
-    modalContent.classList.add('fade-out');
-    
-    // Через 1 секунду полностью закрываем окно
-    setTimeout(() => {
-      closeRatingModal();
-    }, 1000);
-  }, 3000);
+    if (modal && modalContent) {
+      // Добавляем классы для плавного исчезновения
+      modal.classList.add('fade-out');
+      modalContent.classList.add('fade-out');
+      
+      // Через 1 секунду полностью закрываем окно
+      setTimeout(() => {
+        console.log('🚪 Закрываем окно оценки');
+        closeRatingModal();
+      }, 1000);
+    }
+  }, 4000);
 }
 
 // Функция для пропуска оценки
