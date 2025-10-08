@@ -28,15 +28,12 @@
       <div class="auth-buttons">
         <button id="loginBtn"><i class="fas fa-sign-in-alt"></i> Войти</button>
         <button id="registerBtn"><i class="fas fa-user-plus"></i> Регистрация</button>
-        <button id="myBillBtn" style="display:none"><i class="fas fa-receipt"></i> Мой счет</button>
-        <button id="billHistoryBtn" style="display:none"><i class="fas fa-history"></i> История счетов</button>
-        <div id="bonusBalance" class="bonus-balance" style="display:none">
-          <i class="fas fa-gift"></i>
-          <span id="bonusPoints">0</span> баллов
-        </div>
+        <button id="profileBtn" style="display:none" class="profile-btn">
+          <i class="fas fa-user-circle"></i> 
+          <span id="profileUserName">Профиль</span>
+          <span id="profileBonusPreview" class="bonus-preview">💎 0</span>
+        </button>
         <button id="adminBtn" style="display:none"><i class="fas fa-cog"></i> Админка</button>
-        <button id="logoutBtn" style="display:none"><i class="fas fa-sign-out-alt"></i> Выйти</button>
-        <span id="userName" class="user-name"></span>
       </div>
     </header>
     <!-- Модальное окно входа -->
@@ -104,6 +101,130 @@
         <span class="close">&times;</span>
         <h3><i class="fas fa-history"></i> История счетов</h3>
         <div id="billHistoryList" class="bills-history-list"></div>
+      </div>
+    </div>
+    <!-- Модальное окно профиля -->
+    <div id="profileModal" class="modal profile-modal">
+      <div class="modal-content profile-content">
+        <span class="close">&times;</span>
+        <div class="profile-header">
+          <div class="profile-avatar">
+            <i class="fas fa-user-circle"></i>
+          </div>
+          <div class="profile-info">
+            <h3 id="profileName">Имя пользователя</h3>
+            <p id="profilePhone">+7 (999) 999-99-99</p>
+          </div>
+        </div>
+        
+        <!-- Вкладки профиля -->
+        <div class="profile-tabs">
+          <button class="profile-tab active" data-profile-tab="bonuses">
+            <i class="fas fa-gift"></i>
+            <span>Бонусы</span>
+          </button>
+          <button class="profile-tab" data-profile-tab="bills">
+            <i class="fas fa-receipt"></i>
+            <span>Мой счет</span>
+          </button>
+          <button class="profile-tab" data-profile-tab="history">
+            <i class="fas fa-history"></i>
+            <span>История</span>
+          </button>
+          <button class="profile-tab" data-profile-tab="settings">
+            <i class="fas fa-cog"></i>
+            <span>Настройки</span>
+          </button>
+        </div>
+        
+        <!-- Содержимое вкладок -->
+        <div class="profile-content-wrapper">
+          <!-- Вкладка: Бонусы -->
+          <div class="profile-tab-content active" id="profile-bonuses-tab">
+            <div class="bonus-card-large">
+              <div class="bonus-icon-large">💎</div>
+              <div class="bonus-balance-large">
+                <span class="bonus-amount" id="profileBonusAmount">0</span>
+                <span class="bonus-label">бонусных баллов</span>
+              </div>
+            </div>
+            
+            <div class="bonus-stats-grid">
+              <div class="bonus-stat-item">
+                <i class="fas fa-coins"></i>
+                <div class="bonus-stat-info">
+                  <span class="bonus-stat-value" id="profileTotalEarned">0</span>
+                  <span class="bonus-stat-label">Всего начислено</span>
+                </div>
+              </div>
+              <div class="bonus-stat-item">
+                <i class="fas fa-shopping-cart"></i>
+                <div class="bonus-stat-info">
+                  <span class="bonus-stat-value" id="profileTotalSpent">0</span>
+                  <span class="bonus-stat-label">Всего потрачено</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="bonus-info-card">
+              <h4><i class="fas fa-info-circle"></i> Как работают бонусы?</h4>
+              <ul>
+                <li>За каждый заказ начисляется 5% бонусами</li>
+                <li>Бонусами можно оплатить до 50% заказа</li>
+                <li>Минимальная сумма для начисления: 300 ₽</li>
+              </ul>
+            </div>
+          </div>
+          
+          <!-- Вкладка: Мой счет -->
+          <div class="profile-tab-content" id="profile-bills-tab">
+            <div id="profileCurrentBill" class="profile-bill-section">
+              <!-- Текущий счет будет загружен сюда -->
+            </div>
+          </div>
+          
+          <!-- Вкладка: История -->
+          <div class="profile-tab-content" id="profile-history-tab">
+            <div id="profileBillHistory" class="profile-history-section">
+              <!-- История счетов будет загружена сюда -->
+            </div>
+          </div>
+          
+          <!-- Вкладка: Настройки -->
+          <div class="profile-tab-content" id="profile-settings-tab">
+            <div class="settings-section">
+              <h4><i class="fas fa-bell"></i> Уведомления</h4>
+              <div class="setting-item">
+                <label>
+                  <input type="checkbox" id="notifyOrders" checked>
+                  Уведомлять о статусе заказов
+                </label>
+              </div>
+              <div class="setting-item">
+                <label>
+                  <input type="checkbox" id="notifyBonuses" checked>
+                  Уведомлять о начислении бонусов
+                </label>
+              </div>
+            </div>
+            
+            <div class="settings-section">
+              <h4><i class="fas fa-palette"></i> Оформление</h4>
+              <div class="setting-item">
+                <label>Тема оформления</label>
+                <button id="profileThemeToggle" class="theme-toggle-btn">
+                  <i class="fas fa-moon"></i> Переключить тему
+                </button>
+              </div>
+            </div>
+            
+            <div class="settings-section danger-zone">
+              <button id="profileLogoutBtn" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Выйти из аккаунта
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <!-- Модальное окно уведомления -->
@@ -823,6 +944,7 @@
   <script src="script.js"></script>
   <script src="happy-hours-and-bonuses.js"></script>
   <script src="order-integration.js"></script>
+  <script src="profile.js"></script>
   
   <!-- Инструкции для разработчиков -->
   <script>

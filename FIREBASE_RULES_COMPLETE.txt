@@ -1,0 +1,91 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Пользователи - каждый может читать и писать свои данные
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Коктейли - все могут читать, писать только админы
+    match /cocktails/{cocktailId} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Заказы - читать могут все авторизованные, создавать - все, обновлять - только админы или владелец
+    match /orders/{orderId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        request.auth.uid == resource.data.userId
+      );
+      allow delete: if request.auth != null && 
+                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Стоп-лист - все могут читать, писать только авторизованные
+    match /stoplist/{itemId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Промокоды - читать все, писать только админы
+    match /promocodes/{promoCode} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Счета - каждый видит только свой
+    match /bills/{billId} {
+      allow read: if request.auth != null && 
+                  (resource.data.userId == request.auth.uid ||
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && 
+                    (resource.data.userId == request.auth.uid ||
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      allow delete: if request.auth != null && 
+                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Ингредиенты - читать все авторизованные, писать только админы
+    match /ingredients/{ingredientId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Счастливые часы - читать все, писать только админы
+    match /happyHours/{hhId} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Настройки бонусной системы - читать все, писать только админы
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Бонусные счета - каждый видит только свой
+    match /bonusAccounts/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null;
+    }
+    
+    // Транзакции бонусов - каждый видит только свои
+    match /bonusTransactions/{transId} {
+      allow read: if request.auth != null && 
+                  resource.data.userId == request.auth.uid;
+      allow write: if request.auth != null;
+    }
+  }
+}
+
