@@ -2428,6 +2428,23 @@ body.dark-theme .order-image-placeholder i {
   font-size: 1.1rem;
   color: #1a1a1a;
   margin-bottom: 0.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.item-quantity {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #c9a87c, #b08c5a);
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  min-width: 30px;
+  box-shadow: 0 2px 6px rgba(201, 168, 124, 0.3);
 }
 
 .bill-item-promo {
@@ -2569,6 +2586,11 @@ body.dark-theme .bill-item {
 
 body.dark-theme .bill-item-name {
   color: #f8f9fa;
+}
+
+body.dark-theme .item-quantity {
+  background: linear-gradient(135deg, #d4af37, #b08c5a);
+  color: #1a1a2e;
 }
 
 body.dark-theme .bill-item-promo {
