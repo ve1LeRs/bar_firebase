@@ -6049,8 +6049,8 @@ stars.forEach((star, index) => {
     }
   });
   
-  // Клик по звезде - заполняем желтым цветом
-  star.addEventListener('click', () => {
+  // Клик по звезде - заполняем желтым цветом и СРАЗУ сохраняем
+  star.addEventListener('click', async () => {
     selectedRating = index + 1;
     resetStars();
     
@@ -6072,10 +6072,22 @@ stars.forEach((star, index) => {
     ratingText.textContent = ratingTexts[selectedRating - 1];
     ratingText.classList.add('has-rating');
     
-    // Включаем кнопку отправки
-    submitRatingBtn.disabled = false;
-    
     console.log('⭐ Выбрана оценка:', selectedRating, '- звезды заполняются желтым!');
+    
+    // Скрываем кнопки
+    const ratingFooter = document.querySelector('.rating-footer');
+    if (ratingFooter) {
+      ratingFooter.style.opacity = '0';
+      ratingFooter.style.transform = 'translateY(20px)';
+      setTimeout(() => {
+        ratingFooter.style.display = 'none';
+      }, 300);
+    }
+    
+    // Через 600ms (после заполнения всех звезд) автоматически сохраняем
+    setTimeout(() => {
+      saveRating();
+    }, 600);
   });
 });
 
@@ -6102,9 +6114,11 @@ async function saveRating() {
   }
   
   try {
-    // Отключаем кнопку отправки
-    submitRatingBtn.disabled = true;
-    submitRatingBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Отправка...';
+    // Отключаем кнопку отправки (если она видна)
+    if (submitRatingBtn) {
+      submitRatingBtn.disabled = true;
+      submitRatingBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Отправка...';
+    }
     
     // Сохраняем оценку в коллекцию ratings
     const ratingData = {
@@ -6236,7 +6250,14 @@ function closeRatingModal() {
   ratingComment.value = '';
   resetStars();
   
-  // Возвращаем кнопку в исходное состояние
+  // Возвращаем кнопки в исходное состояние
+  const ratingFooter = document.querySelector('.rating-footer');
+  if (ratingFooter) {
+    ratingFooter.style.display = 'flex';
+    ratingFooter.style.opacity = '1';
+    ratingFooter.style.transform = 'translateY(0)';
+  }
+  
   if (submitRatingBtn) {
     submitRatingBtn.disabled = false;
     submitRatingBtn.innerHTML = '<i class="fas fa-check"></i> Отправить оценку';
