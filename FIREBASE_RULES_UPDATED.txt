@@ -1,0 +1,162 @@
+// ВАЖНО: Скопируйте эти правила в Firebase Console!
+// https://console.firebase.google.com/project/bar-menu-2/firestore/rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Правила для коллекции заказов
+    match /orders/{orderId} {
+      // Разрешить всем читать заказы
+      allow read: if true;
+      
+      // Разрешить всем создавать заказы
+      allow create: if true;
+      
+      // Разрешить обновлять заказы (для webhook сервера и клиентов)
+      allow update: if true;
+      
+      // Разрешить удалять заказы
+      allow delete: if true;
+    }
+    
+    // Правила для стоп-листа
+    match /stoplist/{itemId} {
+      // Разрешить всем читать стоп-лист
+      allow read: if true;
+      
+      // Разрешить всем изменять стоп-лист
+      allow write: if true;
+    }
+    
+    // Правила для коллекции счетов (bills)
+    match /bills/{billId} {
+      // Разрешить пользователям читать только свои счета
+      allow read: if request.auth != null && 
+                     (resource.data.userId == request.auth.uid || 
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      
+      // Разрешить создавать счета авторизованным пользователям
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      
+      // Разрешить обновлять свои счета или админам
+      allow update: if request.auth != null && 
+                       (resource.data.userId == request.auth.uid || 
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      
+      // Разрешить удалять только админам
+      allow delete: if request.auth != null && 
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Правила для коллекции оценок (ratings) - для будущего
+    match /ratings/{ratingId} {
+      // Разрешить всем читать оценки
+      allow read: if true;
+      
+      // Разрешить создавать оценки авторизованным пользователям
+      allow create: if request.auth != null;
+      
+      // Разрешить обновлять только свои оценки
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      // Разрешить удалять только свои оценки
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    
+    // Правила для коллекции промокодов (promocodes)
+    match /promocodes/{promoId} {
+      // Разрешить всем читать промокоды (для проверки)
+      allow read: if true;
+      
+      // Разрешить создавать, обновлять и удалять только админам
+      allow create, update, delete: if request.auth != null && 
+                                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Правила для коллекции ингредиентов (ingredients) - Система закупок
+    match /ingredients/{ingredientId} {
+      // Разрешить читать только админам
+      allow read: if request.auth != null && 
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      
+      // Разрешить создавать, обновлять и удалять только админам
+      allow create, update, delete: if request.auth != null && 
+                                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // ============================================
+    // НОВЫЕ ПРАВИЛА: Счастливые часы и Бонусы
+    // ============================================
+    
+    // Правила для коллекции "Счастливые часы" (happyHours)
+    match /happyHours/{hhId} {
+      // Разрешить всем читать счастливые часы (для отображения баннера)
+      allow read: if true;
+      
+      // Разрешить создавать, обновлять и удалять только админам
+      allow create, update, delete: if request.auth != null && 
+                                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Правила для настроек бонусной системы (settings)
+    match /settings/{docId} {
+      // Разрешить всем читать настройки (для проверки условий)
+      allow read: if true;
+      
+      // Разрешить создавать и обновлять только админам
+      allow create, update: if request.auth != null && 
+                               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      
+      // Разрешить удалять только админам
+      allow delete: if request.auth != null && 
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Правила для бонусных счетов пользователей (bonusAccounts)
+    match /bonusAccounts/{userId} {
+      // Разрешить пользователям читать только свой бонусный счет
+      // Админы могут читать все счета
+      allow read: if request.auth != null && 
+                     (request.auth.uid == userId || 
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      
+      // Разрешить создавать и обновлять свой бонусный счет
+      // Это нужно для автоматического начисления и списания бонусов
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+      
+      // Разрешить удалять только админам
+      allow delete: if request.auth != null && 
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Правила для транзакций бонусов (bonusTransactions)
+    match /bonusTransactions/{transId} {
+      // Разрешить пользователям читать только свои транзакции
+      // Админы могут читать все транзакции
+      allow read: if request.auth != null && 
+                     (resource.data.userId == request.auth.uid || 
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      
+      // Разрешить создавать транзакции авторизованным пользователям
+      // Это нужно для записи истории начисления/списания
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      
+      // Запретить обновление транзакций (история не должна меняться)
+      allow update: if false;
+      
+      // Разрешить удалять только админам
+      allow delete: if request.auth != null && 
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Правила для категорий и других коллекций
+    match /{document=**} {
+      // Разрешить всем читать
+      allow read: if true;
+      
+      // Разрешить всем записывать
+      allow write: if true;
+    }
+  }
+}
+
