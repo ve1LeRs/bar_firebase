@@ -432,10 +432,11 @@ console.log('🔍 Инициализация DOM элементов...');
 const themeToggle = document.getElementById('themeToggle');
 const loginBtn = document.getElementById('loginBtn');
 const registerBtn = document.getElementById('registerBtn');
+const adminBtn = document.getElementById('adminBtn');
+// Старые элементы (если они еще есть для совместимости)
 const logoutBtn = document.getElementById('logoutBtn');
 const myBillBtn = document.getElementById('myBillBtn');
 const billHistoryBtn = document.getElementById('billHistoryBtn');
-const adminBtn = document.getElementById('adminBtn');
 const userName = document.getElementById('userName');
 const authModal = document.getElementById('authModal');
 const registerModal = document.getElementById('registerModal');
@@ -589,24 +590,25 @@ auth.onAuthStateChanged(async user => {
   if (user) {
     loginBtn.style.display = 'none';
     registerBtn.style.display = 'none';
-    myBillBtn.style.display = 'inline-block';
-    billHistoryBtn.style.display = 'inline-block';
-    logoutBtn.style.display = 'inline-block';
+    
+    // Скрываем старые кнопки (если они еще есть)
+    if (myBillBtn) myBillBtn.style.display = 'none';
+    if (billHistoryBtn) billHistoryBtn.style.display = 'none';
+    if (logoutBtn) logoutBtn.style.display = 'none';
+    if (userName) {
+      userName.textContent = '';
+      userName.style.display = 'none';
+    }
+    
     // Проверяем, является ли пользователь администратором
     const userDoc = await db.collection('users').doc(user.uid).get();
     if (userDoc.exists) {
       const userData = userDoc.data();
       isAdmin = userData.role === 'admin';
-      if (isAdmin) {
+      if (isAdmin && adminBtn) {
         adminBtn.style.display = 'inline-block';
       }
     }
-    // 👇 Если displayName пуст — пробуем обновить данные
-    if (!user.displayName) {
-      await user.reload();
-    }
-    userName.textContent = user.displayName || "Гость";
-    userName.style.display = 'block';
     
     // Инициализируем глобальный listener для отслеживания изменений статусов
     console.log('🔄 Инициализируем listener для пользователя:', user.uid);
@@ -614,12 +616,16 @@ auth.onAuthStateChanged(async user => {
   } else {
     loginBtn.style.display = 'inline-block';
     registerBtn.style.display = 'inline-block';
-    myBillBtn.style.display = 'none';
-    billHistoryBtn.style.display = 'none';
-    adminBtn.style.display = 'none';
-    logoutBtn.style.display = 'none';
-    userName.textContent = '';
-    userName.style.display = 'none';
+    
+    // Скрываем старые элементы, если они есть
+    if (myBillBtn) myBillBtn.style.display = 'none';
+    if (billHistoryBtn) billHistoryBtn.style.display = 'none';
+    if (adminBtn) adminBtn.style.display = 'none';
+    if (logoutBtn) logoutBtn.style.display = 'none';
+    if (userName) {
+      userName.textContent = '';
+      userName.style.display = 'none';
+    }
     isAdmin = false;
     
     // Отключаем listener при выходе пользователя
