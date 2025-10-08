@@ -6913,35 +6913,30 @@ body.dark-theme .promo-detail-value {
   position: absolute;
   top: 15px;
   left: 15px;
-  background: rgba(255, 215, 0, 0.95);
-  backdrop-filter: blur(10px);
-  padding: 0.5rem 0.9rem;
-  border-radius: 25px;
+  background: rgba(201, 168, 124, 0.9);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  font-size: 0.9rem;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.4);
-  z-index: 5;
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  transition: all 0.3s ease;
-}
-
-.cocktail-rating:hover {
-  transform: scale(1.1);
-  box-shadow: 0 6px 20px rgba(255, 215, 0, 0.6);
+  gap: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 40;
+  pointer-events: none;
 }
 
 .cocktail-rating i {
-  color: white;
-  font-size: 1rem;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  color: #ffd700;
+  font-size: 0.9rem;
 }
 
 .cocktail-rating .rating-value {
-  font-weight: 700;
-  font-size: 1.1rem;
+  font-weight: 600;
+  font-size: 0.95rem;
   color: white;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 /* Анимация появления рейтинга */
@@ -7005,12 +7000,12 @@ body.dark-theme .rating-btn-skip:hover {
 }
 
 body.dark-theme .cocktail-rating {
-  background: rgba(255, 215, 0, 0.9);
-  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(212, 175, 55, 0.9);
+  color: #1a1a2e;
 }
 
 body.dark-theme .cocktail-rating i {
-  color: white;
+  color: #ffd700;
 }
 
 body.dark-theme .cocktail-rating .rating-value {
@@ -7248,15 +7243,16 @@ body.dark-theme .thank-you-message {
   .cocktail-rating {
     top: 10px;
     left: 10px;
-    padding: 0.4rem 0.7rem;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
   }
 
   .cocktail-rating i {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
   }
 
   .cocktail-rating .rating-value {
-    font-size: 1rem;
+    font-size: 0.9rem;
   }
   
   .thank-you-emoji {
