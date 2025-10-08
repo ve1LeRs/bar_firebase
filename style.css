@@ -1488,13 +1488,56 @@ header h1::after {
   font-style: italic;
   color: #a18c6a;
   margin-top: 0.4rem;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
   line-height: 1.5;
   letter-spacing: 0.5px;
   transition: color 0.6s ease;
   /* Фиксированные размеры для предотвращения сдвигов */
   min-height: 1.5rem;
   box-sizing: border-box;
+}
+
+/* Цена коктейля в карточке */
+.cocktail-price {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #8e6f42;
+  margin: 1rem 0;
+  padding: 0.8rem 1.2rem;
+  background: linear-gradient(135deg, rgba(142, 111, 66, 0.1) 0%, rgba(107, 92, 71, 0.1) 100%);
+  border-radius: 12px;
+  border: 2px solid rgba(142, 111, 66, 0.2);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(142, 111, 66, 0.1);
+}
+
+.cocktail-price i {
+  font-size: 1.2rem;
+}
+
+.cocktail-price:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(142, 111, 66, 0.2);
+  background: linear-gradient(135deg, rgba(142, 111, 66, 0.15) 0%, rgba(107, 92, 71, 0.15) 100%);
+}
+
+/* Темная тема для цены в карточке */
+body.dark-theme .cocktail-price {
+  color: #ffd700;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.15) 0%, rgba(255, 184, 0, 0.15) 100%);
+  border-color: rgba(255, 215, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.2);
+}
+
+body.dark-theme .cocktail-price:hover {
+  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(255, 184, 0, 0.2) 100%);
 }
 
 .order-btn {

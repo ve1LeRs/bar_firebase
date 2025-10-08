@@ -706,8 +706,9 @@ async function loadCocktails() {
           <!-- ИСПРАВЛЕНО: Улучшена проверка на "Состав не указан" -->
           <p class="ingredients">${(typeof cocktail.ingredients === 'string' && cocktail.ingredients.trim()) || 'Состав не указан'}</p>
           <p class="mood">${cocktail.mood || ''}</p>
+          ${cocktail.price ? `<div class="cocktail-price"><i class="fas fa-ruble-sign"></i> ${cocktail.price} ₽</div>` : ''}
           ${!isInStoplist ? `
-            <button class="order-btn" data-name="${cocktail.name}">
+            <button class="order-btn" data-name="${cocktail.name}" data-price="${cocktail.price || 500}">
               <i class="fas fa-glass-martini-alt"></i> Заказать
             </button>
           ` : `
@@ -1544,6 +1545,10 @@ addCocktailBtn?.addEventListener('click', () => {
   if (cocktailIngredients) cocktailIngredients.value = '';
   if (cocktailMood) cocktailMood.value = '';
   if (cocktailAlcohol) cocktailAlcohol.value = '';
+  
+  const cocktailPrice = document.getElementById('cocktailPrice');
+  if (cocktailPrice) cocktailPrice.value = '';
+  
   if (cocktailCategory) cocktailCategory.value = '';
   if (previewImage) {
     previewImage.style.display = 'none';
@@ -1770,6 +1775,10 @@ function editCocktail(id) {
     if (cocktailIngredients) cocktailIngredients.value = cocktail.ingredients || '';
     if (cocktailMood) cocktailMood.value = cocktail.mood || '';
     if (cocktailAlcohol) cocktailAlcohol.value = cocktail.alcohol || '';
+    
+    const cocktailPrice = document.getElementById('cocktailPrice');
+    if (cocktailPrice) cocktailPrice.value = cocktail.price || 500;
+    
     if (cocktailCategory) cocktailCategory.value = cocktail.category || 'signature';
 
     if (cocktail.image) {
