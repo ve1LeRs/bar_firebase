@@ -24,7 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const image = newButton.getAttribute('data-image');
       const price = parseInt(newButton.getAttribute('data-price')) || 0;
       
-      if (!currentUser) {
+      const user = firebase.auth().currentUser;
+      if (!user) {
         showError('Пожалуйста, войдите в систему для заказа');
         return;
       }
@@ -124,8 +125,9 @@ async function updateOrderDisplay(name, image, originalPrice) {
   }
   
   // Показываем секцию бонусов, если пользователь авторизован
-  if (currentUser && orderBonusSectionEl) {
-    const userBonuses = await getUserBonusBalance(currentUser.uid);
+  const user = firebase.auth().currentUser;
+  if (user && orderBonusSectionEl) {
+    const userBonuses = await getUserBonusBalance(user.uid);
     
     if (userBonuses > 0) {
       orderBonusSectionEl.style.display = 'block';
@@ -260,9 +262,14 @@ if (originalConfirmOrder) {
     newConfirmOrder.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Отправляем заказ...';
     
     try {
+      const user = firebase.auth().currentUser;
+      if (!user) {
+        throw new Error('Необходима авторизация');
+      }
+      
       // Если используются бонусы - списываем их
-      if (orderBonusAmount > 0 && currentUser) {
-        const success = await spendBonusPoints(currentUser.uid, orderBonusAmount, `pending_${Date.now()}`);
+      if (orderBonusAmount > 0) {
+        const success = await spendBonusPoints(user.uid, orderBonusAmount, `pending_${Date.now()}`);
         if (!success) {
           throw new Error('Не удалось списать бонусы');
         }
@@ -276,8 +283,8 @@ if (originalConfirmOrder) {
         name: currentOrder.name,
         cocktailId: currentOrder.cocktailId,
         cocktailImage: currentOrder.image || '',
-        user: currentUser.displayName || 'Гость',
-        userId: currentUser.uid,
+        user: user.displayName || 'Гость',
+        userId: user.uid,
         status: 'confirmed',
         queuePosition: queuePosition,
         originalPrice: orderOriginalPrice,
@@ -293,12 +300,12 @@ if (originalConfirmOrder) {
       console.log('✅ Заказ создан:', docRef.id);
       
       // Начисляем бонусы (если применимо)
-      if (currentUser && orderFinalPrice > 0) {
-        await awardBonusPoints(currentUser.uid, orderFinalPrice, docRef.id);
+      if (orderFinalPrice > 0) {
+        await awardBonusPoints(user.uid, orderFinalPrice, docRef.id);
       }
       
       // Добавляем заказ в текущий счет пользователя
-      await addOrderToBill(currentUser.uid, {
+      await addOrderToBill(user.uid, {
         ...orderData,
         orderId: docRef.id,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
@@ -381,9 +388,10 @@ if (typeof addOrderToBill === 'undefined') {
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
       } else {
+        const user = firebase.auth().currentUser;
         await db.collection('bills').add({
           userId: userId,
-          userName: currentUser.displayName || 'Гость',
+          userName: user ? user.displayName || 'Гость' : 'Гость',
           items: [orderData],
           totalAmount: orderData.finalPrice,
           originalTotal: orderData.finalPrice,

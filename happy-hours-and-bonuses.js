@@ -408,9 +408,10 @@ async function updateBonusDisplay() {
   const bonusBalanceEl = document.getElementById('bonusBalance');
   const bonusPointsEl = document.getElementById('bonusPoints');
   
-  if (!currentUser || !bonusBalanceEl) return;
+  const user = firebase.auth().currentUser;
+  if (!user || !bonusBalanceEl) return;
   
-  const balance = await getUserBonusBalance(currentUser.uid);
+  const balance = await getUserBonusBalance(user.uid);
   
   if (bonusPointsEl) bonusPointsEl.textContent = balance;
   bonusBalanceEl.style.display = 'flex';
@@ -474,7 +475,8 @@ async function awardBonusPoints(userId, orderAmount, orderId) {
     console.log(`✅ Начислено ${bonusPoints} бонусов пользователю ${userId}`);
     
     // Обновляем отображение
-    if (currentUser && currentUser.uid === userId) {
+    const user = firebase.auth().currentUser;
+    if (user && user.uid === userId) {
       updateBonusDisplay();
     }
     
@@ -523,7 +525,8 @@ async function spendBonusPoints(userId, bonusAmount, orderId) {
     console.log(`✅ Списано ${bonusAmount} бонусов у пользователя ${userId}`);
     
     // Обновляем отображение
-    if (currentUser && currentUser.uid === userId) {
+    const user = firebase.auth().currentUser;
+    if (user && user.uid === userId) {
       updateBonusDisplay();
     }
     
