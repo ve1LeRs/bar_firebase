@@ -4874,9 +4874,20 @@ button.loading i.fa-spinner {
   header h1 {
     font-size: 2.5rem;
   }
+  
+  .cocktails-grid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    padding: 1rem 0.5rem 3rem;
+  }
 
   .image-container {
-    height: 300px;
+    height: 280px;
+  }
+  
+  .image-container img {
+    object-fit: cover;
+    object-position: center;
   }
 
   .cocktail-card h2 {
@@ -9089,9 +9100,9 @@ body.dark-theme .danger-zone {
   }
   
   .profile-btn span#profileUserName {
-    display: inline;
+    display: inline !important;
     font-size: 0.85rem;
-    max-width: 80px;
+    max-width: 70px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -9163,8 +9174,10 @@ body.dark-theme .danger-zone {
   
   .profile-content-wrapper {
     padding: 0.8rem;
-    max-height: calc(100vh - 220px);
+    padding-bottom: 4rem;
+    max-height: calc(100vh - 180px);
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   
   .bonus-card-large {
@@ -9203,6 +9216,36 @@ body.dark-theme .danger-zone {
   
   .profile-bill-items-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Оптимизация изображений коктейлей для мобильных */
+@media (max-width: 768px) {
+  .cocktails-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2.5rem;
+  }
+  
+  .image-container {
+    height: 320px;
+  }
+  
+  .image-container img {
+    object-fit: cover;
+    object-position: center center;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .cocktails-grid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  
+  .image-container {
+    height: 300px;
   }
 }
 

@@ -15,6 +15,12 @@ const profileCloseBtn = profileModal?.querySelector('.close');
 profileCloseBtn?.addEventListener('click', () => {
   profileModal.style.display = 'none';
   document.body.classList.remove('modal-open');
+  
+  // Отключаем listener при закрытии
+  if (profileBillListener) {
+    profileBillListener();
+    profileBillListener = null;
+  }
 });
 
 // Функция открытия профиля
@@ -88,8 +94,107 @@ async function loadProfileBonuses(userId) {
   }
 }
 
-// Загрузка текущего счета в профиле
+// Real-time listener для текущего счета
+let profileBillListener = null;
+
+// Загрузка текущего счета в профиле с real-time обновлением
 async function loadProfileCurrentBill(userId) {
+  try {
+    const profileCurrentBill = document.getElementById('profileCurrentBill');
+    if (!profileCurrentBill) return;
+    
+    // Отключаем старый listener если есть
+    if (profileBillListener) {
+      profileBillListener();
+      profileBillListener = null;
+    }
+    
+    // Устанавливаем real-time listener
+    profileBillListener = db.collection('bills')
+      .where('userId', '==', userId)
+      .where('status', '==', 'open')
+      .limit(1)
+      .onSnapshot(snapshot => {
+        if (snapshot.empty) {
+          profileCurrentBill.innerHTML = `
+            <div class="no-bill-message">
+              <i class="fas fa-receipt"></i>
+              <p>У вас пока нет открытого счета</p>
+              <p class="hint">Сделайте заказ, чтобы начать</p>
+            </div>
+          `;
+          return;
+        }
+        
+        const billDoc = snapshot.docs[0];
+        const billData = billDoc.data();
+        const billId = billDoc.id;
+        
+        renderProfileBill(billData, billId);
+      });
+    
+  } catch (error) {
+    console.error('❌ Ошибка загрузки текущего счета:', error);
+  }
+}
+
+// Рендеринг счета в профиле
+function renderProfileBill(billData, billId) {
+  const profileCurrentBill = document.getElementById('profileCurrentBill');
+  if (!profileCurrentBill) return;
+  
+  const billItems = billData.items || [];
+  const totalAmount = billData.totalAmount || 0;
+  
+  let itemsHTML = '';
+  billItems.forEach(item => {
+    const statusIcon = getOrderStatusIcon(item.status);
+    const statusText = getOrderStatusText(item.status);
+    const statusClass = `status-${item.status}`;
+    const itemPrice = item.finalPrice || item.price || 0;
+    
+    itemsHTML += `
+      <div class="profile-bill-item">
+        <div class="profile-bill-item-main">
+          ${item.cocktailImage ? `<img src="${item.cocktailImage}" alt="${item.cocktailName}" class="profile-bill-item-image">` : '<div class="profile-bill-item-placeholder"><i class="fas fa-cocktail"></i></div>'}
+          <div class="profile-bill-item-info">
+            <div class="profile-bill-item-name">${item.cocktailName}</div>
+            <div class="profile-bill-item-price">${itemPrice} ₽</div>
+          </div>
+        </div>
+        <div class="profile-bill-item-status ${statusClass}">
+          <span class="status-icon">${statusIcon}</span>
+          <span class="status-text">${statusText}</span>
+        </div>
+      </div>
+    `;
+  });
+  
+  profileCurrentBill.innerHTML = `
+    <div class="current-bill-card">
+      <div class="bill-header">
+        <h4><i class="fas fa-receipt"></i> Текущий счет</h4>
+        <div class="bill-total">${totalAmount} ₽</div>
+      </div>
+      <div class="profile-bill-items-grid">
+        ${itemsHTML}
+      </div>
+      <div class="bill-summary">
+        <div class="bill-summary-row">
+          <span>Количество позиций:</span>
+          <strong>${billItems.length}</strong>
+        </div>
+        <div class="bill-summary-row total">
+          <span>Итого к оплате:</span>
+          <strong>${totalAmount} ₽</strong>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Старая функция - переименована
+async function _loadProfileCurrentBill_OLD(userId) {
   try {
     const billsSnapshot = await db.collection('bills')
       .where('userId', '==', userId)
