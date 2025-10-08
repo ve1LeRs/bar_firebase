@@ -1608,18 +1608,56 @@ body.dark-theme .cocktail-price:hover {
 
 .modal-content {
   background: white;
-  margin: 10% auto;
+  margin: 5% auto;
   padding: 2.5rem;
   border-radius: 18px;
   width: 90%;
   max-width: 500px;
+  max-height: 90vh;
   position: relative;
   box-shadow: 0 10px 40px rgba(0,0,0,0.2);
   text-align: center;
   animation: modalAppear 0.4s ease;
+  overflow-y: auto;
+  overflow-x: hidden;
   /* Фиксированные размеры для предотвращения сдвигов */
   box-sizing: border-box;
   min-height: 300px;
+  /* Плавная прокрутка */
+  scroll-behavior: smooth;
+}
+
+/* Стилизация скроллбара для модальных окон */
+.modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: rgba(142, 111, 66, 0.4);
+  border-radius: 10px;
+  transition: background 0.3s ease;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(142, 111, 66, 0.6);
+}
+
+/* Темная тема для скроллбара */
+body.dark-theme .modal-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+body.dark-theme .modal-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 215, 0, 0.3);
+}
+
+body.dark-theme .modal-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 215, 0, 0.5);
 }
 
 @keyframes modalAppear {
@@ -5488,14 +5526,15 @@ body:not(.dark-theme) .notification-close {
 /* ============= Управление модальными окнами ============= */
 
 /* Класс для блокировки прокрутки основного контента */
-body.modal-open {
-  overflow: hidden;
-  /* Для мобильных браузеров, которые могут игнорировать overflow: hidden */
-  position: fixed;
-  width: 100%;
-  /* Сохраняем позицию прокрутки */
-  top: -var(--scroll-y);
-  left: 0;
+/* Блокировка скролла body только на мобильных устройствах */
+@media (max-width: 768px) {
+  body.modal-open {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    top: -var(--scroll-y);
+    left: 0;
+  }
 }
 
 /* Убедимся, что модальные окна корректно перекрывают друг друга */
