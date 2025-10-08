@@ -1,0 +1,33 @@
+{
+  "name": "asafiev-bar-webhook",
+  "version": "1.0.0",
+  "description": "Webhook сервер для обработки Telegram callback и синхронизации с Firebase",
+  "main": "webhook-server.js",
+  "scripts": {
+    "start": "node webhook-server.js",
+    "dev": "nodemon webhook-server.js",
+    "serve": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "telegram",
+    "webhook",
+    "firebase",
+    "bar",
+    "orders"
+  ],
+  "author": "Asafiev Bar",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^4.18.2",
+    "firebase-admin": "^11.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
