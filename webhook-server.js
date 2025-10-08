@@ -515,8 +515,20 @@ app.delete('/cleanup-test-orders', async (req, res) => {
 });
 
 // Отправка списка закупок в Telegram
-app.options('/send-purchase-list', cors()); // Явная обработка preflight
+app.options('/send-purchase-list', (req, res) => {
+  // Явная обработка CORS preflight
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.status(200).end();
+});
+
 app.post('/send-purchase-list', async (req, res) => {
+  // Устанавливаем CORS заголовки
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  
   try {
     console.log('🛒 Получен запрос на отправку списка закупок...');
     console.log('📨 Origin:', req.headers.origin);
