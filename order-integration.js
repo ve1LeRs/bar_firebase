@@ -8,68 +8,8 @@ let orderBonusAmount = 0;
 let orderOriginalPrice = 0;
 let orderFinalPrice = 0;
 
-// Обработчик открытия модального окна заказа - обновляем логику
+// Обработчик применения бонусов
 document.addEventListener('DOMContentLoaded', () => {
-  // Переопределяем обработчик кнопок "Заказать"
-  const orderButtons = document.querySelectorAll('.order-btn');
-  
-  orderButtons.forEach(button => {
-    // Удаляем старые обработчики
-    const newButton = button.cloneNode(true);
-    button.parentNode.replaceChild(newButton, button);
-    
-    newButton.addEventListener('click', async (e) => {
-      const cocktailId = newButton.getAttribute('data-id');
-      const name = newButton.getAttribute('data-name');
-      const image = newButton.getAttribute('data-image');
-      const price = parseInt(newButton.getAttribute('data-price')) || 0;
-      
-      const user = firebase.auth().currentUser;
-      if (!user) {
-        showError('Пожалуйста, войдите в систему для заказа');
-        return;
-      }
-      
-      // Проверяем стоп-лист
-      const stoplistDoc = await db.collection('stoplist').doc(cocktailId).get();
-      if (stoplistDoc.exists) {
-        const stoplistData = stoplistDoc.data();
-        showError(`😔 К сожалению, "${name}" временно недоступен. ${stoplistData.reason || ''}`);
-        return;
-      }
-      
-      // Сохраняем данные заказа
-      orderOriginalPrice = price;
-      orderHappyHourDiscount = 0;
-      orderBonusAmount = 0;
-      orderFinalPrice = price;
-      
-      // Создаём объект заказа
-      currentOrder = {
-        cocktailId: cocktailId,
-        name: name,
-        image: image,
-        price: price,
-        originalPrice: price,
-        discount: 0,
-        promoCode: null,
-        happyHourDiscount: 0,
-        bonusDiscount: 0
-      };
-      
-      // Обновляем отображение заказа
-      await updateOrderDisplay(name, image, price);
-      
-      // Показываем модальное окно
-      const orderModal = document.getElementById('orderModal');
-      if (orderModal) {
-        orderModal.style.display = 'block';
-        document.body.classList.add('modal-open');
-      }
-    });
-  });
-  
-  // Обработчик применения бонусов
   const applyBonusBtn = document.getElementById('applyBonusBtn');
   applyBonusBtn?.addEventListener('click', () => {
     applyBonusToOrder();
@@ -241,107 +181,8 @@ function applyBonusToOrder() {
   }
 }
 
-// Обработчик подтверждения заказа - обновляем логику
-const originalConfirmOrder = document.getElementById('confirmOrder');
-if (originalConfirmOrder) {
-  const newConfirmOrder = originalConfirmOrder.cloneNode(true);
-  originalConfirmOrder.parentNode.replaceChild(newConfirmOrder, originalConfirmOrder);
-  
-  newConfirmOrder.addEventListener('click', async () => {
-    if (!currentOrder) return;
-    
-    // Предотвращаем множественные клики
-    if (newConfirmOrder.disabled || newConfirmOrder.classList.contains('loading')) {
-      return;
-    }
-    
-    // Устанавливаем состояние загрузки
-    newConfirmOrder.classList.add('loading');
-    newConfirmOrder.disabled = true;
-    const originalText = newConfirmOrder.innerHTML;
-    newConfirmOrder.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Отправляем заказ...';
-    
-    try {
-      const user = firebase.auth().currentUser;
-      if (!user) {
-        throw new Error('Необходима авторизация');
-      }
-      
-      // Если используются бонусы - списываем их
-      if (orderBonusAmount > 0) {
-        const success = await spendBonusPoints(user.uid, orderBonusAmount, `pending_${Date.now()}`);
-        if (!success) {
-          throw new Error('Не удалось списать бонусы');
-        }
-      }
-      
-      // Получаем следующую позицию в очереди
-      const queuePosition = await getNextQueuePosition();
-      
-      // Создаём заказ
-      const orderData = {
-        name: currentOrder.name,
-        cocktailId: currentOrder.cocktailId,
-        cocktailImage: currentOrder.image || '',
-        user: user.displayName || 'Гость',
-        userId: user.uid,
-        status: 'confirmed',
-        queuePosition: queuePosition,
-        originalPrice: orderOriginalPrice,
-        happyHourDiscount: orderHappyHourDiscount,
-        bonusDiscount: orderBonusAmount,
-        finalPrice: orderFinalPrice,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        displayTime: new Date().toLocaleString('ru-RU'),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      };
-      
-      const docRef = await db.collection('orders').add(orderData);
-      console.log('✅ Заказ создан:', docRef.id);
-      
-      // Начисляем бонусы (если применимо)
-      if (orderFinalPrice > 0) {
-        await awardBonusPoints(user.uid, orderFinalPrice, docRef.id);
-      }
-      
-      // Добавляем заказ в текущий счет пользователя
-      await addOrderToBill(user.uid, {
-        ...orderData,
-        orderId: docRef.id,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      
-      // Закрываем модальное окно заказа
-      const orderModal = document.getElementById('orderModal');
-      if (orderModal) {
-        orderModal.style.display = 'none';
-        document.body.classList.remove('modal-open');
-      }
-      
-      // Показываем уведомление об успешном заказе
-      showNotification();
-      
-      // Сбрасываем данные
-      currentOrder = null;
-      orderHappyHourDiscount = 0;
-      orderBonusAmount = 0;
-      orderOriginalPrice = 0;
-      orderFinalPrice = 0;
-      
-      // Обновляем баланс бонусов
-      await updateBonusDisplay();
-      
-    } catch (error) {
-      console.error('❌ Ошибка создания заказа:', error);
-      showError('❌ Не удалось отправить заказ.');
-    } finally {
-      // Восстанавливаем состояние кнопки
-      newConfirmOrder.classList.remove('loading');
-      newConfirmOrder.disabled = false;
-      newConfirmOrder.innerHTML = originalText;
-    }
-  });
-}
+// НЕ переопределяем confirmOrder - используем существующий из script.js
+// Вместо этого, добавим обработку бонусов и счастливых часов через расширение существующей логики
 
 // Функция получения следующей позиции в очереди (если ещё не определена)
 if (typeof getNextQueuePosition === 'undefined') {

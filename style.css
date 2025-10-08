@@ -8707,12 +8707,12 @@ body.dark-theme .profile-tabs {
 }
 
 body.dark-theme .profile-tab {
-  color: #95a5a6;
+  color: #d4af37;
 }
 
 body.dark-theme .profile-tab:hover {
   background: rgba(180, 140, 90, 0.2);
-  color: #b48c5a;
+  color: #ffd700;
 }
 
 body.dark-theme .profile-tab.active {
