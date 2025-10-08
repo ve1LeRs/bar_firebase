@@ -1,11 +1,11 @@
 // 🔥 ТВОИ КЛЮЧИ FIREBASE
 const firebaseConfig = {
-  apiKey: "AIzaSyAIssqVqGL9125nkyXLGbXDYOiFsD7lCTo",
-  authDomain: "bar-menu-2.firebaseapp.com",
-  projectId: "bar-menu-2",
-  storageBucket: "bar-menu-2.firebasestorage.app",
-  messagingSenderId: "289761689575",
-  appId: "1:289761689575:web:fb65f4f7e5a89042f08742"
+  apiKey: "AIzaSyB4bD8UAu0Aj5IRK5H-uZg6kxNAIbkZc9k",
+  authDomain: "bar-menu-6145c.firebaseapp.com",
+  projectId: "bar-menu-6145c",
+  storageBucket: "bar-menu-6145c.appspot.com",
+  messagingSenderId: "493608422842",
+  appId: "1:493608422842:web:3b4b6bd8a4cb681c436183"
 };
 // 🤖 TELEGRAM
 const TELEGRAM_BOT_TOKEN = "8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo";
