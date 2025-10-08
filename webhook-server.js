@@ -832,19 +832,15 @@ ${queueInfoText}🕒 *Время:* ${orderData.displayTime || new Date().toLocal
 🆔 *ID заказа:* ${orderId}
     `.trim();
     
-    // Создаем обновленные inline-кнопки
+    // Создаем inline-кнопки (только актуальные статусы)
     const inlineKeyboard = {
       inline_keyboard: [
-        [
-          { text: "✅ Подтвердить", callback_data: `confirmed_${orderId}` },
-          { text: "❌ Отменить", callback_data: `cancelled_${orderId}` }
-        ],
         [
           { text: "👨‍🍳 Готовится", callback_data: `preparing_${orderId}` },
           { text: "🍸 Готов", callback_data: `ready_${orderId}` }
         ],
         [
-          { text: "✅ Выполнен", callback_data: `completed_${orderId}` }
+          { text: "❌ Отменить", callback_data: `cancelled_${orderId}` }
         ]
       ]
     };

@@ -8707,7 +8707,7 @@ body.dark-theme .profile-tabs {
 }
 
 body.dark-theme .profile-tab {
-  color: #d4af37;
+  color: #ecf0f1;
 }
 
 body.dark-theme .profile-tab:hover {
@@ -8717,8 +8717,8 @@ body.dark-theme .profile-tab:hover {
 
 body.dark-theme .profile-tab.active {
   color: #1a1a2e;
-  background: linear-gradient(135deg, #b48c5a 0%, #d4af37 100%);
-  box-shadow: 0 4px 12px rgba(180, 140, 90, 0.3);
+  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.4);
 }
 
 /* Контент вкладок */
