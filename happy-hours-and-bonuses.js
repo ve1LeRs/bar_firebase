@@ -554,18 +554,22 @@ async function loadBonusStatistics() {
       }
     });
     
-    // Считаем начисления за сегодня
+    // Считаем начисления за сегодня - упрощённый запрос
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    const todayTransactionsSnapshot = await db.collection('bonusTransactions')
-      .where('type', '==', 'earn')
-      .where('createdAt', '>=', today)
-      .get();
+    // Получаем все транзакции и фильтруем на клиенте
+    const allTransactionsSnapshot = await db.collection('bonusTransactions').get();
     
     let todayEarned = 0;
-    todayTransactionsSnapshot.forEach(doc => {
-      todayEarned += doc.data().amount || 0;
+    allTransactionsSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.type === 'earn' && data.createdAt) {
+        const transDate = data.createdAt.toDate();
+        if (transDate >= today) {
+          todayEarned += data.amount || 0;
+        }
+      }
     });
     
     // Обновляем отображение статистики
