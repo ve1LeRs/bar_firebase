@@ -175,9 +175,13 @@
 
 body {
   font-family: 'Cormorant Garamond', serif;
-  background: linear-gradient(135deg, #f9f7f3 0%, #f0ece6 100%);
+  background: 
+    radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 40% 40%, rgba(120, 219, 255, 0.2) 0%, transparent 50%),
+    linear-gradient(135deg, #0f0f23 0%, #1a1a2e 25%, #16213e 50%, #0f3460 75%, #533483 100%);
   background-attachment: fixed;
-  color: #1a1a1a;
+  color: #f0f0f0;
   line-height: 1.7;
   padding: 2rem 0;
   position: relative;
@@ -186,6 +190,55 @@ body {
   transition: 
     background 1s cubic-bezier(0.4, 0, 0.2, 1),
     color 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(255, 255, 255, 0.05) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 1;
+  animation: backgroundFloat 20s ease-in-out infinite;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(circle at 60% 40%, rgba(120, 119, 198, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 40% 80%, rgba(255, 119, 198, 0.1) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+  animation: backgroundFloat 25s ease-in-out infinite reverse;
+}
+
+@keyframes backgroundFloat {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.8;
+  }
+  25% {
+    transform: translate(-20px, -20px) scale(1.1);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(20px, -10px) scale(0.9);
+    opacity: 0.6;
+  }
+  75% {
+    transform: translate(-10px, 20px) scale(1.05);
+    opacity: 0.9;
+  }
 }
 
 /* Темная тема */
@@ -212,6 +265,16 @@ body.dark-theme .container {
   /* Фиксированные размеры для предотвращения сдвигов */
   min-height: calc(100vh - 4rem);
   box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  border-radius: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+  padding: 3rem 2rem;
 }
 
 body.dark-theme header h1 {
@@ -1051,6 +1114,14 @@ header {
   padding: 3rem 0;
   position: relative;
   z-index: 10;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(15px);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  margin: 0 2rem 5rem 2rem;
 }
 
 .header-content {
@@ -1087,10 +1158,12 @@ header h1 {
   font-size: 6rem;
   font-weight: 600;
   letter-spacing: -0.05em;
-  color: #141414;
+  color: #ffffff;
   margin: 0;
   font-style: italic;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.03);
+  text-shadow: 
+    0 0 20px rgba(255, 255, 255, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.3);
   position: relative;
   display: inline-block;
   transition: color 0.6s ease, text-shadow 0.6s ease;
@@ -1113,7 +1186,7 @@ header h1::after {
   font-family: 'Inter', sans-serif;
   font-size: 1.35rem;
   font-weight: 300;
-  color: #6b5c47;
+  color: rgba(255, 255, 255, 0.8);
   margin-top: 1.5rem;
   letter-spacing: 0.5px;
   text-align: center;
@@ -1135,10 +1208,11 @@ header h1::after {
 
 .auth-buttons button {
   padding: 0.6rem 1.4rem;
-  border: 1px solid #c9a87c;
-  background: white;
-  color: #c9a87c;
-  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  color: #ffffff;
+  border-radius: 12px;
   font-family: 'Inter', sans-serif;
   font-size: 0.95rem;
   cursor: pointer;
@@ -1146,6 +1220,9 @@ header h1::after {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  box-shadow: 
+    0 4px 16px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   /* Фиксированные размеры для предотвращения сдвигов */
   min-height: 40px;
   box-sizing: border-box;
@@ -1153,17 +1230,25 @@ header h1::after {
 }
 
 .auth-buttons button:hover {
-  background: #c9a87c;
+  background: rgba(255, 255, 255, 0.2);
   color: white;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(201, 168, 124, 0.3);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 
+    0 8px 24px rgba(0, 0, 0, 0.3),
+    0 0 20px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .theme-toggle:hover {
-  background: #c9a87c;
+  background: rgba(255, 255, 255, 0.2);
   color: white;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(201, 168, 124, 0.3);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.3),
+    0 0 30px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .theme-toggle {
@@ -1174,14 +1259,18 @@ header h1::after {
   bottom: auto !important;
   width: 50px;
   height: 50px;
-  border: 1px solid #c9a87c;
-  background: white;
-  color: #c9a87c;
-  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(15px);
+  color: #ffffff;
+  border-radius: 16px;
   padding: 0;
   justify-content: center;
   align-items: center;
   font-size: 1.2rem;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   z-index: 10001 !important;
   cursor: pointer;
   transition: 
@@ -1216,39 +1305,54 @@ header h1::after {
 }
 
 #ordersBtn {
-  background: #9b59b6;
+  background: rgba(155, 89, 182, 0.2);
   color: white;
-  border-color: #9b59b6;
+  border-color: rgba(155, 89, 182, 0.3);
+  backdrop-filter: blur(10px);
 }
 
 #ordersBtn:hover {
-  background: #8e44ad;
+  background: rgba(155, 89, 182, 0.3);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+  border-color: rgba(155, 89, 182, 0.4);
+  box-shadow: 
+    0 8px 24px rgba(0, 0, 0, 0.3),
+    0 0 20px rgba(155, 89, 182, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 #adminBtn {
-  background: #3498db;
+  background: rgba(52, 152, 219, 0.2);
   color: white;
-  border-color: #3498db;
+  border-color: rgba(52, 152, 219, 0.3);
+  backdrop-filter: blur(10px);
 }
 
 #adminBtn:hover {
-  background: #2980b9;
+  background: rgba(52, 152, 219, 0.3);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+  border-color: rgba(52, 152, 219, 0.4);
+  box-shadow: 
+    0 8px 24px rgba(0, 0, 0, 0.3),
+    0 0 20px rgba(52, 152, 219, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 #logoutBtn {
-  background: #e74c3c;
+  background: rgba(231, 76, 60, 0.2);
   color: white;
-  border-color: #e74c3c;
+  border-color: rgba(231, 76, 60, 0.3);
+  backdrop-filter: blur(10px);
 }
 
 #logoutBtn:hover {
-  background: #c0392b;
+  background: rgba(231, 76, 60, 0.3);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+  border-color: rgba(231, 76, 60, 0.4);
+  box-shadow: 
+    0 8px 24px rgba(0, 0, 0, 0.3),
+    0 0 20px rgba(231, 76, 60, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .user-name {
@@ -1282,12 +1386,16 @@ header h1::after {
   align-items: center;
   gap: 0.8rem;
   padding: 1rem 2rem;
-  background: rgba(255, 255, 255, 0.8);
-  border: 2px solid rgba(201, 168, 124, 0.3);
-  border-radius: 16px;
-  color: #6b5c47;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  color: rgba(255, 255, 255, 0.9);
   font-family: 'Inter', sans-serif;
   font-size: 1rem;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1314,20 +1422,24 @@ header h1::after {
 }
 
 .category-tab:hover {
-  background: rgba(201, 168, 124, 0.1);
-  border-color: #c9a87c;
-  color: #8e6f42;
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(201, 168, 124, 0.2);
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.3),
+    0 0 30px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .category-tab.active {
-  background: linear-gradient(135deg, #c9a87c, #b08c5a);
-  border-color: #c9a87c;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1));
+  border-color: rgba(255, 255, 255, 0.4);
   color: white;
   box-shadow: 
-    0 8px 25px rgba(201, 168, 124, 0.3),
-    0 0 0 1px rgba(255, 255, 255, 0.2);
+    0 12px 40px rgba(0, 0, 0, 0.3),
+    0 0 40px rgba(255, 255, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
   transform: translateY(-2px);
 }
 
@@ -1367,14 +1479,16 @@ header h1::after {
 }
 
 .cocktail-card {
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
   border-radius: 24px;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   transition: all 0.5s cubic-bezier(0.165, 0.84, 0.44, 1), background 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
   position: relative;
-  border: 1px solid rgba(255,255,255,0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   animation: fadeInUp 0.8s ease forwards;
   opacity: 0;
   transform: translateY(30px);
@@ -1390,7 +1504,11 @@ header h1::after {
 
 .cocktail-card:hover {
   transform: translateY(-12px);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.08);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    0 0 40px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .image-container {
@@ -1438,7 +1556,8 @@ header h1::after {
   padding: 1.8rem 1.5rem 2rem;
   position: relative;
   z-index: 2;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -1455,12 +1574,13 @@ header h1::after {
 .cocktail-card h2 {
   font-size: 2.1rem;
   font-weight: 600;
-  color: #1a1a1a;
+  color: #ffffff;
   margin: 0 0 1rem;
   font-style: normal;
   letter-spacing: -0.5px;
   line-height: 1.2;
   transition: color 0.6s ease;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
   /* Фиксированные размеры для предотвращения сдвигов */
   min-height: 2.5rem;
   box-sizing: border-box;
@@ -1470,7 +1590,7 @@ header h1::after {
   font-family: 'Inter', sans-serif;
   font-size: 0.98rem;
   font-weight: 300;
-  color: #7d6e5d;
+  color: rgba(255, 255, 255, 0.8);
   line-height: 1.6;
   letter-spacing: 0.3px;
   flex: 1;
@@ -1485,12 +1605,13 @@ header h1::after {
   font-family: 'Cormorant Garamond', serif;
   font-size: 0.92rem;
   font-style: italic;
-  color: #a18c6a;
+  color: rgba(255, 215, 0, 0.9);
   margin-top: 0.4rem;
   margin-bottom: 1rem;
   line-height: 1.5;
   letter-spacing: 0.5px;
   transition: color 0.6s ease;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   /* Фиксированные размеры для предотвращения сдвигов */
   min-height: 1.5rem;
   box-sizing: border-box;
@@ -1542,14 +1663,19 @@ body.dark-theme .cocktail-price:hover {
 .order-btn {
   margin-top: 2rem;
   padding: 0.7rem 1.2rem;
-  background: linear-gradient(135deg, #b08c5a, #8e6f42);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
   color: white;
-  border: none;
-  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
   font-family: 'Cormorant Garamond', serif;
   font-size: 1.1rem;
   font-weight: 500;
   cursor: pointer;
+  box-shadow: 
+    0 4px 16px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
   transition: all 0.3s ease;
   width: 100%;
   display: flex;
@@ -1566,7 +1692,12 @@ body.dark-theme .cocktail-price:hover {
 
 .order-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(142, 111, 66, 0.3);
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow: 
+    0 8px 24px rgba(0, 0, 0, 0.3),
+    0 0 20px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 /* Анимация при загрузке */
@@ -1606,16 +1737,21 @@ body.dark-theme .cocktail-price:hover {
 }
 
 .modal-content {
-  background: white;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
   margin: 5% auto;
   padding: 2.5rem;
-  border-radius: 18px;
+  border-radius: 24px;
   width: 90%;
   max-width: 500px;
   max-height: 85vh;
   position: relative;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   text-align: center;
+  color: #ffffff;
   animation: modalAppear 0.4s ease;
   overflow-y: auto;
   overflow-x: hidden;
@@ -5070,6 +5206,49 @@ button.loading i.fa-spinner {
   pointer-events: none;
   z-index: 1;
   overflow: hidden;
+}
+
+/* Анимированные частицы */
+.sparkles {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.sparkles::before,
+.sparkles::after {
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  animation: sparkle 3s ease-in-out infinite;
+}
+
+.sparkles::before {
+  top: 20%;
+  left: 20%;
+  animation-delay: 0s;
+}
+
+.sparkles::after {
+  top: 60%;
+  right: 20%;
+  animation-delay: 1.5s;
+}
+
+@keyframes sparkle {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
   /* Фиксированные размеры для предотвращения сдвигов */
   box-sizing: border-box;
 }
