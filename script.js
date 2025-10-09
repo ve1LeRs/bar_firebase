@@ -703,12 +703,6 @@ async function loadCocktails() {
               <i class="fas fa-ban"></i> В стоп-листе
             </div>
           ` : ''}
-          ${isAdmin ? `
-            <div class="admin-actions">
-              <button class="edit-btn" data-id="${cocktail.id}"><i class="fas fa-edit"></i></button>
-              <button class="delete-btn" data-id="${cocktail.id}"><i class="fas fa-trash"></i></button>
-            </div>
-          ` : ''}
         </div>
         <div class="card-content">
           <h2>${cocktail.name}</h2>
@@ -739,6 +733,8 @@ async function loadCocktails() {
     });
     
     // Добавляем обработчики событий для админских кнопок
+    // ОТКЛЮЧЕНО: Кнопки редактирования и удаления убраны с основной страницы
+    /*
     if (isAdmin) {
       document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -756,6 +752,7 @@ async function loadCocktails() {
         });
       });
     }
+    */
     
     
     // Применяем фильтрацию по текущей категории
@@ -5480,11 +5477,15 @@ function updateAdminCocktailsList() {
   document.querySelectorAll('.admin-cocktail-item .change-category-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      e.preventDefault();
       const id = btn.getAttribute('data-id');
       const currentCategory = btn.getAttribute('data-current');
+      console.log('🔄 Открытие модального окна смены категории для коктейля:', id, 'текущая категория:', currentCategory);
       showCategoryChangeModal(id, currentCategory);
     });
   });
+  
+  console.log('✅ Добавлены обработчики для кнопок смены категории. Количество кнопок:', document.querySelectorAll('.admin-cocktail-item .change-category-btn').length);
   
 }
 
@@ -5496,8 +5497,13 @@ filterAdminCocktails();
 
 // Показать модальное окно изменения категории
 function showCategoryChangeModal(cocktailId, currentCategory) {
+  console.log('📋 showCategoryChangeModal вызвана для:', cocktailId, currentCategory);
   const cocktail = cocktailsData.find(c => c.id === cocktailId);
-  if (!cocktail) return;
+  if (!cocktail) {
+    console.error('❌ Коктейль не найден:', cocktailId);
+    return;
+  }
+  console.log('✅ Коктейль найден:', cocktail.name);
   
   // Создаем модальное окно
   const modal = document.createElement('div');
@@ -6402,10 +6408,13 @@ let allIngredients = [];
 // Добавление нового ингредиента
 const addIngredientBtn = document.getElementById('addIngredientBtn');
 addIngredientBtn?.addEventListener('click', async () => {
+  console.log('🔵 Начало добавления ингредиента...');
   const name = document.getElementById('ingredientName')?.value.trim();
   const unit = document.getElementById('ingredientUnit')?.value;
   const stock = parseFloat(document.getElementById('ingredientStock')?.value || '0');
   const minStock = parseFloat(document.getElementById('ingredientMinStock')?.value || '0');
+  
+  console.log('📝 Данные ингредиента:', { name, unit, stock, minStock });
   
   if (!name) {
     showError('❌ Укажите название ингредиента');
@@ -6418,6 +6427,7 @@ addIngredientBtn?.addEventListener('click', async () => {
   }
   
   try {
+    console.log('💾 Сохранение в базу данных...');
     const ingredientData = {
       name: name,
       unit: unit,
@@ -6427,7 +6437,8 @@ addIngredientBtn?.addEventListener('click', async () => {
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     
-    await db.collection('ingredients').add(ingredientData);
+    const docRef = await db.collection('ingredients').add(ingredientData);
+    console.log('✅ Ингредиент добавлен с ID:', docRef.id);
     
     showSuccess(`✅ Ингредиент "${name}" добавлен успешно!`);
     
@@ -6437,11 +6448,14 @@ addIngredientBtn?.addEventListener('click', async () => {
     document.getElementById('ingredientMinStock').value = '';
     
     // Перезагружаем список
-    loadIngredients();
+    console.log('🔄 Перезагрузка списка ингредиентов...');
+    await loadIngredients();
+    console.log('✅ Список ингредиентов обновлен');
     
   } catch (error) {
     console.error('❌ Ошибка добавления ингредиента:', error);
-    showError('❌ Ошибка добавления ингредиента');
+    console.error('Детали ошибки:', error.message, error.code);
+    showError(`❌ Ошибка добавления ингредиента: ${error.message}`);
   }
 });
 
@@ -6533,7 +6547,12 @@ function createIngredientCard(ingredient) {
     stockClass = 'low';
   }
   
-  card.classList.add(statusClass);
+  if (statusClass) {
+    card.classList.add(statusClass);
+  }
+  
+  // Экранируем имя для безопасного использования в HTML
+  const escapedName = ingredient.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
   
   card.innerHTML = `
     <div class="ingredient-info">
@@ -6547,17 +6566,26 @@ function createIngredientCard(ingredient) {
       </div>
     </div>
     <div class="ingredient-actions">
-      <button class="ingredient-btn add-stock" onclick="addStock('${ingredient.id}')">
+      <button class="ingredient-btn add-stock" data-id="${ingredient.id}" data-name="${escapedName}">
         <i class="fas fa-plus"></i> Добавить
       </button>
-      <button class="ingredient-btn edit" onclick="editIngredient('${ingredient.id}')">
+      <button class="ingredient-btn edit" data-id="${ingredient.id}">
         <i class="fas fa-edit"></i>
       </button>
-      <button class="ingredient-btn delete" onclick="deleteIngredient('${ingredient.id}', '${ingredient.name}')">
+      <button class="ingredient-btn delete" data-id="${ingredient.id}" data-name="${escapedName}">
         <i class="fas fa-trash"></i>
       </button>
     </div>
   `;
+  
+  // Добавляем обработчики событий
+  const addBtn = card.querySelector('.add-stock');
+  const editBtn = card.querySelector('.edit');
+  const deleteBtn = card.querySelector('.delete');
+  
+  addBtn.addEventListener('click', () => window.addStock(ingredient.id));
+  editBtn.addEventListener('click', () => window.editIngredient(ingredient.id));
+  deleteBtn.addEventListener('click', () => window.deleteIngredient(ingredient.id, ingredient.name));
   
   return card;
 }

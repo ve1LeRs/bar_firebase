@@ -1514,7 +1514,7 @@ header h1::after {
 .image-container {
   position: relative;
   overflow: hidden;
-  height: 480px;
+  height: 550px;
   /* Фиксированные размеры для предотвращения сдвигов */
   box-sizing: border-box;
   flex-shrink: 0;
@@ -1524,6 +1524,7 @@ header h1::after {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   display: block;
   transition: transform 0.5s ease;
   will-change: transform;
@@ -4769,7 +4770,7 @@ button.loading i.fa-spinner {
   }
 
   .image-container {
-    height: 400px;
+    height: 460px;
   }
 }
 
@@ -4791,7 +4792,7 @@ button.loading i.fa-spinner {
   }
 
   .image-container {
-    height: 360px;
+    height: 415px;
   }
 
   .cocktail-card h2 {
@@ -5018,7 +5019,7 @@ button.loading i.fa-spinner {
   }
 
   .image-container {
-    height: 280px;
+    height: 320px;
   }
   
   .image-container img {
@@ -8077,6 +8078,32 @@ body.dark-theme .ingredient-details {
   color: #95a5a6;
 }
 
+body.dark-theme .ingredient-stock {
+  color: #bdc3c7;
+}
+
+body.dark-theme .stock-value {
+  color: #2ecc71;
+}
+
+body.dark-theme .stock-value.low {
+  color: #f39c12;
+}
+
+body.dark-theme .stock-value.out {
+  color: #e74c3c;
+}
+
+body.dark-theme .form-label,
+body.dark-theme label {
+  color: #ecf0f1;
+}
+
+body.dark-theme .form-input::placeholder,
+body.dark-theme .form-select option {
+  color: #7f8c8d;
+}
+
 body.dark-theme .filter-btn {
   background: #2c3e50;
   color: #ecf0f1;
@@ -9324,7 +9351,10 @@ body.dark-theme .danger-zone {
 /* Адаптивность для профиля */
 @media (max-width: 768px) {
   .user-actions {
+    flex-direction: column;
+    align-items: stretch;
     gap: 0.5rem;
+    width: 100%;
   }
   
   .profile-btn {
@@ -9352,11 +9382,13 @@ body.dark-theme .danger-zone {
   }
   
   .admin-btn-header {
-    padding: 0.6rem 0.8rem;
+    padding: 0.6rem 1rem;
+    width: 100%;
+    justify-content: center;
   }
   
   .admin-btn-header span {
-    display: none;
+    display: inline !important;
   }
   
   .profile-modal .profile-content {
@@ -9465,7 +9497,7 @@ body.dark-theme .danger-zone {
   }
   
   .image-container {
-    height: 320px;
+    height: 370px;
   }
   
   .image-container img {
@@ -9483,7 +9515,7 @@ body.dark-theme .danger-zone {
   }
   
   .image-container {
-    height: 300px;
+    height: 345px;
   }
 }
 
@@ -11217,5 +11249,88 @@ body.dark-theme .prize-item-description {
   
   .prize-item-actions .admin-btn {
     width: 100%;
+  }
+}
+
+/* ========================================
+   АДАПТИВНОСТЬ АДМИН-ПАНЕЛИ ДЛЯ МОБИЛЬНЫХ
+   ======================================== */
+
+@media (max-width: 768px) {
+  .admin-content {
+    padding: 1rem;
+  }
+  
+  .admin-tabs {
+    gap: 0.3rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .tab-btn {
+    padding: 0.5rem 0.7rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+  
+  .admin-btn {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    font-size: 0.9rem;
+  }
+  
+  .monitoring-controls {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .monitoring-controls .admin-btn {
+    width: 100%;
+  }
+  
+  .telegram-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .telegram-controls .admin-btn {
+    width: 100%;
+  }
+  
+  .purchases-controls {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .purchases-controls .admin-btn {
+    width: 100%;
+    font-size: 0.85rem;
+    padding: 0.7rem;
+  }
+  
+  .admin-filter-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .admin-filter-btn {
+    flex: 1 1 calc(50% - 0.25rem);
+    min-width: 140px;
+    padding: 0.7rem 0.5rem;
+    font-size: 0.85rem;
+  }
+  
+  .admin-list {
+    gap: 0.75rem;
+  }
+  
+  .bills-filters .filter-buttons {
+    flex-wrap: wrap;
+    justify-content: center;
   }
 }
