@@ -6693,16 +6693,18 @@ body.dark-theme .promo-detail-value {
 .rating-modal-content {
   max-width: 500px;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
   border-radius: 24px;
   background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
   box-shadow: 
     0 25px 50px rgba(0, 0, 0, 0.15),
     0 10px 20px rgba(0, 0, 0, 0.1);
   animation: ratingModalAppear 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-  width: fit-content;
-  height: fit-content;
-  margin: 0;
+  width: auto;
+  height: auto;
+  min-height: auto;
+  max-height: none;
+  margin: 0 auto;
 }
 
 @keyframes ratingModalAppear {
@@ -6719,7 +6721,7 @@ body.dark-theme .promo-detail-value {
 /* Заголовок модального окна */
 .rating-header {
   background: linear-gradient(135deg, #c9a87c 0%, #b08c5a 100%);
-  padding: 2.5rem 2rem 2rem;
+  padding: 1.5rem 2rem 1.2rem;
   text-align: center;
   position: relative;
   overflow: hidden;
@@ -6737,22 +6739,22 @@ body.dark-theme .promo-detail-value {
 }
 
 .rating-emoji {
-  font-size: 4rem;
-  margin-bottom: 1rem;
+  font-size: 3rem;
+  margin-bottom: 0.6rem;
   animation: bounce 2s infinite;
   display: inline-block;
 }
 
 .rating-title {
-  font-size: 1.8rem;
+  font-size: 1.5rem;
   font-weight: 700;
   color: white;
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.3rem 0;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .rating-subtitle {
-  font-size: 1.2rem;
+  font-size: 1rem;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.95);
   margin: 0;
@@ -6761,7 +6763,7 @@ body.dark-theme .promo-detail-value {
 
 /* Тело модального окна */
 .rating-body {
-  padding: 2.5rem 2rem;
+  padding: 1.5rem 2rem;
   text-align: center;
 }
 
@@ -6839,13 +6841,13 @@ body.dark-theme .promo-detail-value {
 .stars-container {
   display: flex;
   justify-content: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  padding: 1.5rem 0;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+  padding: 1rem 0;
 }
 
 .star {
-  font-size: 3rem;
+  font-size: 2.5rem;
   color: #ddd;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -6890,11 +6892,11 @@ body.dark-theme .promo-detail-value {
 
 /* Текст оценки */
 .rating-text {
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: #c9a87c;
-  margin: 1rem 0 1.5rem;
-  min-height: 2rem;
+  margin: 0.5rem 0 0.8rem;
+  min-height: 1.5rem;
   transition: all 0.5s ease;
 }
 
