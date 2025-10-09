@@ -6685,6 +6685,9 @@ body.dark-theme .promo-detail-value {
 /* Модальное окно оценки */
 .rating-modal {
   z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .rating-modal-content {
@@ -6697,6 +6700,9 @@ body.dark-theme .promo-detail-value {
     0 25px 50px rgba(0, 0, 0, 0.15),
     0 10px 20px rgba(0, 0, 0, 0.1);
   animation: ratingModalAppear 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  width: fit-content;
+  height: fit-content;
+  margin: 0;
 }
 
 @keyframes ratingModalAppear {
@@ -6763,7 +6769,8 @@ body.dark-theme .promo-detail-value {
 @media (max-width: 768px) {
   .rating-modal-content {
     max-width: 95%;
-    width: 95%;
+    width: auto;
+    min-width: 320px;
   }
   
   .rating-header {
@@ -7127,6 +7134,8 @@ body.dark-theme .cocktail-rating .rating-value {
   opacity: 1;
   transform: translateX(0);
   transition: all 0.5s ease;
+  display: flex;
+  flex-direction: column;
 }
 
 .rating-screen.slide-out {
@@ -7304,7 +7313,7 @@ body.dark-theme .thank-you-message {
 @media (max-width: 768px) {
   .rating-modal-content {
     max-width: 90%;
-    margin: 10% auto;
+    margin: 0;
   }
 
   .rating-header {
