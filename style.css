@@ -1574,14 +1574,16 @@ header h1::after {
 
 .cocktail-card h2 {
   font-size: 2.1rem;
-  font-weight: 600;
+  font-weight: 700;
   color: #ffffff;
   margin: 0 0 1rem;
   font-style: normal;
-  letter-spacing: -0.5px;
-  line-height: 1.2;
+  letter-spacing: -0.3px;
+  line-height: 1.3;
   transition: color 0.6s ease;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  text-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.5),
+    0 1px 3px rgba(0, 0, 0, 0.8);
   /* Фиксированные размеры для предотвращения сдвигов */
   min-height: 2.5rem;
   box-sizing: border-box;
@@ -1589,14 +1591,17 @@ header h1::after {
 
 .cocktail-card .ingredients {
   font-family: 'Inter', sans-serif;
-  font-size: 0.98rem;
-  font-weight: 300;
-  color: rgba(255, 255, 255, 0.8);
-  line-height: 1.6;
-  letter-spacing: 0.3px;
+  font-size: 1rem;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.95);
+  line-height: 1.7;
+  letter-spacing: 0.2px;
   flex: 1;
   transition: color 0.6s ease;
   margin-bottom: 1.5rem;
+  text-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.5),
+    0 0 10px rgba(0, 0, 0, 0.3);
   /* Фиксированные размеры для предотвращения сдвигов */
   min-height: 3rem;
   box-sizing: border-box;
@@ -1604,18 +1609,163 @@ header h1::after {
 
 .cocktail-card .mood {
   font-family: 'Cormorant Garamond', serif;
-  font-size: 0.92rem;
+  font-size: 1rem;
   font-style: italic;
-  color: rgba(255, 215, 0, 0.9);
+  font-weight: 500;
+  color: rgba(255, 215, 0, 1);
   margin-top: 0.4rem;
   margin-bottom: 1rem;
-  line-height: 1.5;
-  letter-spacing: 0.5px;
+  line-height: 1.6;
+  letter-spacing: 0.8px;
   transition: color 0.6s ease;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  text-shadow: 
+    0 1px 4px rgba(0, 0, 0, 0.5),
+    0 0 8px rgba(255, 215, 0, 0.3);
   /* Фиксированные размеры для предотвращения сдвигов */
   min-height: 1.5rem;
   box-sizing: border-box;
+}
+
+/* Теги вкусов в карточке */
+.taste-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.taste-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.taste-tag.sour {
+  background: rgba(255, 193, 7, 0.9);
+  color: #1a1a1a;
+  border: 1px solid rgba(255, 193, 7, 0.5);
+}
+
+.taste-tag.sweet {
+  background: rgba(233, 30, 99, 0.9);
+  color: #ffffff;
+  border: 1px solid rgba(233, 30, 99, 0.5);
+}
+
+.taste-tag.bitter {
+  background: rgba(121, 85, 72, 0.9);
+  color: #ffffff;
+  border: 1px solid rgba(121, 85, 72, 0.5);
+}
+
+.taste-tag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+body.dark-theme .taste-tag.sour {
+  background: rgba(255, 193, 7, 0.85);
+  border-color: rgba(255, 193, 7, 0.4);
+}
+
+body.dark-theme .taste-tag.sweet {
+  background: rgba(233, 30, 99, 0.85);
+  border-color: rgba(233, 30, 99, 0.4);
+}
+
+body.dark-theme .taste-tag.bitter {
+  background: rgba(121, 85, 72, 0.85);
+  border-color: rgba(121, 85, 72, 0.4);
+}
+
+/* Селектор тегов вкуса в форме */
+.taste-tags-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.taste-checkbox {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.taste-checkbox input[type="checkbox"] {
+  margin-right: 0.5rem;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.taste-label {
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.taste-label.sour {
+  background: rgba(255, 193, 7, 0.2);
+  color: #f57f17;
+  border-color: rgba(255, 193, 7, 0.3);
+}
+
+.taste-label.sweet {
+  background: rgba(233, 30, 99, 0.2);
+  color: #c2185b;
+  border-color: rgba(233, 30, 99, 0.3);
+}
+
+.taste-label.bitter {
+  background: rgba(121, 85, 72, 0.2);
+  color: #5d4037;
+  border-color: rgba(121, 85, 72, 0.3);
+}
+
+.taste-checkbox input[type="checkbox"]:checked + .taste-label.sour {
+  background: rgba(255, 193, 7, 0.9);
+  color: #1a1a1a;
+  border-color: #ffc107;
+}
+
+.taste-checkbox input[type="checkbox"]:checked + .taste-label.sweet {
+  background: rgba(233, 30, 99, 0.9);
+  color: #ffffff;
+  border-color: #e91e63;
+}
+
+.taste-checkbox input[type="checkbox"]:checked + .taste-label.bitter {
+  background: rgba(121, 85, 72, 0.9);
+  color: #ffffff;
+  border-color: #795548;
+}
+
+body.dark-theme .taste-label.sour {
+  background: rgba(255, 193, 7, 0.15);
+  color: #ffca28;
+}
+
+body.dark-theme .taste-label.sweet {
+  background: rgba(233, 30, 99, 0.15);
+  color: #f48fb1;
+}
+
+body.dark-theme .taste-label.bitter {
+  background: rgba(121, 85, 72, 0.15);
+  color: #a1887f;
 }
 
 /* Цена коктейля в карточке */
