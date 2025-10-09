@@ -6302,6 +6302,16 @@ body.modal-open {
   /* Фиксированные размеры для предотвращения сдвигов */
   box-sizing: border-box;
   min-height: 300px;
+  /* Скрываем скролл-бар */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+/* Скрываем скролл-бар для Chrome, Safari и Opera */
+.orders-modal::-webkit-scrollbar,
+.admin-content::-webkit-scrollbar,
+.form-modal::-webkit-scrollbar {
+  display: none;
 }
 
 /* Убедимся, что содержимое модального окна корректно прокручивается */
@@ -8947,6 +8957,14 @@ body.dark-theme .admin-btn-header:hover {
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
+  /* Скрываем скролл-бар */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+/* Скрываем скролл-бар для Chrome, Safari и Opera */
+.profile-modal .profile-content::-webkit-scrollbar {
+  display: none;
 }
 
 /* Шапка профиля */
@@ -8992,8 +9010,8 @@ body.dark-theme .profile-header {
 /* Вкладки профиля */
 .profile-tabs {
   display: flex;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-bottom: none;
+  background: transparent;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
   gap: 0.5rem;
   padding: 0.5rem;
 }
@@ -9001,8 +9019,8 @@ body.dark-theme .profile-header {
 .profile-tab {
   flex: 1;
   padding: 0.9rem 0.7rem;
-  background: transparent;
-  border: none;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.05);
   border-radius: 10px;
   cursor: pointer;
   display: flex;
@@ -9044,11 +9062,14 @@ body.dark-theme .profile-header {
 
 /* Темная тема для вкладок */
 body.dark-theme .profile-tabs {
-  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 body.dark-theme .profile-tab {
   color: #ecf0f1;
+  background: rgba(44, 62, 80, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 body.dark-theme .profile-tab:hover {
@@ -9065,10 +9086,19 @@ body.dark-theme .profile-tab.active {
 /* Контент вкладок */
 .profile-content-wrapper {
   flex: 1;
-  overflow: visible;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 1rem;
   display: flex;
   flex-direction: column;
+  /* Скрываем скролл-бар */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+/* Скрываем скролл-бар для Chrome, Safari и Opera */
+.profile-content-wrapper::-webkit-scrollbar {
+  display: none;
 }
 
 .profile-tab-content {
@@ -10769,8 +10799,18 @@ body.dark-theme .confirm-btn.cancel:hover {
 /* Модальное окно колеса */
 .wheel-modal .modal-content {
   max-width: 600px;
+  max-height: 90vh;
   padding: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Скрываем скролл-бар */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+/* Скрываем скролл-бар для Chrome, Safari и Opera */
+.wheel-modal .modal-content::-webkit-scrollbar {
+  display: none;
 }
 
 .wheel-content {
