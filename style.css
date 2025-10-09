@@ -1469,8 +1469,8 @@ header h1::after {
 .cocktails-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 3.5rem;
-  padding: 1rem 0 4rem;
+  gap: 2.5rem;
+  padding: 1rem 0 2rem;
   position: relative;
   z-index: 10;
   /* Фиксированные размеры для предотвращения сдвигов */
@@ -1514,7 +1514,7 @@ header h1::after {
 .image-container {
   position: relative;
   overflow: hidden;
-  height: 550px;
+  height: 480px;
   /* Фиксированные размеры для предотвращения сдвигов */
   box-sizing: border-box;
   flex-shrink: 0;
@@ -4928,7 +4928,7 @@ button.loading i.fa-spinner {
   }
 
   .image-container {
-    height: 460px;
+    height: 400px;
   }
 }
 
@@ -4946,11 +4946,11 @@ button.loading i.fa-spinner {
   }
 
   .cocktails-grid {
-    gap: 2.5rem;
+    gap: 2rem;
   }
 
   .image-container {
-    height: 415px;
+    height: 360px;
   }
 
   .cocktail-card h2 {
@@ -5177,7 +5177,7 @@ button.loading i.fa-spinner {
   }
 
   .image-container {
-    height: 320px;
+    height: 280px;
   }
   
   .image-container img {
@@ -9725,11 +9725,11 @@ body.dark-theme .danger-zone {
 @media (max-width: 768px) {
   .cocktails-grid {
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 2.5rem;
+    gap: 2rem;
   }
   
   .image-container {
-    height: 370px;
+    height: 320px;
   }
   
   .image-container img {
@@ -9743,11 +9743,11 @@ body.dark-theme .danger-zone {
 @media (max-width: 600px) {
   .cocktails-grid {
     grid-template-columns: 1fr;
-    gap: 2rem;
+    gap: 1.5rem;
   }
   
   .image-container {
-    height: 345px;
+    height: 300px;
   }
 }
 
