@@ -1903,7 +1903,7 @@ body.dark-theme .cocktail-price:hover {
   border-radius: 24px;
   width: 90%;
   max-width: 500px;
-  max-height: 85vh;
+  max-height: none;
   position: relative;
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 
@@ -6475,14 +6475,13 @@ body.modal-open {
 }
 
 /* Добавим немного стилей для лучшего UX модальных окон */
+/* Модальные окна по умолчанию без ограничения высоты */
 .modal-content {
   /* Уже есть стили */
-  /* Добавим max-height и overflow для самих модальных окон, если содержимое большое */
-  max-height: 90vh; /* Ограничиваем высоту модального окна */
+  max-height: none;
 }
 
-/* Для модальных окон с прокручиваемым содержимым (например, админ-панель) */
-.orders-modal,
+/* ТОЛЬКО для админ-панели разрешаем прокрутку внутри */
 .admin-content,
 .form-modal {
   max-height: 90vh;
@@ -6498,14 +6497,12 @@ body.modal-open {
 }
 
 /* Скрываем скролл-бар для Chrome, Safari и Opera */
-.orders-modal::-webkit-scrollbar,
 .admin-content::-webkit-scrollbar,
 .form-modal::-webkit-scrollbar {
   display: none;
 }
 
 /* Убедимся, что содержимое модального окна корректно прокручивается */
-.orders-modal > *,
 .admin-content > *,
 .form-modal > * {
   flex-shrink: 0;
@@ -9148,7 +9145,7 @@ body.dark-theme .admin-btn-header:hover {
 .profile-modal .profile-content {
   max-width: 900px;
   width: 95%;
-  max-height: 95vh;
+  max-height: 90vh;
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;
@@ -10996,7 +10993,7 @@ body.dark-theme .confirm-btn.cancel:hover {
 /* Модальное окно колеса */
 .wheel-modal .modal-content {
   max-width: 600px;
-  max-height: 90vh;
+  max-height: 85vh;
   padding: 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -11117,20 +11114,25 @@ body.dark-theme .confirm-btn.cancel:hover {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
+  width: 100px !important;
+  height: 100px !important;
+  min-width: 100px;
+  min-height: 100px;
+  max-width: 100px;
+  max-height: 100px;
+  border-radius: 50% !important;
   background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%);
-  border: 6px solid white;
+  border: 5px solid white;
   color: white;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 700;
   cursor: pointer;
-  display: flex;
+  display: flex !important;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.3rem;
+  padding: 0;
   box-shadow: 
     0 4px 16px rgba(251, 140, 0, 0.4),
     0 0 0 0 rgba(255, 152, 0, 0.7);
@@ -11168,13 +11170,16 @@ body.dark-theme .confirm-btn.cancel:hover {
 }
 
 .spin-icon {
-  font-size: 2.5rem;
+  font-size: 2rem;
+  line-height: 1;
 }
 
 .spin-text {
-  font-size: 1rem;
-  letter-spacing: 1.5px;
+  font-size: 0.75rem;
+  letter-spacing: 1px;
   font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 /* Результат */
@@ -11481,16 +11486,20 @@ body.dark-theme .prize-item-description {
   }
   
   .spin-button {
-    width: 80px;
-    height: 80px;
+    width: 90px !important;
+    height: 90px !important;
+    min-width: 90px;
+    min-height: 90px;
+    max-width: 90px;
+    max-height: 90px;
   }
   
   .spin-icon {
-    font-size: 1.5rem;
+    font-size: 1.8rem;
   }
   
   .spin-text {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
   }
   
   .result-icon {
