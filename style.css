@@ -5436,11 +5436,45 @@ body.dark-theme .champagne-bubble {
 
 
 /* === СТИЛИ МОНИТОРИНГА === */
-.monitoring-controls {
+
+/* Группа управления */
+.control-group {
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.control-group h4 {
+  margin: 0 0 1rem 0;
+  color: #333;
+  font-size: 1.1rem;
   display: flex;
-  gap: 1rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+body.dark-theme .control-group {
+  background: rgba(44, 62, 80, 0.5);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .control-group h4 {
+  color: #ecf0f1;
+}
+
+.monitoring-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.8rem;
   margin-bottom: 2rem;
-  flex-wrap: wrap;
+}
+
+.monitoring-controls .admin-btn {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .system-status {
@@ -5550,10 +5584,16 @@ body.dark-theme .status-details {
 
 /* === СТИЛИ TELEGRAM УПРАВЛЕНИЯ === */
 .telegram-controls {
-  display: flex;
-  gap: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.8rem;
   margin-bottom: 2rem;
-  flex-wrap: wrap;
+}
+
+.telegram-controls .admin-btn {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .telegram-status {
@@ -7822,9 +7862,15 @@ body.dark-theme .thank-you-message {
 }
 
 .purchases-controls {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.8rem;
+}
+
+.purchases-controls .admin-btn {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Фильтры ингредиентов */
@@ -8975,7 +9021,8 @@ body.dark-theme .admin-btn-header:hover {
   padding: 1.5rem;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  border-radius: 12px 12px 0 0;
+  border-radius: 12px;
+  margin-bottom: 0.5rem;
 }
 
 .profile-avatar {
@@ -10887,10 +10934,20 @@ body.dark-theme .confirm-btn.cancel:hover {
 .wheel-arrow {
   position: absolute;
   top: 2rem;
-  font-size: 2rem;
+  font-size: 2.5rem;
   color: #ff9800;
   z-index: 10;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  animation: arrowBounce 1s ease-in-out infinite;
+}
+
+@keyframes arrowBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 #wheelCanvas {
@@ -10910,11 +10967,11 @@ body.dark-theme .confirm-btn.cancel:hover {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 100px;
-  height: 100px;
+  width: 120px;
+  height: 120px;
   border-radius: 50%;
   background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%);
-  border: 5px solid white;
+  border: 6px solid white;
   color: white;
   font-size: 1rem;
   font-weight: 700;
@@ -10923,10 +10980,26 @@ body.dark-theme .confirm-btn.cancel:hover {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
-  box-shadow: 0 4px 16px rgba(251, 140, 0, 0.4);
+  gap: 0.3rem;
+  box-shadow: 
+    0 4px 16px rgba(251, 140, 0, 0.4),
+    0 0 0 0 rgba(255, 152, 0, 0.7);
   transition: all 0.3s ease;
   z-index: 20;
+  animation: buttonPulse 2s ease-in-out infinite;
+}
+
+@keyframes buttonPulse {
+  0%, 100% {
+    box-shadow: 
+      0 4px 16px rgba(251, 140, 0, 0.4),
+      0 0 0 0 rgba(255, 152, 0, 0.7);
+  }
+  50% {
+    box-shadow: 
+      0 4px 20px rgba(251, 140, 0, 0.6),
+      0 0 0 10px rgba(255, 152, 0, 0);
+  }
 }
 
 .spin-button:hover:not(:disabled) {
@@ -10945,12 +11018,13 @@ body.dark-theme .confirm-btn.cancel:hover {
 }
 
 .spin-icon {
-  font-size: 2rem;
+  font-size: 2.5rem;
 }
 
 .spin-text {
-  font-size: 0.9rem;
-  letter-spacing: 1px;
+  font-size: 1rem;
+  letter-spacing: 1.5px;
+  font-weight: 800;
 }
 
 /* Результат */
