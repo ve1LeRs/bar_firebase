@@ -235,7 +235,11 @@ async function openWheelModal() {
     return;
   }
   
+  // Прокручиваем страницу наверх перед открытием модального окна
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  
   wheelElements.modal.style.display = 'block';
+  document.body.classList.add('modal-open');
   
   // Проверяем доступность
   await checkWheelAvailability();
@@ -251,6 +255,7 @@ async function openWheelModal() {
 function closeWheelModal() {
   wheelElements.modal.style.display = 'none';
   wheelElements.resultDiv.style.display = 'none';
+  document.body.classList.remove('modal-open');
 }
 
 // Проверка доступности колеса

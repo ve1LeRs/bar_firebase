@@ -28,6 +28,9 @@ async function openProfile() {
   const user = firebase.auth().currentUser;
   if (!user) return;
   
+  // Прокручиваем страницу наверх перед открытием модального окна
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  
   // Показываем модальное окно
   profileModal.style.display = 'block';
   document.body.classList.add('modal-open');
