@@ -712,6 +712,18 @@ async function loadCocktails() {
           <!-- ИСПРАВЛЕНО: Улучшена проверка на "Состав не указан" -->
           <p class="ingredients">${(typeof cocktail.ingredients === 'string' && cocktail.ingredients.trim()) || 'Состав не указан'}</p>
           <p class="mood">${cocktail.mood || ''}</p>
+          ${cocktail.tasteTags && cocktail.tasteTags.length > 0 ? `
+            <div class="taste-tags">
+              ${cocktail.tasteTags.map(tag => {
+                const tagLabels = {
+                  'sour': '🍋 Кислый',
+                  'sweet': '🍬 Сладкий',
+                  'bitter': '☕ Горький'
+                };
+                return `<span class="taste-tag ${tag}">${tagLabels[tag] || tag}</span>`;
+              }).join('')}
+            </div>
+          ` : ''}
           ${cocktail.price ? `<div class="cocktail-price"><i class="fas fa-ruble-sign"></i> ${cocktail.price} ₽</div>` : ''}
           ${!isInStoplist ? `
             <button class="order-btn" data-name="${cocktail.name}" data-price="${cocktail.price || 500}">
@@ -1813,6 +1825,14 @@ function editCocktail(id) {
       }
     }
     
+    // Предзаполняем теги вкусов
+    const tasteSour = document.getElementById('tasteSour');
+    const tasteSweet = document.getElementById('tasteSweet');
+    const tasteBitter = document.getElementById('tasteBitter');
+    if (tasteSour) tasteSour.checked = cocktail.tasteTags?.includes('sour') || false;
+    if (tasteSweet) tasteSweet.checked = cocktail.tasteTags?.includes('sweet') || false;
+    if (tasteBitter) tasteBitter.checked = cocktail.tasteTags?.includes('bitter') || false;
+    
     console.log('🔍 Перед открытием формы редактирования - заголовок:', formTitle ? formTitle.innerHTML : 'formTitle не найден');
     openModal(cocktailFormModal); // Используем новую функцию
   }
@@ -1865,6 +1885,12 @@ cocktailForm?.addEventListener('submit', async (e) => {
   const category = cocktailCategory ? cocktailCategory.value : '';
   const imageFile = cocktailImage ? cocktailImage.files[0] : null;
   
+  // Получаем выбранные теги вкусов
+  const tasteTags = [];
+  if (document.getElementById('tasteSour')?.checked) tasteTags.push('sour');
+  if (document.getElementById('tasteSweet')?.checked) tasteTags.push('sweet');
+  if (document.getElementById('tasteBitter')?.checked) tasteTags.push('bitter');
+  
   try {
     let imageUrl = '';
     
@@ -1883,6 +1909,7 @@ cocktailForm?.addEventListener('submit', async (e) => {
       alcohol: alcohol ? parseInt(alcohol) : null,
       price: price,
       category: category || 'signature', // По умолчанию авторский, если не выбрано
+      tasteTags: tasteTags, // Добавляем теги вкусов
       updatedAt: new Date()
     };
     
@@ -5501,6 +5528,10 @@ filterAdminCocktails();
 // Показать модальное окно изменения категории
 function showCategoryChangeModal(cocktailId, currentCategory) {
   console.log('📋 showCategoryChangeModal вызвана для:', cocktailId, currentCategory);
+  
+  // Прокручиваем страницу наверх перед открытием модального окна
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  
   const cocktail = cocktailsData.find(c => c.id === cocktailId);
   if (!cocktail) {
     console.error('❌ Коктейль не найден:', cocktailId);
