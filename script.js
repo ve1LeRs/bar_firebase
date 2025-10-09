@@ -511,6 +511,9 @@ function openModal(modalElement) {
     return;
   }
   
+  // Прокручиваем страницу наверх перед открытием модального окна
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  
   // Сохраняем текущую позицию прокрутки
   scrollY = window.scrollY;
   document.body.style.setProperty('--scroll-y', `${scrollY}px`);
