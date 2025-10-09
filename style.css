@@ -10421,3 +10421,619 @@ body.dark-theme .confirm-btn.cancel:hover {
     min-width: auto;
   }
 }
+
+/* ========================================
+   КОЛЕСО УДАЧИ - СТИЛИ
+   ======================================== */
+
+/* Анимации для колеса */
+@keyframes wheelSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(1800deg);
+  }
+}
+
+@keyframes wheelPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes wheelShake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+  20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+@keyframes resultPopup {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) translateY(50px);
+  }
+  50% {
+    transform: scale(1.1) translateY(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes confettiDrop {
+  0% {
+    opacity: 1;
+    transform: translateY(-100%) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(100vh) rotate(720deg);
+  }
+}
+
+/* Карточка колеса в профиле */
+.wheel-of-fortune-card {
+  background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%);
+  border-radius: 15px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 8px 24px rgba(251, 140, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.wheel-of-fortune-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 32px rgba(251, 140, 0, 0.4);
+}
+
+.wheel-card-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.wheel-card-icon {
+  font-size: 3rem;
+  animation: wheelPulse 2s ease-in-out infinite;
+}
+
+.wheel-card-info h4 {
+  color: white;
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.wheel-card-info p {
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0.25rem 0 0 0;
+  font-size: 0.95rem;
+}
+
+.wheel-open-btn {
+  width: 100%;
+  padding: 1rem;
+  background: white;
+  color: #ff9800;
+  border: none;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.wheel-open-btn:hover {
+  background: rgba(255, 255, 255, 0.95);
+  transform: scale(1.02);
+}
+
+.wheel-open-btn:disabled {
+  background: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 152, 0, 0.5);
+  cursor: not-allowed;
+}
+
+/* Модальное окно колеса */
+.wheel-modal .modal-content {
+  max-width: 600px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.wheel-content {
+  background: white;
+  border-radius: 20px;
+}
+
+.wheel-header {
+  background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%);
+  padding: 2rem;
+  text-align: center;
+  color: white;
+}
+
+.wheel-header-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  animation: wheelPulse 2s ease-in-out infinite;
+}
+
+.wheel-title {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.wheel-subtitle {
+  margin: 0.5rem 0 0 0;
+  font-size: 1rem;
+  opacity: 0.95;
+}
+
+/* Доступность */
+.wheel-availability {
+  padding: 1.5rem;
+  background: #f8f9fa;
+}
+
+.availability-info {
+  background: white;
+  padding: 1rem;
+  border-radius: 10px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.availability-available {
+  color: #4caf50;
+  font-weight: 600;
+}
+
+.availability-locked {
+  color: #f44336;
+  font-weight: 600;
+}
+
+.availability-timer {
+  font-size: 1.5rem;
+  color: #ff9800;
+  margin-top: 0.5rem;
+  font-weight: 700;
+}
+
+/* Контейнер колеса */
+.wheel-container {
+  padding: 2rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.wheel-arrow {
+  position: absolute;
+  top: 2rem;
+  font-size: 2rem;
+  color: #ff9800;
+  z-index: 10;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+#wheelCanvas {
+  max-width: 100%;
+  height: auto;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.2));
+  transition: all 0.3s ease;
+}
+
+#wheelCanvas.spinning {
+  animation: wheelSpin 4s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+}
+
+/* Кнопка вращения */
+.spin-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%);
+  border: 5px solid white;
+  color: white;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  box-shadow: 0 4px 16px rgba(251, 140, 0, 0.4);
+  transition: all 0.3s ease;
+  z-index: 20;
+}
+
+.spin-button:hover:not(:disabled) {
+  transform: translate(-50%, -50%) scale(1.1);
+  box-shadow: 0 6px 20px rgba(251, 140, 0, 0.5);
+}
+
+.spin-button:active:not(:disabled) {
+  transform: translate(-50%, -50%) scale(0.95);
+}
+
+.spin-button:disabled {
+  background: linear-gradient(135deg, #bdbdbd 0%, #9e9e9e 100%);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.spin-icon {
+  font-size: 2rem;
+}
+
+.spin-text {
+  font-size: 0.9rem;
+  letter-spacing: 1px;
+}
+
+/* Результат */
+.wheel-result {
+  padding: 2rem;
+  text-align: center;
+}
+
+.result-animation {
+  animation: resultPopup 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.result-icon {
+  font-size: 5rem;
+  margin-bottom: 1rem;
+  animation: wheelPulse 1.5s ease-in-out infinite;
+}
+
+.result-title {
+  color: #ff9800;
+  font-size: 2rem;
+  margin: 0 0 0.5rem 0;
+  font-weight: 700;
+}
+
+.result-description {
+  color: #666;
+  font-size: 1.2rem;
+  margin: 0 0 1.5rem 0;
+}
+
+.result-claim-btn {
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+  transition: all 0.3s ease;
+}
+
+.result-claim-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+}
+
+/* История выигрышей */
+.wheel-history {
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border-top: 2px solid #e0e0e0;
+}
+
+.wheel-history h5 {
+  color: #333;
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wheel-history-list {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.wheel-history-item {
+  background: white;
+  padding: 1rem;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.history-item-icon {
+  font-size: 2rem;
+  min-width: 50px;
+  text-align: center;
+}
+
+.history-item-info {
+  flex: 1;
+}
+
+.history-item-prize {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.25rem;
+}
+
+.history-item-date {
+  font-size: 0.85rem;
+  color: #999;
+}
+
+.history-item-status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.history-item-status.claimed {
+  background: #e8f5e9;
+  color: #4caf50;
+}
+
+.history-item-status.pending {
+  background: #fff3e0;
+  color: #ff9800;
+}
+
+/* Админ панель - статистика колеса */
+.wheel-admin-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.wheel-settings-section,
+.wheel-prizes-section,
+.wheel-spins-history {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 10px;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.wheel-settings-section h5,
+.wheel-prizes-section h5,
+.wheel-spins-history h5 {
+  color: #333;
+  margin: 0 0 1rem 0;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-description {
+  color: #666;
+  margin: 0 0 1.5rem 0;
+  font-size: 0.95rem;
+}
+
+.wheel-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Список призов */
+.prizes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.prize-item {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.prize-item-icon {
+  font-size: 2rem;
+  min-width: 50px;
+  text-align: center;
+}
+
+.prize-item-info {
+  flex: 1;
+}
+
+.prize-item-name {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.25rem;
+}
+
+.prize-item-description {
+  font-size: 0.9rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+}
+
+.prize-item-probability {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: #ff9800;
+  color: white;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.prize-item-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.prize-item-actions .admin-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  min-width: auto;
+}
+
+/* Темная тема */
+body.dark-theme .wheel-content {
+  background: #2c3e50;
+}
+
+body.dark-theme .wheel-availability {
+  background: #34495e;
+}
+
+body.dark-theme .availability-info {
+  background: #2c3e50;
+  color: #ecf0f1;
+}
+
+body.dark-theme .wheel-history {
+  background: #34495e;
+  border-top-color: #2c3e50;
+}
+
+body.dark-theme .wheel-history h5 {
+  color: #ecf0f1;
+}
+
+body.dark-theme .wheel-history-item {
+  background: #2c3e50;
+  color: #ecf0f1;
+}
+
+body.dark-theme .history-item-prize {
+  color: #ecf0f1;
+}
+
+body.dark-theme .result-description {
+  color: #bdc3c7;
+}
+
+body.dark-theme .wheel-settings-section,
+body.dark-theme .wheel-prizes-section,
+body.dark-theme .wheel-spins-history {
+  background: #2c3e50;
+}
+
+body.dark-theme .wheel-settings-section h5,
+body.dark-theme .wheel-prizes-section h5,
+body.dark-theme .wheel-spins-history h5 {
+  color: #ecf0f1;
+}
+
+body.dark-theme .section-description {
+  color: #95a5a6;
+}
+
+body.dark-theme .prize-item {
+  background: #34495e;
+  color: #ecf0f1;
+}
+
+body.dark-theme .prize-item-name {
+  color: #ecf0f1;
+}
+
+body.dark-theme .prize-item-description {
+  color: #95a5a6;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .wheel-header-icon {
+    font-size: 3rem;
+  }
+  
+  .wheel-title {
+    font-size: 1.5rem;
+  }
+  
+  #wheelCanvas {
+    width: 320px !important;
+    height: 320px !important;
+  }
+  
+  .spin-button {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .spin-icon {
+    font-size: 1.5rem;
+  }
+  
+  .spin-text {
+    font-size: 0.75rem;
+  }
+  
+  .result-icon {
+    font-size: 3.5rem;
+  }
+  
+  .result-title {
+    font-size: 1.5rem;
+  }
+  
+  .result-description {
+    font-size: 1rem;
+  }
+  
+  .wheel-admin-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .prize-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .prize-item-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+  
+  .prize-item-actions .admin-btn {
+    width: 100%;
+  }
+}

@@ -149,6 +149,76 @@ service cloud.firestore {
                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
     
+    // ============================================
+    // ПРАВИЛА: Колесо удачи
+    // ============================================
+    
+    // Правила для конфигурации колеса (wheelConfig)
+    match /wheelConfig/{docId} {
+      // Разрешить всем читать конфигурацию колеса
+      allow read: if true;
+      
+      // Разрешить создавать и обновлять только админам
+      allow create, update: if request.auth != null && 
+                               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      
+      // Разрешить удалять только админам
+      allow delete: if request.auth != null && 
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Правила для призов колеса (wheelPrizes)
+    match /wheelPrizes/{prizeId} {
+      // Разрешить всем читать призы (для отображения колеса)
+      allow read: if true;
+      
+      // Разрешить создавать, обновлять и удалять только админам
+      allow create, update, delete: if request.auth != null && 
+                                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Правила для попыток вращения колеса (wheelSpins)
+    match /wheelSpins/{userId} {
+      // Разрешить пользователям читать только свои попытки
+      // Админы могут читать все попытки
+      allow read: if request.auth != null && 
+                     (request.auth.uid == userId || 
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      
+      // Разрешить создавать и обновлять только свои попытки
+      // Проверяем, что пользователь не крутит колесо чаще раза в день
+      allow create, update: if request.auth != null && 
+                               request.auth.uid == userId &&
+                               (
+                                 // Первое вращение
+                                 !exists(/databases/$(database)/documents/wheelSpins/$(userId)) ||
+                                 // Или прошло достаточно времени
+                                 request.time > resource.data.lastSpinDate + duration.fromHours(
+                                   get(/databases/$(database)/documents/wheelConfig/settings).data.cooldownHours
+                                 )
+                               );
+      
+      // Разрешить удалять только админам
+      allow delete: if request.auth != null && 
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Правила для промокодов пользователей (userPromocodes)
+    match /userPromocodes/{promoId} {
+      // Разрешить пользователям читать только свои промокоды
+      // Админы могут читать все
+      allow read: if request.auth != null && 
+                     (resource.data.userId == request.auth.uid || 
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      
+      // Разрешить создавать промокоды системе
+      allow create: if request.auth != null;
+      
+      // Запретить обновление и удаление пользователям
+      allow update, delete: if request.auth != null && 
+                               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
     // Правила для категорий и других коллекций
     match /{document=**} {
       // Разрешить всем читать
