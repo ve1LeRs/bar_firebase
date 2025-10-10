@@ -320,7 +320,7 @@ body.dark-theme .card-content {
 }
 
 body.dark-theme .card-content .order-btn {
-  margin-top: auto;
+  margin-top: auto !important;
   margin-bottom: 0;
   align-self: stretch;
 }
@@ -1571,7 +1571,7 @@ header h1::after {
 }
 
 .card-content .order-btn {
-  margin-top: auto;
+  margin-top: auto !important;
   margin-bottom: 0;
   align-self: stretch;
 }
