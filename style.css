@@ -301,8 +301,8 @@ body.dark-theme .cocktail-card {
   border: 1px solid rgba(100, 100, 150, 0.3);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   transition: background 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
-  /* Адаптивная высота под содержимое */
-  min-height: 600px;
+  /* Равномерная высота для всех карточек */
+  height: 100%;
   box-sizing: border-box;
 }
 
@@ -1476,6 +1476,7 @@ header h1::after {
   /* Фиксированные размеры для предотвращения сдвигов */
   box-sizing: border-box;
   min-height: 400px;
+  align-items: stretch; /* Выравнивает все карточки по высоте */
 }
 
 .cocktail-card {
@@ -1496,8 +1497,8 @@ header h1::after {
   touch-action: pan-y;
   display: flex;
   flex-direction: column;
-  /* Адаптивная высота под содержимое */
-  min-height: 600px;
+  /* Равномерная высота для всех карточек */
+  height: 100%;
   box-sizing: border-box;
 }
 
