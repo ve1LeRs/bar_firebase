@@ -152,6 +152,10 @@
   }
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -175,6 +179,7 @@
 
 body {
   font-family: 'Cormorant Garamond', serif;
+  scroll-behavior: smooth;
   background: 
     radial-gradient(circle at 20% 80%, rgba(220, 38, 38, 0.2) 0%, transparent 50%),
     radial-gradient(circle at 80% 20%, rgba(34, 197, 94, 0.2) 0%, transparent 50%),
@@ -320,7 +325,13 @@ body.dark-theme .card-content {
 }
 
 body.dark-theme .card-content .order-btn {
-  margin-top: auto !important;
+  margin-top: 0 !important;
+  margin-bottom: 0;
+  align-self: stretch;
+}
+
+.card-bottom .order-btn {
+  margin-top: 0 !important;
   margin-bottom: 0;
   align-self: stretch;
 }
@@ -923,12 +934,19 @@ body.dark-theme .category-change-notification {
 }
 
 body.dark-theme .close {
-  color: #aaa;
-  transition: color 0.6s ease;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  transition: background 0.3s ease, border-color 0.3s ease;
+  display: grid;
+  place-items: center;
 }
 
 body.dark-theme .close:hover {
   color: #fff;
+  background: rgba(231, 76, 60, 0.9);
+  border-color: rgba(255, 255, 255, 0.6);
 }
 
 body.dark-theme .order-summary {
@@ -1494,6 +1512,120 @@ header h1::after {
   align-items: stretch; /* Выравнивает все карточки по высоте */
 }
 
+/* Сообщение о пустой категории */
+.empty-category-message {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  padding: 3rem;
+}
+
+.empty-message-content {
+  text-align: center;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  padding: 3rem 2rem;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.empty-icon {
+  font-size: 5rem;
+  margin-bottom: 1.5rem;
+  animation: emptyIconFloat 3s ease-in-out infinite;
+}
+
+@keyframes emptyIconFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.empty-message-content h3 {
+  font-size: 1.8rem;
+  color: #fff;
+  margin-bottom: 0.8rem;
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+}
+
+.empty-message-content p {
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+body.dark-theme .empty-message-content {
+  background: rgba(40, 40, 60, 0.8);
+  border-color: rgba(212, 175, 55, 0.3);
+}
+
+/* Легенда тегов вкуса */
+.taste-tags-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  padding: 1rem 2rem;
+  margin: 1rem 2rem 2rem;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(15px);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.legend-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: 'Inter', sans-serif;
+}
+
+.legend-items {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.legend-emoji {
+  font-size: 1.3rem;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.legend-text {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+}
+
+body.dark-theme .taste-tags-legend {
+  background: rgba(40, 40, 60, 0.6);
+  border-color: rgba(212, 175, 55, 0.2);
+}
+
+body.dark-theme .legend-emoji {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(212, 175, 55, 0.3);
+}
+
 .cocktail-card {
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(20px);
@@ -1514,6 +1646,7 @@ header h1::after {
   flex-direction: column;
   /* Равномерная высота для всех карточек */
   height: 100%;
+  min-height: 650px;
   box-sizing: border-box;
 }
 
@@ -1580,26 +1713,49 @@ header h1::after {
   flex: 1;
   transition: background 0.6s ease;
   box-sizing: border-box;
+  justify-content: space-between;
+  min-height: 200px;
+}
+
+.card-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: auto;
+  flex-shrink: 0;
 }
 
 .card-content .order-btn {
-  margin-top: auto !important;
+  margin-top: 0 !important;
+  margin-bottom: 0;
+  align-self: stretch;
+}
+
+.card-bottom .order-btn {
+  margin-top: 0 !important;
   margin-bottom: 0;
   align-self: stretch;
 }
 
 .cocktail-card h2 {
-  font-size: 2.1rem;
-  font-weight: 700;
-  color: #ffffff;
+  font-size: 2.2rem;
+  font-weight: 600;
+  color: #1a1a1a;
   margin: 0 0 1rem;
-  font-style: normal;
-  letter-spacing: -0.3px;
+  font-style: italic;
+  letter-spacing: 0.5px;
   line-height: 1.3;
   transition: color 0.6s ease;
+  font-family: 'Cormorant Garamond', serif;
   text-shadow: 
-    0 2px 8px rgba(0, 0, 0, 0.5),
-    0 1px 3px rgba(0, 0, 0, 0.8);
+    0 2px 4px rgba(0, 0, 0, 0.1),
+    0 1px 1px rgba(255, 255, 255, 0.6);
   /* Фиксированная высота для выравнивания кнопок */
   height: 5.5rem;
   overflow: hidden;
@@ -1607,113 +1763,100 @@ header h1::after {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   box-sizing: border-box;
+  flex-shrink: 0;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.cocktail-card .ingredients {
-  font-family: 'Inter', sans-serif;
-  font-size: 1rem;
-  font-weight: 400;
-  color: rgba(255, 255, 255, 0.95);
-  line-height: 1.7;
-  letter-spacing: 0.2px;
-  transition: color 0.6s ease;
-  margin-bottom: 1rem;
-  text-shadow: 
-    0 1px 3px rgba(0, 0, 0, 0.5),
-    0 0 10px rgba(0, 0, 0, 0.3);
-  /* Фиксированная высота для выравнивания кнопок */
-  height: 5.5rem;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  box-sizing: border-box;
-}
+/* Убираем стили для ингредиентов в карточках, так как они теперь в модальном окне */
 
 .cocktail-card .mood {
   font-family: 'Cormorant Garamond', serif;
   font-size: 1rem;
   font-style: italic;
   font-weight: 500;
-  color: rgba(255, 215, 0, 1);
+  color: #000000;
   margin-top: 0;
   margin-bottom: 1rem;
   line-height: 1.6;
   letter-spacing: 0.8px;
   transition: color 0.6s ease;
   text-shadow: 
-    0 1px 4px rgba(0, 0, 0, 0.5),
-    0 0 8px rgba(255, 215, 0, 0.3);
-  /* Фиксированная высота для выравнивания кнопок */
-  height: 2rem;
+    0 1px 2px rgba(255, 255, 255, 0.6),
+    0 0 3px rgba(0, 0, 0, 0.2);
+  /* Увеличиваем высоту для настроения */
+  height: 4rem;
   overflow: hidden;
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 /* Теги вкусов в карточке */
 .taste-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  height: 2.5rem;
-  overflow: hidden;
+  position: absolute !important;
+  bottom: 10px !important;
+  left: 10px !important;
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 0.5rem !important;
+  z-index: 5 !important;
+  pointer-events: none;
 }
 
 .taste-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.4rem 0.8rem;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  backdrop-filter: blur(10px);
-  transition: all 0.3s ease;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  display: grid !important;
+  place-items: center !important;
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 50% !important;
+  font-size: 1.5rem !important;
+  backdrop-filter: blur(10px) !important;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4) !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+  pointer-events: auto;
 }
 
 .taste-tag.sour {
-  background: rgba(255, 193, 7, 0.9);
-  color: #1a1a1a;
-  border: 1px solid rgba(255, 193, 7, 0.5);
+  background: rgba(255, 193, 7, 0.95);
+  border: 2px solid rgba(255, 255, 255, 0.6);
 }
 
 .taste-tag.sweet {
-  background: rgba(233, 30, 99, 0.9);
-  color: #ffffff;
-  border: 1px solid rgba(233, 30, 99, 0.5);
+  background: rgba(233, 30, 99, 0.95);
+  border: 2px solid rgba(255, 255, 255, 0.6);
 }
 
 .taste-tag.bitter {
-  background: rgba(121, 85, 72, 0.9);
-  color: #ffffff;
-  border: 1px solid rgba(121, 85, 72, 0.5);
+  background: rgba(78, 52, 46, 0.95);
+  border: 2px solid rgba(255, 255, 255, 0.6);
 }
 
 .taste-tag:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  transform: scale(1.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 body.dark-theme .taste-tag.sour {
-  background: rgba(255, 193, 7, 0.85);
-  border-color: rgba(255, 193, 7, 0.4);
+  background: rgba(255, 193, 7, 0.95);
+  border-color: rgba(255, 255, 255, 0.5);
 }
 
 body.dark-theme .taste-tag.sweet {
-  background: rgba(233, 30, 99, 0.85);
-  border-color: rgba(233, 30, 99, 0.4);
+  background: rgba(233, 30, 99, 0.95);
+  border-color: rgba(255, 255, 255, 0.5);
 }
 
 body.dark-theme .taste-tag.bitter {
-  background: rgba(121, 85, 72, 0.85);
-  border-color: rgba(121, 85, 72, 0.4);
+  background: rgba(78, 52, 46, 0.95);
+  border-color: rgba(255, 255, 255, 0.5);
 }
 
 /* Селектор тегов вкуса в форме */
@@ -1814,6 +1957,7 @@ body.dark-theme .taste-label.bitter {
   justify-content: center;
   gap: 0.5rem;
   transition: all 0.3s ease;
+  flex-shrink: 0;
   box-shadow: 0 2px 8px rgba(142, 111, 66, 0.1);
   height: 3.5rem;
   box-sizing: border-box;
@@ -1858,6 +2002,8 @@ body.dark-theme .cocktail-price:hover {
     0 4px 16px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
   transition: all 0.3s ease;
+  flex-shrink: 0;
+  min-height: 50px;
   transition: all 0.3s ease;
   width: 100%;
   display: flex;
@@ -1914,10 +2060,25 @@ body.dark-theme .cocktail-price:hover {
   top: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0,0,0,0.6);
-  backdrop-filter: blur(3px);
+  background-color: rgba(0,0,0,0.7);
+  backdrop-filter: blur(5px);
   overflow-y: auto;
   padding: 20px 0;
+  z-index: 1000;
+}
+
+/* Предотвращаем прокрутку страницы только для определенных модальных окон */
+body.modal-open.wheel-open {
+  overflow: hidden;
+}
+
+body.modal-open.profile-open {
+  overflow: hidden;
+}
+
+/* Для обычных модальных окон разрешаем прокрутку */
+.modal {
+  overflow-y: auto;
 }
 
 .modal[style*="display: block"] {
@@ -1930,7 +2091,7 @@ body.dark-theme .cocktail-price:hover {
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(20px);
   margin: 0 auto;
-  padding: 2.5rem;
+  padding: 0;
   border-radius: 24px;
   width: 90%;
   max-width: 500px;
@@ -1943,8 +2104,7 @@ body.dark-theme .cocktail-price:hover {
   text-align: center;
   color: #ffffff;
   animation: modalAppear 0.4s ease;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   /* Фиксированные размеры для предотвращения сдвигов */
   box-sizing: border-box;
   /* Плавная прокрутка */
@@ -1998,17 +2158,29 @@ body.dark-theme .modal-content::-webkit-scrollbar-thumb:hover {
 .close {
   position: absolute;
   right: 20px;
-  top: 15px;
-  font-size: 2rem;
-  font-weight: bold;
+  top: 20px;
+  font-size: 1.8rem;
+  font-weight: 400;
   cursor: pointer;
-  color: #aaa;
-  transition: all 0.3s ease;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  transition: background 0.3s ease, border-color 0.3s ease;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  z-index: 10;
+  line-height: 1;
+  padding: 0;
+  margin: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
 .close:hover {
-  color: #333;
-  transform: rotate(90deg);
+  background: rgba(231, 76, 60, 0.9);
+  border-color: rgba(255, 255, 255, 0.6);
 }
 
 .modal h3 {
@@ -2098,6 +2270,7 @@ body.dark-theme .modal-content::-webkit-scrollbar-thumb:hover {
   max-height: 95vh;
   overflow-y: auto;
   overflow-x: hidden;
+  border-radius: 24px;
 }
 
 .order-modal #confirmOrder {
@@ -2397,7 +2570,7 @@ body.dark-theme .order-image-placeholder i {
   position: relative;
   box-sizing: border-box;
   background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-  border-radius: 20px;
+  border-radius: 24px;
   box-shadow: 
     0 20px 60px rgba(0, 0, 0, 0.15),
     0 0 0 1px rgba(255, 255, 255, 0.8);
@@ -2972,6 +3145,7 @@ body.dark-theme #myBillBtn:hover {
   padding: 2rem;
   max-height: 85vh;
   overflow-y: auto;
+  border-radius: 24px;
 }
 
 .bills-history-list {
@@ -3241,6 +3415,7 @@ body.dark-theme #billHistoryBtn:hover {
   max-width: 400px;
   padding: 3rem 2rem;
   text-align: center;
+  border-radius: 24px;
 }
 
 .success-icon {
@@ -3291,6 +3466,7 @@ body.dark-theme #billHistoryBtn:hover {
   max-width: 400px;
   padding: 3rem 2rem;
   text-align: center;
+  border-radius: 24px;
 }
 
 .error-icon {
@@ -3335,11 +3511,20 @@ body.dark-theme #billHistoryBtn:hover {
 /* Админ-панель */
 .admin-panel {
   z-index: 3000;
+  overflow-y: visible !important;
+  position: fixed;
+  align-items: flex-start;
+  padding: 20px 0;
+  padding-bottom: 60px;
 }
 
 .admin-content {
   max-width: 800px;
   padding: 2rem;
+  border-radius: 24px;
+  overflow: hidden;
+  margin: 2rem auto;
+  position: relative;
 }
 
 .admin-content h3 {
@@ -3351,40 +3536,58 @@ body.dark-theme #billHistoryBtn:hover {
 }
 
 .admin-tabs {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 0.5rem;
-  margin-bottom: 1.5rem;
-  border-bottom: 2px solid #eee;
-  padding-bottom: 0.5rem;
+  margin-bottom: 1.2rem;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.6rem;
+  border-radius: 12px;
 }
 
 .tab-btn {
-  padding: 0.6rem 0.9rem;
-  background: none;
-  border: none;
-  border-bottom: 3px solid transparent;
+  padding: 0.6rem 0.5rem;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(201, 168, 124, 0.2);
+  border-radius: 8px;
   cursor: pointer;
   font-family: 'Inter', sans-serif;
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: 0.7rem;
+  font-weight: 600;
   color: #6b5c47;
-  transition: all 0.3s ease;
-  white-space: nowrap;
+  transition: all 0.2s ease;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.2;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tab-btn:hover {
-  color: #c9a87c;
+  background: rgba(201, 168, 124, 0.2);
+  border-color: #c9a87c;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(201, 168, 124, 0.2);
 }
 
 /* Темная тема для вкладок админки */
 body.dark-theme .admin-tabs {
-  border-color: rgba(180, 140, 90, 0.3);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+body.dark-theme .tab-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #b0b0c0;
+  border-color: rgba(180, 140, 90, 0.2);
 }
 
 .tab-btn.active {
-  color: #c9a87c;
-  border-bottom: 3px solid #c9a87c;
+  background: linear-gradient(135deg, #c9a87c, #b08c5a);
+  color: white;
+  border-color: #c9a87c;
+  box-shadow: 0 4px 12px rgba(201, 168, 124, 0.3);
 }
 
 .tab-content {
@@ -4073,6 +4276,8 @@ body.dark-theme .admin-tabs {
 .form-modal {
   max-width: 600px;
   padding: 2rem;
+  border-radius: 24px;
+  overflow: hidden;
 }
 
 .form-group {
@@ -4750,6 +4955,7 @@ body.dark-theme .admin-tabs {
 .status-modal {
   max-width: 500px;
   padding: 2rem;
+  border-radius: 24px;
 }
 
 .status-modal h3 {
@@ -5201,6 +5407,21 @@ button.loading i.fa-spinner {
     font-size: 2.5rem;
   }
   
+  .taste-tags-legend {
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+    margin: 1rem 1rem 1.5rem;
+  }
+  
+  .legend-items {
+    gap: 1rem;
+  }
+  
+  .legend-text {
+    font-size: 0.85rem;
+  }
+
   .cocktails-grid {
     grid-template-columns: 1fr;
     gap: 2rem;
@@ -6517,6 +6738,7 @@ body.modal-open {
 .form-modal {
   max-height: 90vh;
   overflow-y: auto; /* Разрешаем вертикальную прокрутку внутри модального окна */
+  overflow-x: hidden; /* Скрываем горизонтальную прокрутку */
   display: flex;
   flex-direction: column;
   /* Фиксированные размеры для предотвращения сдвигов */
@@ -7143,7 +7365,7 @@ body.dark-theme .promo-detail-value {
   text-align: center;
   position: relative;
   overflow: hidden;
-  border-radius: 24px 24px 0 0;
+  border-radius: 24px 24px 16px 16px;
 }
 
 .rating-header::before {
@@ -9173,6 +9395,14 @@ body.dark-theme .admin-btn-header:hover {
 }
 
 /* Модальное окно профиля */
+.profile-modal {
+  overflow-y: visible !important;
+  position: fixed;
+  align-items: flex-start;
+  padding: 20px 0;
+  padding-bottom: 60px;
+}
+
 .profile-modal .profile-content {
   max-width: 900px;
   width: 95%;
@@ -9180,6 +9410,9 @@ body.dark-theme .admin-btn-header:hover {
   overflow: visible;
   display: flex;
   flex-direction: column;
+  margin: 2rem auto;
+  position: relative;
+  border-radius: 24px;
 }
 
 /* Шапка профиля */
@@ -9190,7 +9423,7 @@ body.dark-theme .admin-btn-header:hover {
   padding: 1.5rem;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  border-radius: 12px;
+  border-radius: 24px 24px 16px 16px;
   margin-bottom: 0.5rem;
 }
 
@@ -9636,13 +9869,19 @@ body.dark-theme .danger-zone {
     display: inline !important;
   }
   
+  .profile-modal {
+    padding: 0;
+    padding-bottom: 20px;
+  }
+  
   .profile-modal .profile-content {
     max-width: 100%;
     width: 100%;
     max-height: none;
     height: auto;
     margin: 0;
-    border-radius: 0;
+    border-radius: 24px;
+    overflow: visible;
   }
   
   .profile-header {
@@ -10470,11 +10709,12 @@ body.dark-theme .bill-detail-total strong:last-child {
 .payment-confirm-content {
   max-width: 550px;
   max-height: 95vh;
-  padding: 0;
+  padding: 2rem;
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
+  border-radius: 24px;
 }
 
 .payment-confirm-header {
@@ -10482,6 +10722,7 @@ body.dark-theme .bill-detail-total strong:last-child {
   color: white;
   padding: 1.5rem;
   text-align: center;
+  border-radius: 24px 24px 16px 16px;
 }
 
 .payment-icon {
@@ -10715,6 +10956,7 @@ body.dark-theme .payment-btn.cancel:hover {
   max-width: 500px;
   padding: 0;
   overflow: hidden;
+  border-radius: 24px;
 }
 
 .confirm-action-header {
@@ -10722,6 +10964,7 @@ body.dark-theme .payment-btn.cancel:hover {
   text-align: center;
   background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%);
   color: white;
+  border-radius: 24px 24px 16px 16px;
 }
 
 .confirm-action-header.danger {
@@ -11002,16 +11245,27 @@ body.dark-theme .confirm-btn.cancel:hover {
 }
 
 /* Модальное окно колеса */
+.wheel-modal {
+  overflow-y: visible !important;
+  position: fixed;
+  align-items: flex-start;
+  padding: 20px 0;
+  padding-bottom: 60px;
+}
+
 .wheel-modal .modal-content {
-  max-width: 600px;
+  max-width: 700px;
   max-height: none;
   padding: 0;
   overflow: visible;
+  margin: 2rem auto;
+  position: relative;
+  border-radius: 24px;
 }
 
 .wheel-content {
   background: white;
-  border-radius: 20px;
+  border-radius: 24px;
 }
 
 .wheel-header {
@@ -11019,6 +11273,7 @@ body.dark-theme .confirm-btn.cancel:hover {
   padding: 2rem;
   text-align: center;
   color: white;
+  border-radius: 24px 24px 16px 16px;
 }
 
 .wheel-header-icon {
@@ -11116,15 +11371,15 @@ body.dark-theme .confirm-btn.cancel:hover {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 100px !important;
-  height: 100px !important;
-  min-width: 100px;
-  min-height: 100px;
-  max-width: 100px;
-  max-height: 100px;
+  width: 120px !important;
+  height: 120px !important;
+  min-width: 120px;
+  min-height: 120px;
+  max-width: 120px;
+  max-height: 120px;
   border-radius: 50% !important;
   background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%);
-  border: 5px solid white;
+  border: 6px solid white;
   color: white;
   font-size: 0.9rem;
   font-weight: 700;
@@ -11157,18 +11412,47 @@ body.dark-theme .confirm-btn.cancel:hover {
 }
 
 .spin-button:hover:not(:disabled) {
-  transform: translate(-50%, -50%) scale(1.1);
-  box-shadow: 0 6px 20px rgba(251, 140, 0, 0.5);
+  transform: translate(-50%, -50%) !important;
+  box-shadow: 0 6px 20px rgba(251, 140, 0, 0.6) !important;
+  background: linear-gradient(135deg, #fb8c00 0%, #ff9800 100%);
+  animation: none;
 }
 
 .spin-button:active:not(:disabled) {
-  transform: translate(-50%, -50%) scale(0.95);
+  transform: translate(-50%, -50%) !important;
+  box-shadow: 0 2px 8px rgba(251, 140, 0, 0.4) !important;
+  animation: none;
 }
 
 .spin-button:disabled {
   background: linear-gradient(135deg, #bdbdbd 0%, #9e9e9e 100%);
   cursor: not-allowed;
   opacity: 0.7;
+}
+
+/* Кнопка админа для обхода ожидания */
+.admin-spin-bypass {
+  margin-top: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(156, 39, 176, 0.3);
+}
+
+.admin-spin-bypass:hover {
+  background: linear-gradient(135deg, #7b1fa2 0%, #6a1b9a 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(156, 39, 176, 0.4);
+}
+
+.admin-spin-bypass i {
+  margin-right: 0.5rem;
 }
 
 .spin-icon {

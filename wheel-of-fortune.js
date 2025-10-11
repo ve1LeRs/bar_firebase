@@ -89,9 +89,9 @@ async function loadWheelConfig() {
 // Загрузка призов
 async function loadWheelPrizes() {
   try {
+    // Упрощенный запрос без составного индекса
     const prizesSnapshot = await db.collection('wheelPrizes')
       .where('active', '==', true)
-      .orderBy('probability', 'desc')
       .get();
     
     if (prizesSnapshot.empty) {
@@ -102,6 +102,9 @@ async function loadWheelPrizes() {
         id: doc.id,
         ...doc.data()
       }));
+      
+      // Сортируем на клиенте по вероятности (от большей к меньшей)
+      wheelState.prizes.sort((a, b) => (b.probability || 0) - (a.probability || 0));
     }
     
     console.log('🎁 Призы загружены:', wheelState.prizes);
@@ -221,10 +224,45 @@ function setupWheelEventListeners() {
     wheelElements.spinButton.addEventListener('click', spinWheel);
   }
   
+  // Кнопка обхода ожидания для админа
+  const adminBypassBtn = document.getElementById('adminSpinBypass');
+  if (adminBypassBtn) {
+    adminBypassBtn.addEventListener('click', async () => {
+      const userId = auth.currentUser.uid;
+      
+      // Сбрасываем таймер вращения для админа
+      try {
+        await db.collection('wheelSpins').doc(userId).delete();
+        console.log('✅ Таймер вращения сброшен');
+      } catch (error) {
+        console.error('❌ Ошибка сброса таймера:', error);
+      }
+      
+      wheelElements.spinButton.disabled = false;
+      wheelElements.availabilityInfo.innerHTML = `
+        <div class="availability-available">
+          👑 Админ режим активирован!
+          <p style="margin-top: 0.5rem; font-size: 0.9rem; font-weight: normal;">
+            Таймер сброшен - колесо доступно
+          </p>
+        </div>
+      `;
+    });
+  }
+  
   // Закрытие модального окна
   const closeBtn = wheelElements.modal?.querySelector('.close');
   if (closeBtn) {
     closeBtn.addEventListener('click', closeWheelModal);
+  }
+  
+  // Закрытие модального окна по клику на фон
+  if (wheelElements.modal) {
+    wheelElements.modal.addEventListener('click', (e) => {
+      if (e.target === wheelElements.modal) {
+        closeWheelModal();
+      }
+    });
   }
 }
 
@@ -239,7 +277,8 @@ async function openWheelModal() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
   
   wheelElements.modal.style.display = 'block';
-  document.body.classList.add('modal-open');
+  // НЕ добавляем modal-open, чтобы страница могла прокручиваться
+  // document.body.classList.add('modal-open');
   
   // Проверяем доступность
   await checkWheelAvailability();
@@ -255,7 +294,7 @@ async function openWheelModal() {
 function closeWheelModal() {
   wheelElements.modal.style.display = 'none';
   wheelElements.resultDiv.style.display = 'none';
-  document.body.classList.remove('modal-open');
+  // document.body.classList.remove('modal-open'); // Убираем, так как не добавляли
 }
 
 // Проверка доступности колеса
@@ -264,6 +303,11 @@ async function checkWheelAvailability() {
   
   try {
     const userId = auth.currentUser.uid;
+    const userDoc = await db.collection('users').doc(userId).get();
+    const isAdmin = userDoc.exists && userDoc.data().isAdmin === true;
+    
+    const adminBypassBtn = document.getElementById('adminSpinBypass');
+    
     const userSpinDoc = await db.collection('wheelSpins').doc(userId).get();
     
     if (userSpinDoc.exists) {
@@ -295,9 +339,20 @@ async function checkWheelAvailability() {
             wheelCardStatus.textContent = `Доступно через ${remainingHours}ч ${remainingMinutes}м`;
           }
           
+          // Показываем кнопку обхода для админа
+          if (isAdmin && adminBypassBtn) {
+            adminBypassBtn.style.display = 'block';
+          }
+          
           return false;
         }
       }
+    }
+    
+    // Показываем кнопку админа всегда если он админ
+    if (isAdmin && adminBypassBtn) {
+      adminBypassBtn.style.display = 'block';
+      adminBypassBtn.innerHTML = '<i class="fas fa-crown"></i> Админ режим: крутить всегда';
     }
     
     // Колесо доступно
@@ -322,6 +377,16 @@ async function checkWheelAvailability() {
     console.error('❌ Ошибка проверки доступности:', error);
     return false;
   }
+}
+
+// Вспомогательная функция для осветления цвета
+function lightenColor(color, percent) {
+  const num = parseInt(color.replace('#', ''), 16);
+  const amt = Math.round(2.55 * percent);
+  const R = Math.min(255, (num >> 16) + amt);
+  const G = Math.min(255, ((num >> 8) & 0x00FF) + amt);
+  const B = Math.min(255, (num & 0x0000FF) + amt);
+  return `#${(0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1)}`;
 }
 
 // Отрисовка колеса
@@ -351,58 +416,74 @@ function drawWheel() {
     ctx.arc(centerX, centerY, radius, startAngle, endAngle);
     ctx.closePath();
     
-    // Заливаем цветом
-    ctx.fillStyle = prize.color || '#ff9800';
+    // Создаем градиентную заливку для красоты
+    const gradient = ctx.createRadialGradient(centerX, centerY, radius * 0.3, centerX, centerY, radius);
+    const baseColor = prize.color || '#ff9800';
+    gradient.addColorStop(0, lightenColor(baseColor, 30));
+    gradient.addColorStop(1, baseColor);
+    ctx.fillStyle = gradient;
     ctx.fill();
     
-    // Обводка
+    // Обводка с тенью
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+    ctx.shadowBlur = 5;
     ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4;
     ctx.stroke();
+    ctx.shadowBlur = 0;
     
-    // Текст приза
+    // Эмодзи приза (только эмодзи, без текста)
     ctx.save();
     ctx.translate(centerX, centerY);
     ctx.rotate(startAngle + anglePerPrize / 2);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
-    // Иконка
-    ctx.font = 'bold 30px Arial';
-    ctx.fillStyle = '#fff';
-    ctx.fillText(prize.icon || '🎁', radius * 0.65, 0);
-    
-    // Название
-    ctx.font = 'bold 14px Arial';
+    // Рисуем только эмодзи по центру ячейки
+    ctx.font = 'bold 48px Arial';
     ctx.fillStyle = '#fff';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-    ctx.shadowBlur = 4;
-    ctx.fillText(prize.name, radius * 0.4, 0);
+    ctx.shadowBlur = 8;
+    ctx.fillText(prize.icon || '🎁', radius * 0.65, 0);
     
     ctx.restore();
   });
   
-  // Центральный круг
+  // Центральный круг (точно под размер кнопки 120px)
   ctx.beginPath();
   ctx.arc(centerX, centerY, 60, 0, 2 * Math.PI);
-  ctx.fillStyle = '#fff';
+  
+  // Градиентная заливка для центрального круга
+  const centerGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 60);
+  centerGradient.addColorStop(0, '#fff');
+  centerGradient.addColorStop(1, '#f0f0f0');
+  ctx.fillStyle = centerGradient;
   ctx.fill();
+  
+  // Обводка с тенью
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+  ctx.shadowBlur = 10;
   ctx.strokeStyle = '#ff9800';
-  ctx.lineWidth = 5;
+  ctx.lineWidth = 6;
   ctx.stroke();
+  ctx.shadowBlur = 0;
 }
 
 // Вращение колеса
 async function spinWheel() {
-  if (wheelState.isSpinning) return;
+  if (wheelState.isSpinning) {
+    console.log('⚠️ Колесо уже вращается');
+    return;
+  }
   
-  // Проверяем доступность
-  const isAvailable = await checkWheelAvailability();
-  if (!isAvailable) {
+  // Проверяем, не заблокирована ли кнопка
+  if (wheelElements.spinButton.disabled) {
+    console.log('⚠️ Кнопка заблокирована');
     showError('Колесо пока недоступно. Попробуйте позже');
     return;
   }
   
+  console.log('🎰 Начинаем вращение колеса');
   wheelState.isSpinning = true;
   wheelElements.spinButton.disabled = true;
   wheelElements.resultDiv.style.display = 'none';
@@ -498,17 +579,36 @@ async function claimPrize(prize) {
     const userId = auth.currentUser.uid;
     
     if (prize.type === 'bonus') {
-      // Начисляем бонусы
-      await db.collection('users').doc(userId).update({
-        bonusPoints: firebase.firestore.FieldValue.increment(prize.value),
-        totalEarned: firebase.firestore.FieldValue.increment(prize.value)
-      });
+      // Начисляем бонусы в правильную коллекцию
+      const bonusRef = db.collection('bonusAccounts').doc(userId);
+      const bonusDoc = await bonusRef.get();
+      
+      if (bonusDoc.exists) {
+        await bonusRef.update({
+          balance: firebase.firestore.FieldValue.increment(prize.value),
+          totalEarned: firebase.firestore.FieldValue.increment(prize.value),
+          lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      } else {
+        // Создаем аккаунт если его нет
+        await bonusRef.set({
+          userId: userId,
+          balance: prize.value,
+          totalEarned: prize.value,
+          totalSpent: 0,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
       
       showSuccess(`🎉 ${prize.value} бонусов начислено на ваш счет!`);
       
-      // Обновляем отображение бонусов
-      if (typeof loadUserBonuses === 'function') {
-        await loadUserBonuses();
+      // Обновляем отображение бонусов в профиле
+      if (typeof loadProfileBonuses === 'function') {
+        await loadProfileBonuses(userId);
+      }
+      if (typeof updateBonusDisplay === 'function') {
+        await updateBonusDisplay();
       }
       
     } else if (prize.type === 'promo') {
@@ -585,13 +685,29 @@ async function saveSpinAttempt(prize) {
         name: prize.name,
         type: prize.type,
         value: prize.value,
+        icon: prize.icon,
         claimed: false
       },
       lastSpinDate: firebase.firestore.FieldValue.serverTimestamp(),
       totalSpins: firebase.firestore.FieldValue.increment(1)
     };
     
+    // Сохраняем последнюю попытку
     await db.collection('wheelSpins').doc(userId).set(spinData, { merge: true });
+    
+    // Добавляем в историю
+    await db.collection('wheelHistory').add({
+      userId: userId,
+      prize: {
+        id: prize.id,
+        name: prize.name,
+        type: prize.type,
+        value: prize.value,
+        icon: prize.icon
+      },
+      claimed: false,
+      spunAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
     
     // Обновляем статус доступности
     await checkWheelAvailability();
@@ -608,9 +724,15 @@ async function loadWheelHistory() {
   
   try {
     const userId = auth.currentUser.uid;
-    const userSpinDoc = await db.collection('wheelSpins').doc(userId).get();
     
-    if (!userSpinDoc.exists) {
+    // Загружаем историю из коллекции wheelHistory
+    const historySnapshot = await db.collection('wheelHistory')
+      .where('userId', '==', userId)
+      .orderBy('spunAt', 'desc')
+      .limit(10)
+      .get();
+    
+    if (historySnapshot.empty) {
       wheelElements.historyList.innerHTML = `
         <p style="text-align: center; color: #999; padding: 2rem;">
           История пуста. Крутите колесо!
@@ -619,38 +741,36 @@ async function loadWheelHistory() {
       return;
     }
     
-    const data = userSpinDoc.data();
-    const prize = data.prize;
-    
-    if (!prize) {
-      wheelElements.historyList.innerHTML = `
-        <p style="text-align: center; color: #999; padding: 2rem;">
-          История пуста. Крутите колесо!
-        </p>
+    let historyHTML = '';
+    historySnapshot.forEach(doc => {
+      const data = doc.data();
+      const prize = data.prize;
+      const spunDate = data.spunAt?.toDate();
+      const dateStr = spunDate ? formatDate(spunDate) : 'Недавно';
+      
+      historyHTML += `
+        <div class="wheel-history-item">
+          <div class="history-item-icon">${prize.icon || '🎁'}</div>
+          <div class="history-item-info">
+            <div class="history-item-prize">${prize.name}</div>
+            <div class="history-item-date">${dateStr}</div>
+          </div>
+          <div class="history-item-status ${data.claimed ? 'claimed' : 'pending'}">
+            ${data.claimed ? '✓ Получен' : '⏳ Ожидает'}
+          </div>
+        </div>
       `;
-      return;
-    }
+    });
     
-    const lastSpinDate = data.lastSpinDate?.toDate();
-    const dateStr = lastSpinDate ? formatDate(lastSpinDate) : 'Недавно';
-    
-    wheelElements.historyList.innerHTML = `
-      <div class="wheel-history-item">
-        <div class="history-item-icon">
-          ${wheelState.prizes.find(p => p.id === prize.id)?.icon || '🎁'}
-        </div>
-        <div class="history-item-info">
-          <div class="history-item-prize">${prize.name}</div>
-          <div class="history-item-date">${dateStr}</div>
-        </div>
-        <div class="history-item-status ${prize.claimed ? 'claimed' : 'pending'}">
-          ${prize.claimed ? 'Получен' : 'Ожидает'}
-        </div>
-      </div>
-    `;
+    wheelElements.historyList.innerHTML = historyHTML;
     
   } catch (error) {
     console.error('❌ Ошибка загрузки истории:', error);
+    wheelElements.historyList.innerHTML = `
+      <p style="text-align: center; color: #999; padding: 2rem;">
+        История пуста. Крутите колесо!
+      </p>
+    `;
   }
 }
 

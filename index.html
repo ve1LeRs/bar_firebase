@@ -1100,10 +1100,13 @@
         <!-- Контейнер колеса -->
         <div class="wheel-container" id="wheelContainer">
           <div class="wheel-arrow">▼</div>
-          <canvas id="wheelCanvas" width="400" height="400"></canvas>
+          <canvas id="wheelCanvas" width="500" height="500"></canvas>
           <button id="spinButton" class="spin-button" disabled>
             <span class="spin-icon">🎯</span>
             <span class="spin-text">КРУТИТЬ</span>
+          </button>
+          <button id="adminSpinBypass" class="admin-spin-bypass" style="display:none">
+            <i class="fas fa-crown"></i> Админ: крутить без ожидания
           </button>
         </div>
         
@@ -1145,6 +1148,25 @@
             <span>Шоты</span>
           </button>
         </div>
+    </div>
+    
+    <!-- Объяснение тегов вкуса -->
+    <div class="taste-tags-legend">
+      <div class="legend-title">Теги вкуса:</div>
+      <div class="legend-items">
+        <div class="legend-item">
+          <span class="legend-emoji">🍋</span>
+          <span class="legend-text">Кислый</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-emoji">🍬</span>
+          <span class="legend-text">Сладкий</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-emoji">☕</span>
+          <span class="legend-text">Горький</span>
+        </div>
+      </div>
     </div>
     
     <main class="cocktails-grid">
