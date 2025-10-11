@@ -14,12 +14,25 @@ profileBtn?.addEventListener('click', () => {
 const profileCloseBtn = profileModal?.querySelector('.close');
 profileCloseBtn?.addEventListener('click', () => {
   profileModal.style.display = 'none';
-  document.body.classList.remove('modal-open');
+  // document.body.classList.remove('modal-open'); // Убираем, так как не добавляли
   
   // Отключаем listener при закрытии
   if (profileBillListener) {
     profileBillListener();
     profileBillListener = null;
+  }
+});
+
+// Закрытие модального окна по клику на фон
+profileModal?.addEventListener('click', (e) => {
+  if (e.target === profileModal) {
+    profileModal.style.display = 'none';
+    
+    // Отключаем listener при закрытии
+    if (profileBillListener) {
+      profileBillListener();
+      profileBillListener = null;
+    }
   }
 });
 
@@ -33,7 +46,8 @@ async function openProfile() {
   
   // Показываем модальное окно
   profileModal.style.display = 'block';
-  document.body.classList.add('modal-open');
+  // НЕ добавляем modal-open, чтобы страница могла прокручиваться
+  // document.body.classList.add('modal-open');
   
   // Загружаем данные профиля
   await loadProfileData(user);
@@ -386,7 +400,7 @@ function getOrderStatusText(status) {
 // Открыть полный счет (используем существующую функцию)
 window.openMyBill = function() {
   profileModal.style.display = 'none';
-  document.body.classList.remove('modal-open');
+  // document.body.classList.remove('modal-open'); // Убираем, так как не добавляли
   
   // Вызываем существующую функцию
   const myBillBtn = document.getElementById('myBillBtn');
@@ -398,7 +412,7 @@ window.openMyBill = function() {
 // Открыть историю счетов
 window.openBillHistory = function() {
   profileModal.style.display = 'none';
-  document.body.classList.remove('modal-open');
+  // document.body.classList.remove('modal-open'); // Убираем, так как не добавляли
   
   // Вызываем существующую функцию
   const billHistoryBtn = document.getElementById('billHistoryBtn');
@@ -450,7 +464,7 @@ profileLogoutBtn?.addEventListener('click', () => {
   if (confirm('Вы уверены, что хотите выйти?')) {
     firebase.auth().signOut().then(() => {
       profileModal.style.display = 'none';
-      document.body.classList.remove('modal-open');
+      // document.body.classList.remove('modal-open'); // Убираем, так как не добавляли
       location.reload();
     });
   }

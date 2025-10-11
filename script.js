@@ -511,13 +511,29 @@ function openModal(modalElement) {
     return;
   }
   
-  // Прокручиваем страницу наверх перед открытием модального окна
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  // НЕ прокручиваем страницу наверх автоматически
+  // window.scrollTo({ top: 0, behavior: 'smooth' });
   
   // Сохраняем текущую позицию прокрутки
   scrollY = window.scrollY;
   document.body.style.setProperty('--scroll-y', `${scrollY}px`);
-  document.body.classList.add('modal-open');
+  
+  // Добавляем специальные классы только для определенных модальных окон
+  const modalId = modalElement.id || '';
+  if (modalId.includes('wheel') || modalId.includes('profile') || modalId.includes('admin')) {
+    if (modalId.includes('wheel')) {
+      document.body.classList.add('modal-open', 'wheel-open');
+    } else if (modalId.includes('profile')) {
+      document.body.classList.add('modal-open', 'profile-open');
+    } else if (modalId.includes('admin')) {
+      // Для админ-панели НЕ блокируем прокрутку
+      // document.body.classList.add('modal-open');
+    }
+  } else {
+    // Для обычных модальных окон добавляем только базовый класс
+    document.body.classList.add('modal-open');
+  }
+  
   modalElement.style.display = 'block';
   
   // Добавляем логирование для отладки
@@ -532,9 +548,14 @@ function closeModal(modalElement) {
   }
   
   modalElement.style.display = 'none';
-  document.body.classList.remove('modal-open');
-  // Восстанавливаем позицию прокрутки
-  window.scrollTo(0, scrollY);
+  
+  // Удаляем все классы модальных окон
+  document.body.classList.remove('modal-open', 'wheel-open', 'profile-open');
+  
+  // Восстанавливаем позицию прокрутки только если она была сохранена
+  if (scrollY > 0) {
+    window.scrollTo(0, scrollY);
+  }
 }
 
 // === КОНЕЦ ФУНКЦИЙ УПРАВЛЕНИЯ МОДАЛЬНЫМИ ОКНАМИ ===
@@ -706,34 +727,35 @@ async function loadCocktails() {
               <i class="fas fa-ban"></i> В стоп-листе
             </div>
           ` : ''}
-        </div>
-        <div class="card-content">
-          <h2>${cocktail.name}</h2>
-          <!-- ИСПРАВЛЕНО: Улучшена проверка на "Состав не указан" -->
-          <p class="ingredients">${(typeof cocktail.ingredients === 'string' && cocktail.ingredients.trim()) || 'Состав не указан'}</p>
-          <p class="mood">${cocktail.mood || ''}</p>
           ${cocktail.tasteTags && cocktail.tasteTags.length > 0 ? `
             <div class="taste-tags">
               ${cocktail.tasteTags.map(tag => {
                 const tagLabels = {
-                  'sour': '🍋 Кислый',
-                  'sweet': '🍬 Сладкий',
-                  'bitter': '☕ Горький'
+                  'sour': '🍋',
+                  'sweet': '🍬',
+                  'bitter': '☕'
                 };
                 return `<span class="taste-tag ${tag}">${tagLabels[tag] || tag}</span>`;
               }).join('')}
             </div>
           ` : ''}
-          ${cocktail.price ? `<div class="cocktail-price"><i class="fas fa-ruble-sign"></i> ${cocktail.price} ₽</div>` : ''}
-          ${!isInStoplist ? `
-            <button class="order-btn" data-name="${cocktail.name}" data-price="${cocktail.price || 500}">
-              <i class="fas fa-glass-martini-alt"></i> Заказать
-            </button>
-          ` : `
-            <button class="order-btn disabled" disabled>
-              <i class="fas fa-ban"></i> Недоступен
-            </button>
-          `}
+        </div>
+        <div class="card-content">
+          <div class="card-info">
+            <h2>${cocktail.name}</h2>
+            <p class="mood">${cocktail.mood || ''}</p>
+          </div>
+          <div class="card-bottom">
+            ${!isInStoplist ? `
+              <button class="order-btn" data-name="${cocktail.name}" data-price="${cocktail.price || 500}">
+                <i class="fas fa-glass-martini-alt"></i> Заказать
+              </button>
+            ` : `
+              <button class="order-btn disabled" disabled>
+                <i class="fas fa-ban"></i> Недоступен
+              </button>
+            `}
+          </div>
         </div>
       `;
       
@@ -2322,6 +2344,9 @@ sendTestMessageBtn?.addEventListener('click', sendTestMessage);
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.order-btn');
   if (btn && !btn.disabled && !btn.classList.contains('loading')) {
+    // Предотвращаем стандартное поведение кнопки
+    e.preventDefault();
+    
     const user = auth.currentUser;
     if (!user) {
       showError('🔒 Пожалуйста, войдите или зарегистрируйтесь для заказа.');
@@ -2356,10 +2381,14 @@ document.addEventListener('click', (e) => {
       discount: 0,
       promoCode: null
     };
+    // Найдем данные коктейля для отображения состава
+    const cocktailData = cocktailsData.find(c => c.name === name);
+    const ingredients = cocktailData ? (cocktailData.ingredients || 'Состав не указан') : 'Состав не указан';
+    
     if (orderSummary) {
         orderSummary.innerHTML = `
         <strong>🍸 Коктейль:</strong> ${name}<br>
-        <strong>📬 Ваше имя:</strong> ${currentOrder.user}
+        <strong>📝 Состав:</strong> ${ingredients}
         `;
     }
     
@@ -3858,6 +3887,12 @@ async function checkWebhookServerStatus() {
 // Проверка Firebase через webhook сервер
 async function checkWebhookFirebase() {
   try {
+    // Проверяем только если не localhost
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      console.log('ℹ️ Пропускаем проверку webhook сервера в локальной среде');
+      return { status: 'local', message: 'Локальная среда' };
+    }
+    
     // Убираем лишние слеши из URL
     const baseUrl = WEBHOOK_SERVER_URL.replace(/\/+$/, ''); // Убираем слеши в конце
     const response = await fetch(`${baseUrl}/test-firebase`);
@@ -4748,19 +4783,25 @@ async function testTelegramIntegration() {
   
   // 2. Проверяем Firebase подключение webhook сервера
   console.log('2️⃣ Проверка Firebase подключения webhook сервера...');
-  try {
-    const response = await fetch(`${WEBHOOK_SERVER_URL}/test-firebase`);
-    const data = await response.json();
-    
-    if (data.success) {
-      console.log('✅ Firebase подключение webhook сервера работает:', data);
-    } else {
-      console.log('❌ Firebase подключение webhook сервера не работает:', data);
+  
+  // Пропускаем в локальной среде
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    console.log('ℹ️ Пропускаем проверку webhook Firebase в локальной среде');
+  } else {
+    try {
+      const response = await fetch(`${WEBHOOK_SERVER_URL}/test-firebase`);
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log('✅ Firebase подключение webhook сервера работает:', data);
+      } else {
+        console.log('❌ Firebase подключение webhook сервера не работает:', data);
+        return;
+      }
+    } catch (error) {
+      console.log('❌ Ошибка проверки Firebase:', error.message);
       return;
     }
-  } catch (error) {
-    console.log('❌ Ошибка проверки Firebase:', error.message);
-    return;
   }
   
   // 3. Создаем тестовый заказ
@@ -5336,6 +5377,9 @@ function switchCategory(category) {
 // Фильтрация коктейлей по категории
 function filterCocktailsByCategory() {
   const cards = document.querySelectorAll('.cocktail-card');
+  const cocktailsGrid = document.querySelector('.cocktails-grid');
+  
+  let visibleCount = 0;
   
   cards.forEach(card => {
     const cocktailName = card.getAttribute('data-name');
@@ -5348,10 +5392,31 @@ function filterCocktailsByCategory() {
     if (shouldShow) {
       card.style.display = 'block';
       card.style.animation = 'fadeInUp 0.6s ease forwards';
+      visibleCount++;
     } else {
       card.style.display = 'none';
     }
   });
+  
+  // Удаляем старое сообщение если есть
+  const existingMessage = document.querySelector('.empty-category-message');
+  if (existingMessage) {
+    existingMessage.remove();
+  }
+  
+  // Если нет коктейлей в категории, показываем сообщение
+  if (visibleCount === 0 && cocktailsGrid) {
+    const emptyMessage = document.createElement('div');
+    emptyMessage.className = 'empty-category-message';
+    emptyMessage.innerHTML = `
+      <div class="empty-message-content">
+        <div class="empty-icon">🤔</div>
+        <h3>Упс, мы пока ещё думаем, что добавить</h3>
+        <p>Скоро здесь появятся новые коктейли!</p>
+      </div>
+    `;
+    cocktailsGrid.appendChild(emptyMessage);
+  }
 }
 
 // Определение, должен ли коктейль отображаться в данной категории
@@ -5541,14 +5606,12 @@ function showCategoryChangeModal(cocktailId, currentCategory) {
   
   // Создаем модальное окно
   const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
+  modal.className = 'modal';
   modal.innerHTML = `
     <div class="modal-content category-change-modal">
       <div class="modal-header">
         <h3>Изменить категорию коктейля</h3>
-        <button class="modal-close" type="button">
-          <i class="fas fa-times"></i>
-        </button>
+        <span class="close">&times;</span>
       </div>
       <div class="modal-body">
         <div class="cocktail-info">
@@ -5601,7 +5664,7 @@ function showCategoryChangeModal(cocktailId, currentCategory) {
   document.body.appendChild(modal);
   
   // Добавляем обработчики событий
-  const closeBtn = modal.querySelector('.modal-close');
+  const closeBtn = modal.querySelector('.close');
   const cancelBtn = modal.querySelector('[data-action="cancel"]');
   const saveBtn = modal.querySelector('[data-action="save"]');
   const categoryOptions = modal.querySelectorAll('.category-option-item');
@@ -5609,17 +5672,17 @@ function showCategoryChangeModal(cocktailId, currentCategory) {
   let selectedCategory = null;
   
   // Обработчик закрытия модального окна
-  const closeModal = () => {
+  const closeModalHandler = () => {
     document.body.removeChild(modal);
   };
   
-  closeBtn.addEventListener('click', closeModal);
-  cancelBtn.addEventListener('click', closeModal);
+  closeBtn.addEventListener('click', () => closeModal(modal));
+  cancelBtn.addEventListener('click', closeModalHandler);
   
   // Обработчик клика вне модального окна
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
-      closeModal();
+      closeModalHandler();
     }
   });
   
