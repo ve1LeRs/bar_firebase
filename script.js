@@ -1408,23 +1408,16 @@ async function loadAdminOrders() {
               </div>
               <div>
                 <div class="admin-order-status ${order.status || 'pending'}">${getStatusText(order.status)}</div>
-                <button class="change-status-btn" data-id="${order.id}">
-                  <i class="fas fa-edit"></i> Статус
-                </button>
+                <div style="margin-top: 0.5rem; font-size: 0.85rem; color: #6c757d; font-style: italic;">
+                  <i class="fab fa-telegram"></i> Статус меняется через Telegram
+                </div>
               </div>
             </div>
           `;
           adminOrdersList.appendChild(orderElement);
         });
 
-        // Добавляем обработчики событий для кнопок изменения статуса
-        document.querySelectorAll('.change-status-btn').forEach(btn => {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const orderId = btn.getAttribute('data-id');
-            openStatusModal(orderId);
-          });
-        });
+        // Кнопки изменения статуса убраны - статус меняется только через Telegram
 
         // Показываем уведомление о обновлении, если админ-панель открыта
         if (adminPanel && adminPanel.style.display === 'block') {
@@ -2062,13 +2055,13 @@ async function removeFromStoplist(id) {
   }
 }
 
-// Обработка изменения статуса
-statusButtons.forEach(btn => {
-  btn.addEventListener('click', () => {
-    const status = btn.getAttribute('data-status');
-    changeOrderStatus(currentOrderId, status);
-  });
-});
+// Обработка изменения статуса - ОТКЛЮЧЕНО, статус меняется только через Telegram
+// statusButtons.forEach(btn => {
+//   btn.addEventListener('click', () => {
+//     const status = btn.getAttribute('data-status');
+//     changeOrderStatus(currentOrderId, status);
+//   });
+// });
 
 // Обработчики для мониторинга
 checkSystemBtn?.addEventListener('click', async () => {
