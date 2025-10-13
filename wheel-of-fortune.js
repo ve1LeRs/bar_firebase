@@ -238,32 +238,6 @@ function setupWheelEventListeners() {
     wheelElements.spinButton.addEventListener('click', spinWheel);
   }
   
-  // Кнопка обхода ожидания для админа
-  const adminBypassBtn = document.getElementById('adminSpinBypass');
-  if (adminBypassBtn) {
-    adminBypassBtn.addEventListener('click', async () => {
-      const userId = auth.currentUser.uid;
-      
-      // Сбрасываем таймер вращения для админа
-      try {
-        await db.collection('wheelSpins').doc(userId).delete();
-        console.log('✅ Таймер вращения сброшен');
-      } catch (error) {
-        console.error('❌ Ошибка сброса таймера:', error);
-      }
-      
-      wheelElements.spinButton.disabled = false;
-      wheelElements.availabilityInfo.innerHTML = `
-        <div class="availability-available">
-          👑 Админ режим активирован!
-          <p style="margin-top: 0.5rem; font-size: 0.9rem; font-weight: normal;">
-            Таймер сброшен - колесо доступно
-          </p>
-        </div>
-      `;
-    });
-  }
-  
   // Кнопка бесконечных вращений для админа
   const setupInfiniteBtn = () => {
     const btn = wheelElements.adminInfiniteBtn || document.getElementById('adminInfiniteMode');
@@ -360,14 +334,9 @@ async function openWheelModal() {
   const isAdmin = userDoc.exists && userDoc.data().role === 'admin';
   console.log('✅ Результат проверки role === admin:', isAdmin);
   
-  // Показываем админ кнопки если пользователь - админ
+  // Показываем кнопку бесконечного режима если пользователь - админ
   if (isAdmin) {
-    console.log('👑 Пользователь является админом - показываем админ кнопки');
-    const adminBypassBtn = document.getElementById('adminSpinBypass');
-    if (adminBypassBtn) {
-      adminBypassBtn.style.display = 'block';
-      console.log('✅ Кнопка обхода показана');
-    }
+    console.log('👑 Пользователь является админом - показываем кнопку бесконечного режима');
     if (wheelElements.adminInfiniteBtn) {
       wheelElements.adminInfiniteBtn.style.display = 'block';
       console.log('✅ Кнопка бесконечного режима показана');
@@ -411,8 +380,6 @@ async function checkWheelAvailability() {
     const userDoc = await db.collection('users').doc(userId).get();
     const isAdmin = userDoc.exists && userDoc.data().role === 'admin';
     
-    const adminBypassBtn = document.getElementById('adminSpinBypass');
-    
     const userSpinDoc = await db.collection('wheelSpins').doc(userId).get();
     
     if (userSpinDoc.exists) {
@@ -444,11 +411,8 @@ async function checkWheelAvailability() {
             wheelCardStatus.textContent = `Доступно через ${remainingHours}ч ${remainingMinutes}м`;
           }
           
-          // Показываем кнопки админа для обхода
+          // Показываем кнопку бесконечного режима для админа
           if (isAdmin) {
-            if (adminBypassBtn) {
-              adminBypassBtn.style.display = 'block';
-            }
             if (wheelElements.adminInfiniteBtn) {
               wheelElements.adminInfiniteBtn.style.display = 'block';
             }
@@ -459,12 +423,8 @@ async function checkWheelAvailability() {
       }
     }
     
-    // Показываем кнопки админа всегда если он админ
+    // Показываем кнопку бесконечного режима если пользователь админ
     if (isAdmin) {
-      if (adminBypassBtn) {
-        adminBypassBtn.style.display = 'block';
-        adminBypassBtn.innerHTML = '<i class="fas fa-crown"></i> Админ режим: крутить всегда';
-      }
       if (wheelElements.adminInfiniteBtn) {
         wheelElements.adminInfiniteBtn.style.display = 'block';
       }
