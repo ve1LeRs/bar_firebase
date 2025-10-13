@@ -8,6 +8,7 @@ let wheelState = {
   currentRotation: 0,
   prizes: [],
   userLastSpin: null,
+  adminInfiniteMode: false, // Режим бесконечных вращений для админа
   config: {
     active: true,
     cooldownHours: 24
@@ -23,7 +24,8 @@ const wheelElements = {
   resultDiv: null,
   historyList: null,
   availabilityInfo: null,
-  openBtn: null
+  openBtn: null,
+  adminInfiniteBtn: null
 };
 
 // Инициализация колеса удачи
@@ -38,10 +40,22 @@ async function initWheelOfFortune() {
   wheelElements.historyList = document.getElementById('wheelHistoryList');
   wheelElements.availabilityInfo = document.getElementById('availabilityInfo');
   wheelElements.openBtn = document.getElementById('openWheelBtn');
+  wheelElements.adminInfiniteBtn = document.getElementById('adminInfiniteMode');
+  
+  console.log('🔍 Элементы колеса:', {
+    modal: !!wheelElements.modal,
+    canvas: !!wheelElements.canvas,
+    spinButton: !!wheelElements.spinButton,
+    adminInfiniteBtn: !!wheelElements.adminInfiniteBtn
+  });
   
   if (!wheelElements.canvas) {
     console.error('❌ Canvas для колеса не найден');
     return;
+  }
+  
+  if (!wheelElements.adminInfiniteBtn) {
+    console.warn('⚠️ Кнопка бесконечного режима не найдена в DOM');
   }
   
   wheelElements.ctx = wheelElements.canvas.getContext('2d');
@@ -250,6 +264,46 @@ function setupWheelEventListeners() {
     });
   }
   
+  // Кнопка бесконечных вращений для админа
+  const setupInfiniteBtn = () => {
+    const btn = wheelElements.adminInfiniteBtn || document.getElementById('adminInfiniteMode');
+    if (btn) {
+      console.log('🔧 Настройка кнопки бесконечного режима');
+      btn.addEventListener('click', () => {
+        wheelState.adminInfiniteMode = !wheelState.adminInfiniteMode;
+        
+        if (wheelState.adminInfiniteMode) {
+          btn.classList.add('active');
+          btn.innerHTML = `
+            <i class="fas fa-infinity"></i> Бесконечный режим: ВКЛ
+          `;
+          wheelElements.spinButton.disabled = false;
+          wheelElements.availabilityInfo.innerHTML = `
+            <div class="availability-available">
+              ♾️ Режим бесконечных вращений активирован!
+              <p style="margin-top: 0.5rem; font-size: 0.9rem; font-weight: normal;">
+                Крутите колесо сколько угодно раз
+              </p>
+            </div>
+          `;
+          showSuccess('♾️ Режим бесконечных вращений активирован!');
+        } else {
+          btn.classList.remove('active');
+          btn.innerHTML = `
+            <i class="fas fa-infinity"></i> Бесконечный режим: ВЫКЛ
+          `;
+          // Проверяем доступность заново
+          checkWheelAvailability();
+          showInfo('Режим бесконечных вращений деактивирован');
+        }
+      });
+    } else {
+      console.warn('⚠️ Кнопка бесконечного режима не найдена при настройке обработчиков');
+    }
+  };
+  
+  setupInfiniteBtn();
+  
   // Закрытие модального окна
   const closeBtn = wheelElements.modal?.querySelector('.close');
   if (closeBtn) {
@@ -279,6 +333,50 @@ async function openWheelModal() {
   wheelElements.modal.style.display = 'block';
   // НЕ добавляем modal-open, чтобы страница могла прокручиваться
   // document.body.classList.add('modal-open');
+  
+  // Проверяем, является ли пользователь админом
+  const userId = auth.currentUser.uid;
+  console.log('🔍 Проверка админа для пользователя:', userId);
+  
+  const userDoc = await db.collection('users').doc(userId).get();
+  console.log('📄 Документ пользователя существует:', userDoc.exists);
+  
+  if (userDoc.exists) {
+    const userData = userDoc.data();
+    console.log('👤 Данные пользователя:', {
+      displayName: userData.displayName,
+      isAdmin: userData.isAdmin,
+      isAdminType: typeof userData.isAdmin
+    });
+  }
+  
+  const isAdmin = userDoc.exists && userDoc.data().isAdmin === true;
+  console.log('✅ Результат проверки isAdmin:', isAdmin);
+  
+  // Показываем админ кнопки если пользователь - админ
+  if (isAdmin) {
+    console.log('👑 Пользователь является админом - показываем админ кнопки');
+    const adminBypassBtn = document.getElementById('adminSpinBypass');
+    if (adminBypassBtn) {
+      adminBypassBtn.style.display = 'block';
+      console.log('✅ Кнопка обхода показана');
+    }
+    if (wheelElements.adminInfiniteBtn) {
+      wheelElements.adminInfiniteBtn.style.display = 'block';
+      console.log('✅ Кнопка бесконечного режима показана');
+    } else {
+      console.error('❌ wheelElements.adminInfiniteBtn не найден');
+      // Пробуем найти напрямую
+      const infiniteBtn = document.getElementById('adminInfiniteMode');
+      if (infiniteBtn) {
+        infiniteBtn.style.display = 'block';
+        console.log('✅ Кнопка бесконечного режима найдена напрямую и показана');
+      }
+    }
+  } else {
+    console.log('⚠️ Пользователь НЕ является админом');
+    console.log('💡 Используйте команду setMeAsAdmin() в консоли для установки админ прав');
+  }
   
   // Проверяем доступность
   await checkWheelAvailability();
@@ -339,9 +437,14 @@ async function checkWheelAvailability() {
             wheelCardStatus.textContent = `Доступно через ${remainingHours}ч ${remainingMinutes}м`;
           }
           
-          // Показываем кнопку обхода для админа
-          if (isAdmin && adminBypassBtn) {
-            adminBypassBtn.style.display = 'block';
+          // Показываем кнопки админа для обхода
+          if (isAdmin) {
+            if (adminBypassBtn) {
+              adminBypassBtn.style.display = 'block';
+            }
+            if (wheelElements.adminInfiniteBtn) {
+              wheelElements.adminInfiniteBtn.style.display = 'block';
+            }
           }
           
           return false;
@@ -349,10 +452,15 @@ async function checkWheelAvailability() {
       }
     }
     
-    // Показываем кнопку админа всегда если он админ
-    if (isAdmin && adminBypassBtn) {
-      adminBypassBtn.style.display = 'block';
-      adminBypassBtn.innerHTML = '<i class="fas fa-crown"></i> Админ режим: крутить всегда';
+    // Показываем кнопки админа всегда если он админ
+    if (isAdmin) {
+      if (adminBypassBtn) {
+        adminBypassBtn.style.display = 'block';
+        adminBypassBtn.innerHTML = '<i class="fas fa-crown"></i> Админ режим: крутить всегда';
+      }
+      if (wheelElements.adminInfiniteBtn) {
+        wheelElements.adminInfiniteBtn.style.display = 'block';
+      }
     }
     
     // Колесо доступно
@@ -476,16 +584,24 @@ async function spinWheel() {
     return;
   }
   
-  // Проверяем, не заблокирована ли кнопка
-  if (wheelElements.spinButton.disabled) {
-    console.log('⚠️ Кнопка заблокирована');
-    showError('Колесо пока недоступно. Попробуйте позже');
-    return;
+  // В режиме бесконечных вращений пропускаем проверку блокировки
+  if (!wheelState.adminInfiniteMode) {
+    // Проверяем, не заблокирована ли кнопка
+    if (wheelElements.spinButton.disabled) {
+      console.log('⚠️ Кнопка заблокирована');
+      showError('Колесо пока недоступно. Попробуйте позже');
+      return;
+    }
   }
   
   console.log('🎰 Начинаем вращение колеса');
   wheelState.isSpinning = true;
-  wheelElements.spinButton.disabled = true;
+  
+  // В режиме бесконечных вращений не блокируем кнопку надолго
+  if (!wheelState.adminInfiniteMode) {
+    wheelElements.spinButton.disabled = true;
+  }
+  
   wheelElements.resultDiv.style.display = 'none';
   
   // Выбираем приз
@@ -521,6 +637,14 @@ async function spinWheel() {
     } else {
       // Вращение завершено
       wheelState.isSpinning = false;
+      
+      // В режиме бесконечных вращений сразу разблокируем кнопку
+      if (wheelState.adminInfiniteMode) {
+        setTimeout(() => {
+          wheelElements.spinButton.disabled = false;
+        }, 1000); // Небольшая задержка для плавности
+      }
+      
       onSpinComplete(selectedPrize);
     }
   }
@@ -574,6 +698,15 @@ async function onSpinComplete(prize) {
 // Получение приза
 async function claimPrize(prize) {
   if (!auth.currentUser) return;
+  
+  // Прокручиваем модальное окно к верху, чтобы пользователь увидел уведомление
+  const modalContent = wheelElements.modal.querySelector('.modal-content');
+  if (modalContent) {
+    modalContent.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  
+  // Также прокручиваем всю страницу наверх
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   
   try {
     const userId = auth.currentUser.uid;
@@ -678,6 +811,27 @@ async function saveSpinAttempt(prize) {
   
   try {
     const userId = auth.currentUser.uid;
+    
+    // Если включен режим бесконечных вращений для админа, не сохраняем время последнего вращения
+    if (wheelState.adminInfiniteMode) {
+      console.log('♾️ Режим бесконечных вращений: время не сохраняется');
+      // Только добавляем в историю, но не обновляем lastSpinDate
+      await db.collection('wheelHistory').add({
+        userId: userId,
+        prize: {
+          id: prize.id,
+          name: prize.name,
+          type: prize.type,
+          value: prize.value,
+          icon: prize.icon
+        },
+        claimed: false,
+        spunAt: firebase.firestore.FieldValue.serverTimestamp(),
+        adminInfiniteMode: true
+      });
+      return;
+    }
+    
     const spinData = {
       userId: userId,
       prize: {
@@ -726,10 +880,9 @@ async function loadWheelHistory() {
     const userId = auth.currentUser.uid;
     
     // Загружаем историю из коллекции wheelHistory
+    // Упрощенный запрос без составного индекса - сортировка на клиенте
     const historySnapshot = await db.collection('wheelHistory')
       .where('userId', '==', userId)
-      .orderBy('spunAt', 'desc')
-      .limit(10)
       .get();
     
     if (historySnapshot.empty) {
@@ -741,11 +894,26 @@ async function loadWheelHistory() {
       return;
     }
     
-    let historyHTML = '';
+    // Преобразуем в массив и сортируем на клиенте
+    const historyItems = [];
     historySnapshot.forEach(doc => {
       const data = doc.data();
+      historyItems.push({
+        id: doc.id,
+        data: data,
+        timestamp: data.spunAt?.toDate()?.getTime() || 0
+      });
+    });
+    
+    // Сортируем по времени (новые первыми) и берем последние 10
+    historyItems.sort((a, b) => b.timestamp - a.timestamp);
+    const recentItems = historyItems.slice(0, 10);
+    
+    let historyHTML = '';
+    recentItems.forEach(item => {
+      const data = item.data;
       const prize = data.prize;
-      const spunDate = data.spunAt?.toDate();
+      const spunDate = item.timestamp ? new Date(item.timestamp) : null;
       const dateStr = spunDate ? formatDate(spunDate) : 'Недавно';
       
       historyHTML += `
@@ -1029,9 +1197,8 @@ async function deleteWheelPrize(prizeId) {
 // Загрузка истории в админке
 async function loadWheelAdminHistory() {
   try {
+    // Упрощенный запрос без orderBy - сортировка на клиенте
     const spinsSnapshot = await db.collection('wheelSpins')
-      .orderBy('lastSpinDate', 'desc')
-      .limit(50)
       .get();
     
     const historyList = document.getElementById('wheelSpinsHistoryList');
@@ -1042,7 +1209,8 @@ async function loadWheelAdminHistory() {
       return;
     }
     
-    let html = '';
+    // Собираем данные и сортируем на клиенте
+    const spinsData = [];
     for (const doc of spinsSnapshot.docs) {
       const data = doc.data();
       const userId = doc.id;
@@ -1052,21 +1220,38 @@ async function loadWheelAdminHistory() {
       const userName = userDoc.exists ? userDoc.data().displayName : 'Неизвестный';
       
       const date = data.lastSpinDate?.toDate();
-      const dateStr = date ? formatDate(date) : 'Недавно';
+      const timestamp = date?.getTime() || 0;
+      
+      spinsData.push({
+        userName,
+        prizeName: data.prize?.name || 'Не определен',
+        claimed: data.prize?.claimed,
+        date,
+        timestamp
+      });
+    }
+    
+    // Сортируем по времени (новые первыми) и берем первые 50
+    spinsData.sort((a, b) => b.timestamp - a.timestamp);
+    const recentSpins = spinsData.slice(0, 50);
+    
+    let html = '';
+    recentSpins.forEach(spin => {
+      const dateStr = spin.date ? formatDate(spin.date) : 'Недавно';
       
       html += `
         <div class="admin-list-item">
           <div class="item-info">
-            <strong>${userName}</strong>
-            <p>Приз: ${data.prize?.name || 'Не определен'}</p>
+            <strong>${spin.userName}</strong>
+            <p>Приз: ${spin.prizeName}</p>
             <small>${dateStr}</small>
           </div>
-          <div class="item-status ${data.prize?.claimed ? 'success' : 'pending'}">
-            ${data.prize?.claimed ? '✓ Получен' : '⏳ Ожидает'}
+          <div class="item-status ${spin.claimed ? 'success' : 'pending'}">
+            ${spin.claimed ? '✓ Получен' : '⏳ Ожидает'}
           </div>
         </div>
       `;
-    }
+    });
     
     historyList.innerHTML = html;
     
@@ -1106,4 +1291,105 @@ firebase.auth().onAuthStateChanged(async (user) => {
 });
 
 console.log('🎰 Модуль колеса удачи загружен');
+
+// ========================================
+// ФУНКЦИИ ДЛЯ ОТЛАДКИ (вызывайте в консоли)
+// ========================================
+
+// Проверка видимости кнопки админа
+window.checkAdminWheelButtons = function() {
+  const infiniteBtn = document.getElementById('adminInfiniteMode');
+  const bypassBtn = document.getElementById('adminSpinBypass');
+  
+  console.log('🔍 Проверка админ кнопок колеса:');
+  console.log('- Кнопка бесконечного режима:', infiniteBtn ? 'НАЙДЕНА' : 'НЕ НАЙДЕНА');
+  console.log('- Видимость:', infiniteBtn ? infiniteBtn.style.display : 'N/A');
+  console.log('- Кнопка обхода:', bypassBtn ? 'НАЙДЕНА' : 'НЕ НАЙДЕНА');
+  console.log('- Видимость обхода:', bypassBtn ? bypassBtn.style.display : 'N/A');
+  
+  return {
+    infiniteBtn: infiniteBtn,
+    bypassBtn: bypassBtn,
+    infiniteVisible: infiniteBtn ? infiniteBtn.style.display !== 'none' : false,
+    bypassVisible: bypassBtn ? bypassBtn.style.display !== 'none' : false
+  };
+};
+
+// Принудительно показать кнопки админа
+window.forceShowAdminWheelButtons = function() {
+  const infiniteBtn = document.getElementById('adminInfiniteMode');
+  const bypassBtn = document.getElementById('adminSpinBypass');
+  
+  if (infiniteBtn) {
+    infiniteBtn.style.display = 'block';
+    console.log('✅ Кнопка бесконечного режима принудительно показана');
+  } else {
+    console.error('❌ Кнопка adminInfiniteMode не найдена в DOM!');
+  }
+  
+  if (bypassBtn) {
+    bypassBtn.style.display = 'block';
+    console.log('✅ Кнопка обхода принудительно показана');
+  } else {
+    console.error('❌ Кнопка adminSpinBypass не найдена в DOM!');
+  }
+};
+
+// Установить текущего пользователя админом
+window.setMeAsAdmin = async function() {
+  if (!auth.currentUser) {
+    console.error('❌ Пользователь не авторизован');
+    return;
+  }
+  
+  const userId = auth.currentUser.uid;
+  try {
+    await db.collection('users').doc(userId).set({
+      isAdmin: true
+    }, { merge: true });
+    console.log('✅ Права админа установлены для пользователя:', userId);
+    console.log('🔄 Перезагрузите страницу или закройте и откройте колесо заново');
+  } catch (error) {
+    console.error('❌ Ошибка установки прав админа:', error);
+  }
+};
+
+// Проверить статус админа текущего пользователя
+window.checkMyAdminStatus = async function() {
+  if (!auth.currentUser) {
+    console.error('❌ Пользователь не авторизован');
+    return;
+  }
+  
+  const userId = auth.currentUser.uid;
+  const userDoc = await db.collection('users').doc(userId).get();
+  
+  console.log('🔍 Проверка статуса админа:');
+  console.log('- User ID:', userId);
+  console.log('- Документ существует:', userDoc.exists);
+  
+  if (userDoc.exists) {
+    const userData = userDoc.data();
+    console.log('- isAdmin:', userData.isAdmin);
+    console.log('- Тип isAdmin:', typeof userData.isAdmin);
+    console.log('- Полные данные:', userData);
+    
+    if (userData.isAdmin === true) {
+      console.log('✅ Вы АДМИН!');
+    } else {
+      console.log('❌ Вы НЕ админ');
+      console.log('💡 Используйте setMeAsAdmin() для получения прав');
+    }
+  } else {
+    console.log('❌ Документ пользователя не найден');
+  }
+  
+  return userDoc.exists ? userDoc.data() : null;
+};
+
+console.log('💡 Доступные команды для отладки:');
+console.log('  - checkAdminWheelButtons() - проверить состояние кнопок');
+console.log('  - forceShowAdminWheelButtons() - принудительно показать кнопки');
+console.log('  - checkMyAdminStatus() - проверить свой статус админа');
+console.log('  - setMeAsAdmin() - установить себя админом');
 
