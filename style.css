@@ -6148,41 +6148,45 @@ body.dark-theme .telegram-info code {
   transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Цветовые схемы для разных статусов */
+/* Цветовые схемы для разных статусов - БЕЗ ЦВЕТА ТЕКСТА (задается отдельно для темной/светлой темы) */
 .status-update-notification.status-confirmed {
   background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
-  color: white;
   border-left: 4px solid #16a34a;
 }
 
 .status-update-notification.status-preparing {
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
   border-left: 4px solid #ea580c;
 }
 
 .status-update-notification.status-ready {
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: white;
   border-left: 4px solid #1d4ed8;
 }
 
 .status-update-notification.status-completed {
   background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-  color: white;
   border-left: 4px solid #6d28d9;
 }
 
 .status-update-notification.status-cancelled {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: white;
   border-left: 4px solid #b91c1c;
 }
 
 .admin-status-update-notification {
   background: linear-gradient(135deg, #ec4899 0%, #be185d 100%);
-  color: white;
   border-left: 4px solid #9d174d;
+}
+
+/* ЦВЕТА ТЕКСТА ДЛЯ ТЕМНОЙ ТЕМЫ - белый текст */
+body.dark-theme .status-update-notification.status-confirmed,
+body.dark-theme .status-update-notification.status-preparing,
+body.dark-theme .status-update-notification.status-ready,
+body.dark-theme .status-update-notification.status-completed,
+body.dark-theme .status-update-notification.status-cancelled,
+body.dark-theme .admin-status-update-notification {
+  color: white;
 }
 
 /* НОВАЯ СТРУКТУРА УВЕДОМЛЕНИЙ - СОВРЕМЕННЫЕ КАРТОЧКИ */
@@ -6641,6 +6645,7 @@ body:not(.dark-theme) .notification-close {
 }
 
 /* ЦВЕТА ТЕКСТА ДЛЯ СВЕТЛОЙ ТЕМЫ - ТЕМНЫЙ ТЕКСТ НА СВЕТЛЫХ ФОНАХ */
+/* Базовый цвет для всех уведомлений в светлой теме */
 body:not(.dark-theme) .status-update-notification.status-confirmed,
 body:not(.dark-theme) .status-update-notification.status-preparing,
 body:not(.dark-theme) .status-update-notification.status-ready,
@@ -6649,12 +6654,23 @@ body:not(.dark-theme) .status-update-notification.status-cancelled {
   color: #1a202c !important;
 }
 
-body:not(.dark-theme) .status-update-notification .notification-title {
+/* Все текстовые элементы внутри уведомлений */
+body:not(.dark-theme) .status-update-notification .notification-title,
+body:not(.dark-theme) .status-update-notification.status-confirmed .notification-title,
+body:not(.dark-theme) .status-update-notification.status-preparing .notification-title,
+body:not(.dark-theme) .status-update-notification.status-ready .notification-title,
+body:not(.dark-theme) .status-update-notification.status-completed .notification-title,
+body:not(.dark-theme) .status-update-notification.status-cancelled .notification-title {
   color: #1a202c !important;
   text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
 }
 
-body:not(.dark-theme) .status-update-notification .notification-subtitle {
+body:not(.dark-theme) .status-update-notification .notification-subtitle,
+body:not(.dark-theme) .status-update-notification.status-confirmed .notification-subtitle,
+body:not(.dark-theme) .status-update-notification.status-preparing .notification-subtitle,
+body:not(.dark-theme) .status-update-notification.status-ready .notification-subtitle,
+body:not(.dark-theme) .status-update-notification.status-completed .notification-subtitle,
+body:not(.dark-theme) .status-update-notification.status-cancelled .notification-subtitle {
   color: #2d3748 !important;
   opacity: 0.85;
 }
@@ -6670,7 +6686,7 @@ body:not(.dark-theme) .status-update-notification .queue-time {
 
 body:not(.dark-theme) .status-update-notification .notification-icon {
   background: rgba(0, 0, 0, 0.1);
-  color: #1a202c;
+  color: #1a202c !important;
 }
 
 body:not(.dark-theme) .status-update-notification .notification-body {
@@ -6685,7 +6701,12 @@ body:not(.dark-theme) .status-update-notification .notification-details {
   color: #2d3748 !important;
 }
 
-body:not(.dark-theme) .status-update-notification .fas {
+body:not(.dark-theme) .status-update-notification .fas,
+body:not(.dark-theme) .status-update-notification i {
+  color: #1a202c !important;
+}
+
+body:not(.dark-theme) .status-update-notification * {
   color: #1a202c !important;
 }
 

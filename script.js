@@ -1503,10 +1503,8 @@ async function changeOrderStatus(orderId, newStatus) {
     // Закрываем модальное окно статуса
     closeModal(statusModal); // Используем новую функцию
     
-    // Перезагрузить список заказов в админке
-    if (adminPanel && adminPanel.style.display === 'block') {
-      await loadAdminOrders();
-    }
+    // НЕ вызываем loadAdminOrders() - real-time listener автоматически обновит список!
+    // Это предотвращает множественные срабатывания и дублирование уведомлений
     
     showSuccess('Статус заказа успешно обновлён и отправлен в Telegram');
   } catch (error) {
