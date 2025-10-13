@@ -624,8 +624,8 @@ async function spinWheel() {
   const fullRotations = 5 + Math.random() * 3; // 5-8 оборотов
   const totalRotation = (fullRotations * 2 * Math.PI) + (2 * Math.PI - targetAngle);
   
-  // Анимация вращения
-  const duration = 4000; // 4 секунды
+  // Анимация вращения (более плавная)
+  const duration = 5000; // 5 секунд для более плавной анимации
   const startTime = Date.now();
   const startRotation = wheelState.currentRotation;
   
@@ -633,8 +633,17 @@ async function spinWheel() {
     const elapsed = Date.now() - startTime;
     const progress = Math.min(elapsed / duration, 1);
     
-    // Ease-out функция
-    const easeOut = 1 - Math.pow(1 - progress, 3);
+    // Более плавная ease-out функция (кубическая с дополнительным замедлением)
+    // Комбинация ease-in-out и ease-out для максимальной плавности
+    let easeOut;
+    if (progress < 0.5) {
+      // Первая половина: постепенное ускорение
+      easeOut = 2 * progress * progress;
+    } else {
+      // Вторая половина: плавное замедление
+      const adjustedProgress = (progress - 0.5) / 0.5;
+      easeOut = 0.5 + 0.5 * (1 - Math.pow(1 - adjustedProgress, 4));
+    }
     
     wheelState.currentRotation = startRotation + (totalRotation * easeOut);
     drawWheel();

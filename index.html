@@ -1100,11 +1100,13 @@
         <!-- Контейнер колеса -->
         <div class="wheel-container" id="wheelContainer">
           <div class="wheel-arrow">▼</div>
-          <canvas id="wheelCanvas" width="500" height="500"></canvas>
-          <button id="spinButton" class="spin-button" disabled>
-            <span class="spin-icon">🎯</span>
-            <span class="spin-text">КРУТИТЬ</span>
-          </button>
+          <div style="position: relative; display: inline-block;">
+            <canvas id="wheelCanvas" width="500" height="500"></canvas>
+            <button id="spinButton" class="spin-button" disabled>
+              <span class="spin-icon">🎯</span>
+              <span class="spin-text">КРУТИТЬ</span>
+            </button>
+          </div>
           <button id="adminSpinBypass" class="admin-spin-bypass" style="display:none">
             <i class="fas fa-crown"></i> Админ: крутить без ожидания
           </button>

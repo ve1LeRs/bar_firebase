@@ -11354,6 +11354,7 @@ body.dark-theme .confirm-btn.cancel:hover {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 1.5rem;
   min-height: 600px; /* Обеспечиваем минимальную высоту для видимости кнопок */
 }
@@ -11382,6 +11383,8 @@ body.dark-theme .confirm-btn.cancel:hover {
   height: auto;
   filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.2));
   transition: all 0.3s ease;
+  position: relative;
+  display: block;
 }
 
 #wheelCanvas.spinning {
