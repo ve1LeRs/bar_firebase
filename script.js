@@ -1484,9 +1484,11 @@ async function changeOrderStatus(orderId, newStatus) {
     const userName = orderData?.user || 'Неизвестный клиент';
 
     // Обновляем статус в Firebase
+    // Используем new Date() вместо serverTimestamp() чтобы избежать двойного срабатывания listener'а
     await db.collection('orders').doc(orderId).update({
       status: newStatus,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp ? firebase.firestore.FieldValue.serverTimestamp() : new Date()
+      updatedAt: new Date(),
+      updatedBy: 'admin_web'
     });
 
     // Отправляем уведомление в Telegram
