@@ -253,14 +253,13 @@ function setupWheelEventListeners() {
           `;
           wheelElements.spinButton.disabled = false;
           wheelElements.availabilityInfo.innerHTML = `
-            <div class="availability-available">
+            <div class="availability-available" style="animation: pulse 0.5s ease-in-out;">
               ♾️ Режим бесконечных вращений активирован!
               <p style="margin-top: 0.5rem; font-size: 0.9rem; font-weight: normal;">
                 Крутите колесо сколько угодно раз
               </p>
             </div>
           `;
-          showSuccess('♾️ Режим бесконечных вращений активирован!');
         } else {
           btn.classList.remove('active');
           btn.innerHTML = `
@@ -268,7 +267,6 @@ function setupWheelEventListeners() {
           `;
           // Проверяем доступность заново
           checkWheelAvailability();
-          showInfo('Режим бесконечных вращений деактивирован');
         }
       });
     } else {
