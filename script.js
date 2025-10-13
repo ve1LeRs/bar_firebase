@@ -3299,8 +3299,8 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
   if (title) {
     // Определяем тему для правильного цвета текста
     const isDarkTheme = document.body.classList.contains('dark-theme');
-    const titleColor = isDarkTheme ? 'white' : '#2d3748';
-    const textShadow = isDarkTheme ? '0 2px 4px rgba(0, 0, 0, 0.3)' : '0 1px 2px rgba(0, 0, 0, 0.1)';
+    const titleColor = isDarkTheme ? 'white' : '#1a202c'; // ТЕМНЫЙ цвет для светлой темы!
+    const textShadow = isDarkTheme ? '0 2px 4px rgba(0, 0, 0, 0.3)' : '0 1px 2px rgba(255, 255, 255, 0.5)';
     
     title.style.cssText = `
       font-weight: 700 !important;
@@ -3338,7 +3338,7 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
   if (status) {
     // Определяем тему для правильного цвета текста
     const isDarkTheme = document.body.classList.contains('dark-theme');
-    const subtitleColor = isDarkTheme ? 'rgba(255, 255, 255, 0.9)' : 'rgba(45, 55, 72, 0.8)';
+    const subtitleColor = isDarkTheme ? 'rgba(255, 255, 255, 0.9)' : '#1a202c'; // ТЕМНЫЙ цвет для светлой темы!
     
     status.style.cssText = `
       font-weight: 500 !important;
@@ -3356,9 +3356,9 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
   if (closeBtn) {
     // Определяем тему для правильного цвета кнопки
     const isDarkTheme = document.body.classList.contains('dark-theme');
-    const closeBtnBg = isDarkTheme ? 'rgba(255, 255, 255, 0.2)' : 'rgba(45, 55, 72, 0.1)';
-    const closeBtnBorder = isDarkTheme ? 'rgba(255, 255, 255, 0.3)' : 'rgba(45, 55, 72, 0.2)';
-    const closeBtnColor = isDarkTheme ? 'white' : '#2d3748';
+    const closeBtnBg = isDarkTheme ? 'rgba(255, 255, 255, 0.2)' : 'rgba(26, 32, 44, 0.1)';
+    const closeBtnBorder = isDarkTheme ? 'rgba(255, 255, 255, 0.3)' : 'rgba(26, 32, 44, 0.2)';
+    const closeBtnColor = isDarkTheme ? 'white' : '#1a202c'; // ТЕМНЫЙ цвет для светлой темы!
     const closeBtnShadow = isDarkTheme ? '0 4px 15px rgba(0, 0, 0, 0.2)' : '0 2px 8px rgba(0, 0, 0, 0.1)';
     
     closeBtn.style.cssText = `
@@ -3387,19 +3387,19 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
     
     closeBtn.addEventListener('mouseenter', () => {
       closeBtn.style.opacity = '1';
-      closeBtn.style.background = isDarkTheme ? 'rgba(255, 255, 255, 0.3)' : 'rgba(45, 55, 72, 0.2)';
-      closeBtn.style.borderColor = isDarkTheme ? 'rgba(255, 255, 255, 0.5)' : 'rgba(45, 55, 72, 0.3)';
+      closeBtn.style.background = isDarkTheme ? 'rgba(255, 255, 255, 0.3)' : 'rgba(26, 32, 44, 0.2)';
+      closeBtn.style.borderColor = isDarkTheme ? 'rgba(255, 255, 255, 0.5)' : 'rgba(26, 32, 44, 0.3)';
       closeBtn.style.transform = 'scale(1.1) rotate(90deg)';
-      closeBtn.style.color = isDarkTheme ? 'white' : '#2d3748';
+      closeBtn.style.color = isDarkTheme ? 'white' : '#1a202c'; // ТЕМНЫЙ цвет для светлой темы!
       closeBtn.style.boxShadow = isDarkTheme ? '0 6px 20px rgba(0, 0, 0, 0.3)' : '0 4px 12px rgba(0, 0, 0, 0.15)';
     });
     
     closeBtn.addEventListener('mouseleave', () => {
       closeBtn.style.opacity = '0.8';
-      closeBtn.style.background = isDarkTheme ? 'rgba(255, 255, 255, 0.2)' : 'rgba(45, 55, 72, 0.1)';
-      closeBtn.style.borderColor = isDarkTheme ? 'rgba(255, 255, 255, 0.3)' : 'rgba(45, 55, 72, 0.2)';
+      closeBtn.style.background = isDarkTheme ? 'rgba(255, 255, 255, 0.2)' : 'rgba(26, 32, 44, 0.1)';
+      closeBtn.style.borderColor = isDarkTheme ? 'rgba(255, 255, 255, 0.3)' : 'rgba(26, 32, 44, 0.2)';
       closeBtn.style.transform = 'scale(1) rotate(0deg)';
-      closeBtn.style.color = isDarkTheme ? 'white' : '#2d3748';
+      closeBtn.style.color = isDarkTheme ? 'white' : '#1a202c'; // ТЕМНЫЙ цвет для светлой темы!
       closeBtn.style.boxShadow = isDarkTheme ? '0 4px 15px rgba(0, 0, 0, 0.2)' : '0 2px 8px rgba(0, 0, 0, 0.1)';
     });
   }
@@ -3408,6 +3408,33 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
   
   document.body.appendChild(notification);
   console.log('✅ Уведомление добавлено в DOM');
+  
+  // ВАЖНО: Применяем темный цвет текста ко ВСЕМ элементам в светлой теме
+  if (!document.body.classList.contains('dark-theme')) {
+    // Темный цвет для всех элементов в светлой теме
+    const allElements = notification.querySelectorAll('*');
+    allElements.forEach(el => {
+      if (!el.classList.contains('notification-progress-bar') && !el.classList.contains('notification-progress-fill')) {
+        el.style.color = '#1a202c';
+      }
+    });
+    
+    // Иконка
+    const icon = notification.querySelector('.notification-icon');
+    if (icon) {
+      icon.style.color = '#1a202c';
+      const iconI = icon.querySelector('i');
+      if (iconI) iconI.style.color = '#1a202c';
+    }
+    
+    // Элементы очереди
+    const queueInfo = notification.querySelector('.notification-queue-info');
+    if (queueInfo) {
+      queueInfo.style.color = '#1a202c';
+      const queueChildren = queueInfo.querySelectorAll('*');
+      queueChildren.forEach(el => el.style.color = '#1a202c');
+    }
+  }
   
   // Уведомление готово
   console.log('🎨 Уведомление создано без иконки');
