@@ -3411,29 +3411,48 @@ function showStatusUpdateNotification(orderData = null, newStatus = null) {
   
   // ВАЖНО: Применяем темный цвет текста ко ВСЕМ элементам в светлой теме
   if (!document.body.classList.contains('dark-theme')) {
-    // Темный цвет для всех элементов в светлой теме
+    console.log('🎨 Применяем темные цвета для светлой темы');
+    
+    // Добавляем position: relative для notification (для ::after оверлея)
+    notification.style.position = 'fixed';
+    
+    // Темный цвет для всех элементов в светлой теме с МАКСИМАЛЬНЫМ приоритетом
     const allElements = notification.querySelectorAll('*');
     allElements.forEach(el => {
       if (!el.classList.contains('notification-progress-bar') && !el.classList.contains('notification-progress-fill')) {
-        el.style.color = '#1a202c';
+        el.style.setProperty('color', '#1a202c', 'important');
       }
     });
+    
+    // Основные элементы с явными стилями
+    const mainTitle = notification.querySelector('.notification-title');
+    if (mainTitle) {
+      mainTitle.style.setProperty('color', '#1a202c', 'important');
+      mainTitle.style.setProperty('text-shadow', '0 1px 2px rgba(255, 255, 255, 0.8)', 'important');
+    }
+    
+    const mainSubtitle = notification.querySelector('.notification-subtitle');
+    if (mainSubtitle) {
+      mainSubtitle.style.setProperty('color', '#1a202c', 'important');
+    }
     
     // Иконка
     const icon = notification.querySelector('.notification-icon');
     if (icon) {
-      icon.style.color = '#1a202c';
+      icon.style.setProperty('color', '#1a202c', 'important');
       const iconI = icon.querySelector('i');
-      if (iconI) iconI.style.color = '#1a202c';
+      if (iconI) iconI.style.setProperty('color', '#1a202c', 'important');
     }
     
     // Элементы очереди
     const queueInfo = notification.querySelector('.notification-queue-info');
     if (queueInfo) {
-      queueInfo.style.color = '#1a202c';
+      queueInfo.style.setProperty('color', '#1a202c', 'important');
       const queueChildren = queueInfo.querySelectorAll('*');
-      queueChildren.forEach(el => el.style.color = '#1a202c');
+      queueChildren.forEach(el => el.style.setProperty('color', '#1a202c', 'important'));
     }
+    
+    console.log('✅ Темные цвета применены для всех элементов');
   }
   
   // Уведомление готово
