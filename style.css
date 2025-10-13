@@ -10627,7 +10627,8 @@ body.dark-theme .view-all-history-btn:hover {
   padding: 0.8rem;
   background: #f8f9fa;
   border-radius: 8px;
-  color: #555;
+  color: #2c3e50;
+  font-weight: 500;
 }
 
 .bill-items-preview i {
@@ -10717,7 +10718,8 @@ body.dark-theme .bill-status-badge.paid {
 
 body.dark-theme .bill-items-preview {
   background: #34495e;
-  color: #95a5a6;
+  color: #ecf0f1;
+  font-weight: 500;
 }
 
 body.dark-theme .bill-items-preview i {
@@ -10799,6 +10801,57 @@ body.dark-theme .bill-paid-date {
   border-bottom: none;
 }
 
+/* Улучшенное отображение позиций в счете */
+.bill-detail-item-enhanced {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #e0e0e0;
+  background: #f8f9fa;
+  margin-bottom: 0.5rem;
+  border-radius: 8px;
+  border-left: 3px solid #667eea;
+}
+
+.bill-detail-item-enhanced:last-child {
+  margin-bottom: 0;
+}
+
+.bill-detail-item-enhanced .item-info {
+  flex: 1;
+}
+
+.bill-detail-item-enhanced .item-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 0.4rem;
+}
+
+.bill-detail-item-enhanced .item-details {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.bill-detail-item-enhanced .item-details strong {
+  color: #2c3e50;
+}
+
+.bill-detail-item-enhanced .item-discount {
+  color: #28a745;
+  font-weight: 600;
+  margin-left: 0.5rem;
+}
+
+.bill-detail-item-enhanced .item-price {
+  font-size: 1.2rem;
+  color: #667eea;
+  font-weight: 700;
+  text-align: right;
+  min-width: 100px;
+}
+
 .bill-detail-total {
   display: flex;
   justify-content: space-between;
@@ -10842,6 +10895,32 @@ body.dark-theme .bill-details-items {
 body.dark-theme .bill-detail-item {
   border-color: rgba(180, 140, 90, 0.2);
   color: #ecf0f1;
+}
+
+body.dark-theme .bill-detail-item-enhanced {
+  background: #34495e;
+  border-color: rgba(180, 140, 90, 0.2);
+  border-left-color: #b48c5a;
+}
+
+body.dark-theme .bill-detail-item-enhanced .item-name {
+  color: #ecf0f1;
+}
+
+body.dark-theme .bill-detail-item-enhanced .item-details {
+  color: #95a5a6;
+}
+
+body.dark-theme .bill-detail-item-enhanced .item-details strong {
+  color: #ecf0f1;
+}
+
+body.dark-theme .bill-detail-item-enhanced .item-discount {
+  color: #52c75a;
+}
+
+body.dark-theme .bill-detail-item-enhanced .item-price {
+  color: #b48c5a;
 }
 
 body.dark-theme .bill-detail-total {
@@ -11181,7 +11260,7 @@ body.dark-theme .payment-confirm-content::-webkit-scrollbar-thumb:hover {
 .confirm-action-body p {
   margin: 0;
   font-size: 1.1rem;
-  color: #2c3e50;
+  color: #ecf0f1;
   line-height: 1.6;
 }
 
