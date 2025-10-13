@@ -246,12 +246,6 @@ function setupWheelEventListeners() {
       btn.addEventListener('click', () => {
         wheelState.adminInfiniteMode = !wheelState.adminInfiniteMode;
         
-        // Прокручиваем только модальное окно к верху (не всю страницу)
-        const modalContent = wheelElements.modal?.querySelector('.modal-content');
-        if (modalContent) {
-          modalContent.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-        
         if (wheelState.adminInfiniteMode) {
           btn.classList.add('active');
           btn.innerHTML = `
