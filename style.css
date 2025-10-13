@@ -11597,6 +11597,7 @@ body.dark-theme .confirm-btn.cancel:hover {
   padding: 1.5rem;
   background: #f8f9fa;
   border-top: 2px solid #e0e0e0;
+  border-radius: 0 0 24px 24px;
 }
 
 .wheel-history h5 {
