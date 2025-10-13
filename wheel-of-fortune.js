@@ -334,7 +334,7 @@ async function openWheelModal() {
   // НЕ добавляем modal-open, чтобы страница могла прокручиваться
   // document.body.classList.add('modal-open');
   
-  // Проверяем, является ли пользователь админом
+  // Проверяем, является ли пользователь админом через role
   const userId = auth.currentUser.uid;
   console.log('🔍 Проверка админа для пользователя:', userId);
   
@@ -345,13 +345,13 @@ async function openWheelModal() {
     const userData = userDoc.data();
     console.log('👤 Данные пользователя:', {
       displayName: userData.displayName,
-      isAdmin: userData.isAdmin,
-      isAdminType: typeof userData.isAdmin
+      role: userData.role,
+      roleType: typeof userData.role
     });
   }
   
-  const isAdmin = userDoc.exists && userDoc.data().isAdmin === true;
-  console.log('✅ Результат проверки isAdmin:', isAdmin);
+  const isAdmin = userDoc.exists && userDoc.data().role === 'admin';
+  console.log('✅ Результат проверки role === admin:', isAdmin);
   
   // Показываем админ кнопки если пользователь - админ
   if (isAdmin) {
@@ -402,7 +402,7 @@ async function checkWheelAvailability() {
   try {
     const userId = auth.currentUser.uid;
     const userDoc = await db.collection('users').doc(userId).get();
-    const isAdmin = userDoc.exists && userDoc.data().isAdmin === true;
+    const isAdmin = userDoc.exists && userDoc.data().role === 'admin';
     
     const adminBypassBtn = document.getElementById('adminSpinBypass');
     
@@ -1345,9 +1345,9 @@ window.setMeAsAdmin = async function() {
   const userId = auth.currentUser.uid;
   try {
     await db.collection('users').doc(userId).set({
-      isAdmin: true
+      role: 'admin'
     }, { merge: true });
-    console.log('✅ Права админа установлены для пользователя:', userId);
+    console.log('✅ Права админа установлены (role: admin) для пользователя:', userId);
     console.log('🔄 Перезагрузите страницу или закройте и откройте колесо заново');
   } catch (error) {
     console.error('❌ Ошибка установки прав админа:', error);
@@ -1370,14 +1370,14 @@ window.checkMyAdminStatus = async function() {
   
   if (userDoc.exists) {
     const userData = userDoc.data();
-    console.log('- isAdmin:', userData.isAdmin);
-    console.log('- Тип isAdmin:', typeof userData.isAdmin);
+    console.log('- role:', userData.role);
+    console.log('- Тип role:', typeof userData.role);
     console.log('- Полные данные:', userData);
     
-    if (userData.isAdmin === true) {
-      console.log('✅ Вы АДМИН!');
+    if (userData.role === 'admin') {
+      console.log('✅ Вы АДМИН! (role: admin)');
     } else {
-      console.log('❌ Вы НЕ админ');
+      console.log('❌ Вы НЕ админ (role:', userData.role || 'не установлен', ')');
       console.log('💡 Используйте setMeAsAdmin() для получения прав');
     }
   } else {
