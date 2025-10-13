@@ -6603,55 +6603,29 @@ body:not(.dark-theme) .notification-close {
   opacity: 0.6;
 }
 
-/* Специальные стили для разных статусов заказов */
-.status-update-notification.status-confirmed {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-}
+/* УДАЛЕНЫ ДУБЛИРУЮЩИЕ СТИЛИ - градиенты уже определены выше (строки 6152-6174) */
 
-.status-update-notification.status-confirmed::before {
-  background: linear-gradient(90deg, #00f2fe, #4facfe, #00f2fe);
-}
-
-.status-update-notification.status-preparing {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-}
-
-.status-update-notification.status-preparing::before {
-  background: linear-gradient(90deg, #fee140, #fa709a, #fee140);
-}
-
-.status-update-notification.status-ready {
-  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-}
-
-.status-update-notification.status-ready::before {
-  background: linear-gradient(90deg, #fed6e3, #a8edea, #fed6e3);
-}
-
-.status-update-notification.status-completed {
-  background: linear-gradient(135deg, #d299c2 0%, #fef9d7 100%);
-}
-
-.status-update-notification.status-completed::before {
-  background: linear-gradient(90deg, #fef9d7, #d299c2, #fef9d7);
-}
-
-.status-update-notification.status-cancelled {
-  background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
-}
-
-.status-update-notification.status-cancelled::before {
-  background: linear-gradient(90deg, #fecfef, #ff9a9e, #fecfef);
-}
-
+/* ====================================================================== */
 /* ЦВЕТА ТЕКСТА ДЛЯ СВЕТЛОЙ ТЕМЫ - ТЕМНЫЙ ТЕКСТ НА СВЕТЛЫХ ФОНАХ */
-/* Базовый цвет для всех уведомлений в светлой теме */
+/* ВАЖНО: Эти стили должны быть ПОСЛЕ всех базовых стилей статусов! */
+/* ====================================================================== */
+
+/* Переопределяем градиенты для светлой темы с темным текстом */
 body:not(.dark-theme) .status-update-notification.status-confirmed,
 body:not(.dark-theme) .status-update-notification.status-preparing,
 body:not(.dark-theme) .status-update-notification.status-ready,
 body:not(.dark-theme) .status-update-notification.status-completed,
 body:not(.dark-theme) .status-update-notification.status-cancelled {
   color: #1a202c !important;
+}
+
+/* Псевдоэлементы ::before не должны влиять на текст */
+body:not(.dark-theme) .status-update-notification.status-confirmed::before,
+body:not(.dark-theme) .status-update-notification.status-preparing::before,
+body:not(.dark-theme) .status-update-notification.status-ready::before,
+body:not(.dark-theme) .status-update-notification.status-completed::before,
+body:not(.dark-theme) .status-update-notification.status-cancelled::before {
+  z-index: -1;
 }
 
 /* Все текстовые элементы внутри уведомлений */
