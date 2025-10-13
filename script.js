@@ -29,7 +29,6 @@ if (window.location.hostname === 'localhost' || window.location.hostname === '12
   // В продакшне пытаемся определить Railway URL автоматически
   const savedUrl = localStorage.getItem('webhook_server_url');
   console.log('💾 Сохраненный URL в localStorage:', savedUrl);
-  
   if (savedUrl) {
     WEBHOOK_SERVER_URL = savedUrl;
     console.log('💾 Используем сохраненный URL:', WEBHOOK_SERVER_URL);
