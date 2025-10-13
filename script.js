@@ -1497,13 +1497,8 @@ async function changeOrderStatus(orderId, newStatus) {
       console.warn('⚠️ Не удалось отправить уведомление в Telegram:', telegramResult.error);
     }
 
-    // Также отправляем обновление через webhook сервер для синхронизации с Telegram
-    const webhookResult = await updateOrderStatusViaWebhook(orderId, newStatus);
-    if (webhookResult.success) {
-      console.log('✅ Статус синхронизирован с Telegram через webhook');
-    } else {
-      console.warn('⚠️ Не удалось синхронизировать с Telegram:', webhookResult.error);
-    }
+    // Webhook используется только для обработки кнопок из Telegram, 
+    // не нужно вызывать его при обновлении из веб-интерфейса (избегаем двойного обновления Firebase)
 
     // Закрываем модальное окно статуса
     closeModal(statusModal); // Используем новую функцию
