@@ -5436,7 +5436,7 @@ button.loading i.fa-spinner {
 
   /* Убираем лишнее пространство под кнопкой */
   .card-content {
-    padding: 1.5rem 1.2rem 0.7rem;
+    padding: 1.5rem 1.2rem 1rem;
   }
 
   .card-bottom {
@@ -5614,7 +5614,7 @@ button.loading i.fa-spinner {
 
   /* Убираем серую полоску под кнопкой заказа */
   .card-content {
-    padding: 1.2rem 1rem 0.5rem;
+    padding: 1.2rem 1rem 0.8rem;
   }
 
   /* Убираем лишнее пространство в нижней части карточки */
