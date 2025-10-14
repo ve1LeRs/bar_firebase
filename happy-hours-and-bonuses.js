@@ -188,7 +188,7 @@ async function loadHappyHours() {
     if (!happyHoursList) return;
     
     if (happyHoursSnapshot.empty) {
-      happyHoursList.innerHTML = '<p style="text-align: center; color: #999;">Счастливые часы не найдены</p>';
+      happyHoursList.innerHTML = '<p style="text-align: center; color: #1a1a1a;">Счастливые часы не найдены</p>';
       return;
     }
     
@@ -597,7 +597,7 @@ async function loadBonusUsers() {
     if (!bonusUsersList) return;
     
     if (bonusAccountsSnapshot.empty) {
-      bonusUsersList.innerHTML = '<p style="text-align: center; color: #999;">Пользователи с бонусами не найдены</p>';
+      bonusUsersList.innerHTML = '<p style="text-align: center; color: #1a1a1a;">Пользователи с бонусами не найдены</p>';
       return;
     }
     
