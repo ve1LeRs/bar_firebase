@@ -5597,7 +5597,13 @@ button.loading i.fa-spinner {
 
   /* Убираем серую полоску под кнопкой заказа */
   .card-content {
-    padding: 1.8rem 1.5rem 0.5rem;
+    padding: 1.8rem 1.5rem 1.2rem;
+  }
+
+  /* Убираем серую полоску у самой кнопки */
+  .order-btn {
+    border-bottom: none;
+    margin-bottom: 0;
   }
 }
 
