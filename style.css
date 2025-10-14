@@ -9101,6 +9101,64 @@ body.dark-theme .happy-hour-detail {
   color: #95a5a6;
 }
 
+/* Адаптивность для мобильных устройств - Счастливые часы */
+@media (max-width: 768px) {
+  .happy-hours-add-section,
+  .happy-hours-list-section {
+    padding: 1rem;
+  }
+  
+  .happy-hours-form .form-row {
+    grid-template-columns: 1fr;
+    gap: 0.8rem;
+  }
+  
+  .happy-hours-form .form-group {
+    width: 100%;
+  }
+  
+  .happy-hours-form .form-input {
+    width: 100%;
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+  
+  .happy-hours-form input[type="time"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.75rem;
+    font-size: 1rem;
+  }
+  
+  .days-selector {
+    gap: 0.5rem;
+    padding: 0.8rem;
+  }
+  
+  .days-selector label {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.9rem;
+  }
+  
+  .happy-hour-item {
+    padding: 1rem;
+  }
+  
+  .happy-hour-details {
+    grid-template-columns: 1fr;
+    gap: 0.8rem;
+  }
+  
+  .happy-hour-name {
+    font-size: 1.1rem;
+  }
+  
+  .happy-hour-discount {
+    font-size: 1.2rem;
+    padding: 0.4rem 0.8rem;
+  }
+}
+
 /* ============================================
    БОНУСНАЯ СИСТЕМА (CASHBACK)
    ============================================ */
