@@ -643,15 +643,8 @@ function selectPrizeByProbability() {
 async function onSpinComplete(prize) {
   console.log('🎊 Вращение завершено! Приз:', prize);
   
-  // Показываем результат
-  wheelElements.resultDiv.style.display = 'block';
-  document.getElementById('resultIcon').textContent = prize.icon || '🎁';
-  document.getElementById('resultTitle').textContent = prize.name;
-  document.getElementById('resultDescription').textContent = prize.description;
-  
-  // Настраиваем кнопку получения приза
-  const claimBtn = document.getElementById('claimPrizeBtn');
-  claimBtn.onclick = () => claimPrize(prize);
+  // Показываем модальное окно приза
+  showPrizeModal(prize);
   
   // Эффекты
   if (prize.type !== 'nothing') {
@@ -660,6 +653,46 @@ async function onSpinComplete(prize) {
   
   // Обновляем историю
   await loadWheelHistory();
+}
+
+// Показать модальное окно приза
+function showPrizeModal(prize) {
+  const prizeModal = document.getElementById('prizeModal');
+  const prizeIconBig = document.getElementById('prizeIconBig');
+  const prizeModalTitle = document.getElementById('prizeModalTitle');
+  const prizeModalDescription = document.getElementById('prizeModalDescription');
+  const prizeClaimBtn = document.getElementById('prizeClaimBtn');
+  
+  if (!prizeModal) return;
+  
+  // Заполняем содержимое
+  prizeIconBig.textContent = prize.icon || '🎁';
+  prizeModalTitle.textContent = prize.name;
+  prizeModalDescription.textContent = prize.description;
+  
+  // Настраиваем кнопку получения приза
+  prizeClaimBtn.onclick = () => {
+    closePrizeModal();
+    claimPrize(prize);
+  };
+  
+  // Показываем модальное окно
+  prizeModal.style.display = 'flex';
+  
+  // Закрытие по клику на фон
+  prizeModal.onclick = (e) => {
+    if (e.target === prizeModal) {
+      closePrizeModal();
+    }
+  };
+}
+
+// Закрыть модальное окно приза
+function closePrizeModal() {
+  const prizeModal = document.getElementById('prizeModal');
+  if (prizeModal) {
+    prizeModal.style.display = 'none';
+  }
 }
 
 // Получение приза
