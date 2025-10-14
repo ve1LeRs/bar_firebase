@@ -1670,8 +1670,10 @@ body.dark-theme .legend-emoji {
   will-change: transform;
 }
 
-.image-container:hover img {
-  transform: scale(1.05);
+@media (min-width: 1025px) {
+  .image-container:hover img {
+    transform: scale(1.05);
+  }
 }
 
 .alcohol-indicator {
@@ -5234,8 +5236,8 @@ button.loading i.fa-spinner {
   }
   
   .image-container img {
-    object-fit: contain;
-    transform: scale(1.15);
+    object-fit: contain !important;
+    transform: scale(1.15) !important;
   }
 }
 
@@ -5265,8 +5267,8 @@ button.loading i.fa-spinner {
   }
   
   .image-container img {
-    object-fit: contain;
-    transform: scale(1.15);
+    object-fit: contain !important;
+    transform: scale(1.15) !important;
   }
 
   .cocktail-card h2 {
@@ -5527,9 +5529,9 @@ button.loading i.fa-spinner {
   }
   
   .image-container img {
-    object-fit: contain;
+    object-fit: contain !important;
     object-position: center;
-    transform: scale(1.15);
+    transform: scale(1.15) !important;
   }
 
   .cocktail-card h2 {
@@ -10334,11 +10336,11 @@ body.dark-theme .danger-zone {
   }
   
   .image-container img {
-    object-fit: contain;
+    object-fit: contain !important;
     object-position: center center;
     width: 100%;
     height: 100%;
-    transform: scale(1.15);
+    transform: scale(1.15) !important;
   }
 }
 
@@ -10353,9 +10355,9 @@ body.dark-theme .danger-zone {
   }
   
   .image-container img {
-    object-fit: contain;
+    object-fit: contain !important;
     object-position: center center;
-    transform: scale(1.15);
+    transform: scale(1.15) !important;
   }
 }
 
