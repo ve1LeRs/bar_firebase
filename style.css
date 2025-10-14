@@ -330,6 +330,10 @@ body.dark-theme .card-content .order-btn {
   align-self: stretch;
 }
 
+body.dark-theme .card-bottom {
+  margin-top: 2rem !important;
+}
+
 .card-bottom .order-btn {
   margin-top: 0 !important;
   margin-bottom: 0;
