@@ -5434,6 +5434,15 @@ button.loading i.fa-spinner {
     font-size: 1rem;
   }
 
+  /* Убираем лишнее пространство под кнопкой */
+  .card-content {
+    padding: 1.5rem 1.2rem 0.7rem;
+  }
+
+  .card-bottom {
+    gap: 0.7rem;
+  }
+
   .orders-modal {
     margin: 5% auto;
     max-height: 90vh;
@@ -5605,7 +5614,13 @@ button.loading i.fa-spinner {
 
   /* Убираем серую полоску под кнопкой заказа */
   .card-content {
-    padding: 1.2rem 1rem 1rem;
+    padding: 1.2rem 1rem 0.5rem;
+  }
+
+  /* Убираем лишнее пространство в нижней части карточки */
+  .card-bottom {
+    gap: 0.5rem;
+    margin-bottom: 0;
   }
 
   /* Убираем серую полоску у самой кнопки */
