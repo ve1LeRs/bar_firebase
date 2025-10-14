@@ -643,8 +643,15 @@ function selectPrizeByProbability() {
 async function onSpinComplete(prize) {
   console.log('🎊 Вращение завершено! Приз:', prize);
   
-  // Показываем модальное окно приза
-  showPrizeModal(prize);
+  // Показываем результат внутри окна колеса
+  wheelElements.resultDiv.style.display = 'block';
+  document.getElementById('resultIcon').textContent = prize.icon || '🎁';
+  document.getElementById('resultTitle').textContent = prize.name;
+  document.getElementById('resultDescription').textContent = prize.description;
+  
+  // Настраиваем кнопку получения приза
+  const claimBtn = document.getElementById('claimPrizeBtn');
+  claimBtn.onclick = () => claimPrize(prize);
   
   // Эффекты
   if (prize.type !== 'nothing') {
@@ -655,45 +662,6 @@ async function onSpinComplete(prize) {
   await loadWheelHistory();
 }
 
-// Показать модальное окно приза
-function showPrizeModal(prize) {
-  const prizeModal = document.getElementById('prizeModal');
-  const prizeIconBig = document.getElementById('prizeIconBig');
-  const prizeModalTitle = document.getElementById('prizeModalTitle');
-  const prizeModalDescription = document.getElementById('prizeModalDescription');
-  const prizeClaimBtn = document.getElementById('prizeClaimBtn');
-  
-  if (!prizeModal) return;
-  
-  // Заполняем содержимое
-  prizeIconBig.textContent = prize.icon || '🎁';
-  prizeModalTitle.textContent = prize.name;
-  prizeModalDescription.textContent = prize.description;
-  
-  // Настраиваем кнопку получения приза
-  prizeClaimBtn.onclick = () => {
-    closePrizeModal();
-    claimPrize(prize);
-  };
-  
-  // Показываем модальное окно
-  prizeModal.style.display = 'flex';
-  
-  // Закрытие по клику на фон
-  prizeModal.onclick = (e) => {
-    if (e.target === prizeModal) {
-      closePrizeModal();
-    }
-  };
-}
-
-// Закрыть модальное окно приза
-function closePrizeModal() {
-  const prizeModal = document.getElementById('prizeModal');
-  if (prizeModal) {
-    prizeModal.style.display = 'none';
-  }
-}
 
 // Получение приза
 async function claimPrize(prize) {
@@ -734,7 +702,7 @@ async function claimPrize(prize) {
         });
       }
       
-      showSuccess(`🎉 ${prize.value} бонусов начислено на ваш счет!`);
+      // showSuccess убран - пользователь уже видел приз в модальном окне
       
       // Обновляем отображение бонусов в профиле
       if (typeof loadProfileBonuses === 'function') {
@@ -748,10 +716,10 @@ async function claimPrize(prize) {
       // Создаем промокод
       const promoCode = await createWheelPromoCode(prize);
       
-      showSuccess(`🎫 Промокод создан: ${promoCode}\nПримените его при заказе!`);
+      // showSuccess убран - пользователь уже видел приз в модальном окне
       
     } else if (prize.type === 'nothing') {
-      showInfo('😢 В этот раз не повезло, но попробуйте завтра!');
+      // showInfo убран - пользователь уже видел это в модальном окне
     }
     
     // Обновляем статус приза
@@ -760,10 +728,7 @@ async function claimPrize(prize) {
       [`prizes.${wheelState.prizes.findIndex(p => p.id === prize.id)}.claimedAt`]: firebase.firestore.FieldValue.serverTimestamp()
     });
     
-    // Закрываем модальное окно
-    setTimeout(() => {
-      closeWheelModal();
-    }, 2000);
+    // Пользователь может сам закрыть окно колеса когда захочет
     
   } catch (error) {
     console.error('❌ Ошибка получения приза:', error);
