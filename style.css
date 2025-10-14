@@ -5594,6 +5594,11 @@ button.loading i.fa-spinner {
     box-sizing: border-box;
     flex-shrink: 0;
   }
+
+  /* Убираем серую полоску под кнопкой заказа */
+  .card-content {
+    padding: 1.8rem 1.5rem 0.5rem;
+  }
 }
 
 /* ============= Анимированный лоадер ============= */
