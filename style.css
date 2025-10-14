@@ -5251,8 +5251,12 @@ button.loading i.fa-spinner {
     gap: 2rem;
   }
 
+  .cocktail-card {
+    min-height: 520px;
+  }
+
   .image-container {
-    height: 360px;
+    height: 300px;
   }
 
   .cocktail-card h2 {
@@ -5495,8 +5499,12 @@ button.loading i.fa-spinner {
     padding: 1rem 0.5rem 3rem;
   }
 
+  .cocktail-card {
+    min-height: 480px;
+  }
+
   .image-container {
-    height: 280px;
+    height: 240px;
   }
   
   .image-container img {
@@ -5597,13 +5605,15 @@ button.loading i.fa-spinner {
 
   /* Убираем серую полоску под кнопкой заказа */
   .card-content {
-    padding: 1.8rem 1.5rem 1.2rem;
+    padding: 1.2rem 1rem 1rem;
   }
 
   /* Убираем серую полоску у самой кнопки */
   .order-btn {
     border-bottom: none;
     margin-bottom: 0;
+    padding: 0.6rem 1rem;
+    font-size: 0.95rem;
   }
 }
 
