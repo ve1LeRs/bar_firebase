@@ -12350,16 +12350,16 @@ body.dark-theme .prize-item-description {
   
   /* Кнопка "Создать промокод" и другие primary кнопки */
   .admin-btn.primary {
-    padding: 0.7rem 0.4rem;
-    font-size: 0.75rem;
+    padding: 0.6rem 0.3rem;
+    font-size: 0.7rem;
     white-space: normal;
-    line-height: 1.2;
+    line-height: 1.1;
     min-height: auto;
+    word-break: break-word;
   }
   
   .admin-btn.primary i {
-    font-size: 0.7rem;
-    margin-right: 0.2rem;
+    display: none;
   }
   
   .admin-list {
