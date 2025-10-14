@@ -5230,7 +5230,7 @@ button.loading i.fa-spinner {
   }
 
   .image-container {
-    height: 450px;
+    height: 380px;
   }
   
   .image-container img {
@@ -5260,7 +5260,7 @@ button.loading i.fa-spinner {
   }
 
   .image-container {
-    height: 350px;
+    height: 320px;
   }
   
   .image-container img {
@@ -5517,11 +5517,11 @@ button.loading i.fa-spinner {
   }
 
   .cocktail-card {
-    min-height: 550px;
+    min-height: 520px;
   }
 
   .image-container {
-    height: 320px;
+    height: 280px;
   }
   
   .image-container img {
@@ -10327,7 +10327,7 @@ body.dark-theme .danger-zone {
   }
   
   .image-container {
-    height: 420px;
+    height: 350px;
   }
   
   .image-container img {
@@ -10345,7 +10345,7 @@ body.dark-theme .danger-zone {
   }
   
   .image-container {
-    height: 400px;
+    height: 320px;
   }
   
   .image-container img {
