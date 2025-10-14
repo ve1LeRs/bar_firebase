@@ -5256,7 +5256,11 @@ button.loading i.fa-spinner {
   }
 
   .image-container {
-    height: 300px;
+    height: 350px;
+  }
+  
+  .image-container img {
+    object-fit: contain;
   }
 
   .cocktail-card h2 {
@@ -5509,15 +5513,15 @@ button.loading i.fa-spinner {
   }
 
   .cocktail-card {
-    min-height: 480px;
+    min-height: 550px;
   }
 
   .image-container {
-    height: 240px;
+    height: 320px;
   }
   
   .image-container img {
-    object-fit: cover;
+    object-fit: contain;
     object-position: center;
   }
 
@@ -10337,7 +10341,12 @@ body.dark-theme .danger-zone {
   }
   
   .image-container {
-    height: 300px;
+    height: 400px;
+  }
+  
+  .image-container img {
+    object-fit: contain;
+    object-position: center center;
   }
 }
 
