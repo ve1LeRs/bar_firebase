@@ -77,7 +77,11 @@ async function createBillCard(bill) {
   // Получаем краткую информацию о позициях
   let itemsPreview = '';
   if (bill.items && bill.items.length > 0) {
-    const preview = bill.items.slice(0, 3).map(item => item.cocktailName || item.name).join(', ');
+    const preview = bill.items.slice(0, 3).map(item => {
+      const name = item.cocktailName || item.name;
+      const qty = item.quantity || 1;
+      return qty > 1 ? `${name} x${qty}` : name;
+    }).join(', ');
     itemsPreview = bill.items.length > 3 ? `${preview}...` : preview;
   }
   
@@ -411,12 +415,28 @@ window.viewBillDetails = async function(billId) {
         
         <h4>Позиции в счете:</h4>
         <div class="bill-details-items">
-          ${items.map(item => `
-            <div class="bill-detail-item">
-              <span>${item.cocktailName || item.name}</span>
-              <span>${item.finalPrice || item.price || 0} ₽</span>
-            </div>
-          `).join('')}
+          ${items.map(item => {
+            const name = item.cocktailName || item.name;
+            const qty = item.quantity || 1;
+            const unitPrice = item.price || 0;
+            const finalPrice = item.finalPrice || unitPrice;
+            const discount = item.discount || 0;
+            
+            return `
+              <div class="bill-detail-item-enhanced">
+                <div class="item-info">
+                  <div class="item-name">${name}</div>
+                  <div class="item-details">
+                    Количество: <strong>${qty} шт.</strong> × ${unitPrice} ₽
+                    ${discount > 0 ? `<span class="item-discount">(-${discount}%)</span>` : ''}
+                  </div>
+                </div>
+                <div class="item-price">
+                  <strong>${finalPrice} ₽</strong>
+                </div>
+              </div>
+            `;
+          }).join('')}
         </div>
         
         ${billData.discount && billData.discount > 0 ? `

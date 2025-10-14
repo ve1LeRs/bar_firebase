@@ -5913,6 +5913,11 @@ body.dark-theme .control-group h4 {
   color: #ecf0f1;
 }
 
+#monitoring-tab h4 {
+  color: #1a1a1a;
+  margin-bottom: 1.5rem;
+}
+
 .monitoring-controls {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -5938,25 +5943,30 @@ body.dark-theme .control-group h4 {
   border-left: 4px solid;
   background: white;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  color: #1a1a1a;
 }
 
 .status-item.online {
   border-left-color: #27ae60;
   background: #d4edda;
+  color: #1a1a1a;
 }
 
 .status-item.warning {
   border-left-color: #f39c12;
   background: #fff3cd;
+  color: #1a1a1a;
 }
 
 .status-item.error {
   border-left-color: #e74c3c;
   background: #f8d7da;
+  color: #1a1a1a;
 }
 
 .status-item.offline {
   border-left-color: #6c757d;
+  color: #1a1a1a;
   background: #f8f9fa;
 }
 
@@ -5970,6 +5980,7 @@ body.dark-theme .control-group h4 {
 .status-title {
   font-weight: 600;
   font-size: 1.1rem;
+  color: #1a1a1a;
 }
 
 .status-indicator {
@@ -6001,14 +6012,22 @@ body.dark-theme .control-group h4 {
 
 .status-details {
   font-size: 0.9rem;
-  color: #6c757d;
+  color: #495057;
   line-height: 1.4;
 }
 
 /* Темная тема для мониторинга */
+body.dark-theme #monitoring-tab h4 {
+  color: #ecf0f1;
+}
+
 body.dark-theme .status-item {
   background: #3a3a4a;
   color: #f0f0f0;
+}
+
+body.dark-theme .status-title {
+  color: #ecf0f1;
 }
 
 body.dark-theme .status-item.online {
@@ -8853,6 +8872,16 @@ body.dark-theme .happy-hour-banner {
   margin-bottom: 2rem;
 }
 
+.happy-hours-add-section h5,
+.happy-hours-list-section h5 {
+  margin: 0 0 1rem 0;
+  color: #1a1a1a;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .happy-hours-form {
   display: flex;
   flex-direction: column;
@@ -8981,6 +9010,11 @@ body.dark-theme .happy-hours-add-section,
 body.dark-theme .happy-hours-list-section {
   background: linear-gradient(135deg, rgba(255, 152, 0, 0.2) 0%, rgba(255, 224, 178, 0.1) 100%);
   border-color: #ff9800;
+}
+
+body.dark-theme .happy-hours-add-section h5,
+body.dark-theme .happy-hours-list-section h5 {
+  color: #ecf0f1;
 }
 
 body.dark-theme .happy-hour-item {
@@ -9189,6 +9223,17 @@ body.dark-theme .bonus-earn-info strong {
   margin-bottom: 2rem;
 }
 
+.bonus-settings-section h5,
+.bonus-stats-section h5,
+.bonus-users-section h5 {
+  margin: 0 0 1rem 0;
+  color: #1a1a1a;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .bonus-settings-form {
   display: flex;
   flex-direction: column;
@@ -9290,6 +9335,12 @@ body.dark-theme .bonus-stats-section,
 body.dark-theme .bonus-users-section {
   background: linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(212, 175, 55, 0.1) 100%);
   border-color: #b48c5a;
+}
+
+body.dark-theme .bonus-settings-section h5,
+body.dark-theme .bonus-stats-section h5,
+body.dark-theme .bonus-users-section h5 {
+  color: #ecf0f1;
 }
 
 body.dark-theme .bonus-settings-form small {
@@ -10751,7 +10802,7 @@ body.dark-theme .bill-paid-date {
 
 .bill-details-modal-content h3 {
   margin: 0 0 1.5rem 0;
-  color: #2c3e50;
+  color: #f0f0f0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -10759,7 +10810,7 @@ body.dark-theme .bill-paid-date {
 
 .bill-details-modal-content h4 {
   margin: 1.5rem 0 1rem 0;
-  color: #2c3e50;
+  color: #f0f0f0;
 }
 
 .bill-detail-section {
@@ -11016,7 +11067,7 @@ body.dark-theme .bill-detail-total strong:last-child {
 
 .payment-method-section h4 {
   margin: 0 0 0.8rem 0;
-  color: #2c3e50;
+  color: #f0f0f0;
   font-size: 1rem;
   display: flex;
   align-items: center;
