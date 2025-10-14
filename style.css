@@ -346,6 +346,7 @@ body.dark-theme .cocktail-card h2 {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   box-sizing: border-box;
+  order: 1;
 }
 
 body.dark-theme .cocktail-card .ingredients {
@@ -376,6 +377,18 @@ body.dark-theme .cocktail-card .mood {
   -webkit-box-orient: vertical;
   box-sizing: border-box;
   flex-shrink: 0;
+  position: relative;
+  order: 2;
+}
+
+body.dark-theme .card-info {
+  order: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+body.dark-theme .card-bottom {
+  order: 3;
 }
 
 body.dark-theme .auth-buttons button {
