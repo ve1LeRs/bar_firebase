@@ -12329,15 +12329,15 @@ body.dark-theme .prize-item-description {
   
   .admin-filter-buttons {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 0.5rem;
   }
   
   .admin-filter-btn {
-    flex: 1 1 calc(50% - 0.25rem);
-    min-width: 140px;
-    padding: 0.7rem 0.5rem;
-    font-size: 0.85rem;
+    width: 100%;
+    padding: 0.8rem 1rem;
+    font-size: 0.9rem;
+    justify-content: center;
   }
   
   .admin-list {
