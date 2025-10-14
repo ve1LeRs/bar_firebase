@@ -5237,9 +5237,9 @@ button.loading i.fa-spinner {
   }
   
   .image-container img {
-    object-fit: contain !important;
+    object-fit: cover !important;
     object-position: center center !important;
-    transform: scale(1.4) !important;
+    transform: scale(1) !important;
     width: 100%;
     height: 100%;
   }
@@ -5272,9 +5272,9 @@ button.loading i.fa-spinner {
   }
   
   .image-container img {
-    object-fit: contain !important;
+    object-fit: cover !important;
     object-position: center center !important;
-    transform: scale(1.4) !important;
+    transform: scale(1) !important;
     width: 100%;
     height: 100%;
   }
@@ -5538,9 +5538,9 @@ button.loading i.fa-spinner {
   }
   
   .image-container img {
-    object-fit: contain !important;
+    object-fit: cover !important;
     object-position: center center !important;
-    transform: scale(1.4) !important;
+    transform: scale(1) !important;
     width: 100%;
     height: 100%;
   }
@@ -10348,11 +10348,11 @@ body.dark-theme .danger-zone {
   }
   
   .image-container img {
-    object-fit: contain !important;
+    object-fit: cover !important;
     object-position: center center !important;
     width: 100%;
     height: 100%;
-    transform: scale(1.4) !important;
+    transform: scale(1) !important;
   }
 }
 
@@ -10368,9 +10368,9 @@ body.dark-theme .danger-zone {
   }
   
   .image-container img {
-    object-fit: contain !important;
+    object-fit: cover !important;
     object-position: center center !important;
-    transform: scale(1.4) !important;
+    transform: scale(1) !important;
     width: 100%;
     height: 100%;
   }
