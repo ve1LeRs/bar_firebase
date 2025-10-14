@@ -5234,12 +5234,13 @@ button.loading i.fa-spinner {
   .image-container {
     height: 380px;
     overflow: hidden;
+    background: transparent;
   }
   
   .image-container img {
     object-fit: cover !important;
     object-position: center center !important;
-    transform: scale(1) !important;
+    transform: scale(1.15) !important;
     width: 100%;
     height: 100%;
   }
@@ -5269,12 +5270,13 @@ button.loading i.fa-spinner {
   .image-container {
     height: 320px;
     overflow: hidden;
+    background: transparent;
   }
   
   .image-container img {
     object-fit: cover !important;
     object-position: center center !important;
-    transform: scale(1) !important;
+    transform: scale(1.15) !important;
     width: 100%;
     height: 100%;
   }
@@ -5535,12 +5537,13 @@ button.loading i.fa-spinner {
   .image-container {
     height: 280px;
     overflow: hidden;
+    background: transparent;
   }
   
   .image-container img {
     object-fit: cover !important;
     object-position: center center !important;
-    transform: scale(1) !important;
+    transform: scale(1.15) !important;
     width: 100%;
     height: 100%;
   }
@@ -10345,6 +10348,7 @@ body.dark-theme .danger-zone {
   .image-container {
     height: 350px;
     overflow: hidden;
+    background: transparent;
   }
   
   .image-container img {
@@ -10352,7 +10356,7 @@ body.dark-theme .danger-zone {
     object-position: center center !important;
     width: 100%;
     height: 100%;
-    transform: scale(1) !important;
+    transform: scale(1.15) !important;
   }
 }
 
@@ -10365,12 +10369,13 @@ body.dark-theme .danger-zone {
   .image-container {
     height: 320px;
     overflow: hidden;
+    background: transparent;
   }
   
   .image-container img {
     object-fit: cover !important;
     object-position: center center !important;
-    transform: scale(1) !important;
+    transform: scale(1.15) !important;
     width: 100%;
     height: 100%;
   }
