@@ -16,7 +16,7 @@
     "bar",
     "orders"
   ],
-  "author": "Asafiev Bar",
+  "author": "AsafievBar",
   "license": "MIT",
   "dependencies": {
     "cors": "^2.8.5",

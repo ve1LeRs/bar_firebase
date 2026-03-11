@@ -161,7 +161,7 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "1743362083";
 app.get('/', (req, res) => {
   res.json({
     status: 'OK',
-    message: 'Asafiev Bar Webhook Server is running',
+    message: 'AsafievBar Webhook Server is running',
     timestamp: new Date().toISOString(),
     endpoints: {
       health: '/health',
@@ -178,7 +178,7 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    service: 'Asafiev Bar Webhook Server'
+    service: 'AsafievBar Webhook Server'
   });
 });
 
@@ -204,7 +204,7 @@ app.get('/diagnose', (req, res) => {
       success: true,
       environment: envVars,
       timestamp: new Date().toISOString(),
-      service: 'Asafiev Bar Webhook Server'
+      service: 'AsafievBar Webhook Server'
     });
   } catch (error) {
     console.error('❌ Ошибка диагностики:', error);

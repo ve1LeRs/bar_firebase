@@ -1,10 +1,10 @@
 {
-  "name": "Asafiev Bar",
-  "short_name": "Asafiev Bar",
+  "name": "AsafievBar",
+  "short_name": "AsafievBar",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#f9f7f3",
-  "description": "Изысканные коктейли Asafiev Bar",
+  "description": "Изысканные коктейли AsafievBar",
   "icons": [
     {
       "src": "favicon.ico",

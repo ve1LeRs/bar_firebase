@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Скрипт для проверки статуса системы Asafiev Bar
+ * Скрипт для проверки статуса системы AsafievBar
  */
 
 const https = require('https');
@@ -9,7 +9,7 @@ const https = require('https');
 const WEBHOOK_URL = 'https://web-production-72014.up.railway.app';
 const TELEGRAM_BOT_TOKEN = '8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo';
 
-console.log('🔍 Проверка статуса системы Asafiev Bar');
+console.log('🔍 Проверка статуса системы AsafievBar');
 console.log('=' .repeat(50));
 
 // Функция для HTTP запросов
