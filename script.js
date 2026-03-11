@@ -2451,7 +2451,7 @@ confirmOrderBtn?.addEventListener('click', async () => {
     const priceInfo = `\n💰 *Цена:* ${currentOrder.price}₽`;
     
     const message = `
-🆕 *Новый заказ в Asafiev Bar!*
+🆕 *Новый заказ в AsafievBar!*
 🍸 *Коктейль:* ${currentOrder.name}
 👤 *Имя клиента:* ${currentOrder.user}
 🕒 *Время:* ${currentOrder.displayTime}${priceInfo}
@@ -4175,7 +4175,7 @@ async function testWebhookServer() {
           from: {
             id: 123456789,
             is_bot: true,
-            first_name: 'Asafiev Bar Bot',
+            first_name: 'AsafievBar Bot',
             username: 'asafiev_bar_bot'
           },
           chat: {
@@ -4306,7 +4306,7 @@ async function getTelegramWebhookInfo() {
 async function sendTestMessage() {
   try {
     const message = `
-🧪 *Тестовое сообщение от Asafiev Bar*
+🧪 *Тестовое сообщение от AsafievBar*
 
 ✅ Webhook сервер работает
 ✅ Firebase подключен
