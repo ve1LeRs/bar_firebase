@@ -790,11 +790,6 @@ async function loadCocktails() {
               <span class="alcohol-percent">${cocktail.alcohol}%</span>
             </div>
           ` : ''}
-          ${isInStoplist ? `
-            <div class="stoplist-badge">
-              <i class="fas fa-ban"></i> В стоп-листе
-            </div>
-          ` : ''}
           ${cocktail.tasteTags && cocktail.tasteTags.length > 0 ? `
             <div class="taste-tags">
               ${cocktail.tasteTags.map(tag => {
@@ -6675,6 +6670,17 @@ addIngredientBtn?.addEventListener('click', async () => {
   }
   
   try {
+    // Проверяем, нет ли уже ингредиента с таким названием (без учета регистра)
+    const existingSnapshot = await db.collection('ingredients')
+      .where('name', '==', name)
+      .limit(1)
+      .get();
+
+    if (!existingSnapshot.empty) {
+      showError('❌ Ингредиент с таким названием уже существует');
+      return;
+    }
+
     console.log('💾 Сохранение в базу данных...');
     const ingredientData = {
       name: name,
