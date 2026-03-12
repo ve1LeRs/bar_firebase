@@ -2606,16 +2606,19 @@ body.dark-theme .order-image-placeholder i {
   z-index: 2000;
 }
 
+.notification-modal[style*="display: block"] {
+  align-items: flex-start;
+  justify-content: center;
+}
+
 .notification-content {
   max-width: 450px;
   padding: 2rem;
   text-align: center;
   display: flex;
   flex-direction: column;
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  position: relative;
+  margin: 10vh auto 0;
   box-sizing: border-box;
   background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
   border-radius: 24px;
