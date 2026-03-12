@@ -3003,17 +3003,7 @@ function createBillHistoryCard(billData, billId) {
       <span class="bill-history-total-label">Итого:</span>
       <span class="bill-history-total-amount">${billData.totalAmount} ₽</span>
     </div>
-    
-    <button class="bill-history-details-btn" data-bill-id="${billId}">
-      <i class="fas fa-eye"></i> Подробнее
-    </button>
   `;
-  
-  // Обработчик для кнопки "Подробнее"
-  const detailsBtn = card.querySelector('.bill-history-details-btn');
-  detailsBtn.addEventListener('click', () => {
-    showBillDetailsModal(billData, billId);
-  });
   
   return card;
 }
@@ -3047,7 +3037,10 @@ function showBillDetailsModal(billData, billId) {
       <div class="bill-item" data-status="${item.status}">
         ${item.cocktailImage ? `<img src="${item.cocktailImage}" alt="${item.cocktailName}" class="bill-item-image">` : ''}
         <div class="bill-item-info">
-          <div class="bill-item-name">${item.cocktailName}</div>
+          <div class="bill-item-name-row">
+            <div class="bill-item-name">${item.cocktailName}</div>
+            ${item.quantity ? `<span class="item-quantity">×${item.quantity}</span>` : ''}
+          </div>
           ${item.promoCode ? `<div class="bill-item-promo">🎫 ${item.promoCode} (-${item.promoDiscount}%)</div>` : ''}
           <div class="bill-item-status">
             <span class="status-icon">${statusIcon}</span>
