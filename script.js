@@ -532,9 +532,8 @@ function openModal(modalElement) {
   
   modalElement.style.display = 'block';
   
-   // Для модального окна уведомления о заказе явно прокручиваем к верху,
-   // чтобы пользователь сразу увидел его на экране
-  const modalId = modalElement.id || '';
+  // Для модального окна уведомления о заказе явно прокручиваем к верху,
+  // чтобы пользователь сразу увидел его на экране
   if (modalId === 'notificationModal') {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
