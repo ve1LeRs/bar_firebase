@@ -556,7 +556,8 @@ async function ensureCocktailHasIngredients(cocktailName) {
         timestamp: new Date().toLocaleString('ru-RU')
       });
 
-      // Перезагружаем стоп-лист и коктейли, чтобы метки "В стоп-листе" обновились
+      // Перезагружаем стоп-лист и коктейли, чтобы метки "Недоступен" обновились
+      // Важно: эту функцию нужно вызывать точечно (например, при заказе), чтобы избежать циклов
       await loadStoplist();
     }
 
@@ -575,6 +576,46 @@ async function ensureCocktailHasIngredients(cocktailName) {
     }
     // При других ошибках не блокируем заказ, чтобы не ломать UX
     return true;
+  }
+}
+
+/**
+ * Списывает ингредиенты со склада по рецепту коктейля после успешного заказа.
+ * @param {string} cocktailName
+ */
+async function deductIngredientsForCocktail(cocktailName) {
+  try {
+    const cocktail = cocktailsData.find(c => c.name === cocktailName);
+    if (!cocktail || !Array.isArray(cocktail.stockRecipe) || cocktail.stockRecipe.length === 0) {
+      return;
+    }
+
+    for (const item of cocktail.stockRecipe) {
+      const ingName = (item.ingredientName || '').trim();
+      const needed = Number(item.amount) || 0;
+      if (!ingName || needed <= 0) continue;
+
+      const snapshot = await db.collection('ingredients')
+        .where('name', '==', ingName)
+        .limit(1)
+        .get();
+
+      if (snapshot.empty) {
+        continue;
+      }
+
+      const doc = snapshot.docs[0];
+      const data = doc.data();
+      const currentStock = Number(data.stock) || 0;
+      const newStock = Math.max(0, currentStock - needed);
+
+      await db.collection('ingredients').doc(doc.id).update({
+        stock: newStock,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+  } catch (error) {
+    console.error('❌ Ошибка списания ингредиентов для коктейля:', error);
   }
 }
 
@@ -2581,6 +2622,9 @@ confirmOrderBtn?.addEventListener('click', async () => {
     
     // Создаем или обновляем счет пользователя
     await createOrUpdateBill(currentOrder, docRef.id);
+
+    // После успешного создания заказа списываем ингредиенты со склада (если задан рецепт)
+    await deductIngredientsForCocktail(orderData.name);
 
     const priceInfo = `\n💰 *Цена:* ${currentOrder.price}₽`;
     
