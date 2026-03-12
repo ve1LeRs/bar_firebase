@@ -26,32 +26,32 @@ if (window.location.hostname === 'localhost' || window.location.hostname === '12
   WEBHOOK_SERVER_URL = "http://localhost:3000";
   console.log('🔧 Режим разработки: используем localhost');
 } else {
-  // В продакшне пытаемся определить Railway URL автоматически
+  // В продакшне пытаемся определить URL сервера автоматически
   const savedUrl = localStorage.getItem('webhook_server_url');
   console.log('💾 Сохраненный URL в localStorage:', savedUrl);
   if (savedUrl) {
     WEBHOOK_SERVER_URL = savedUrl;
     console.log('💾 Используем сохраненный URL:', WEBHOOK_SERVER_URL);
   } else {
-    // Пытаемся автоматически определить Railway URL
+    // Пытаемся автоматически определить URL сервера
     const currentHost = window.location.hostname;
     console.log('🌐 Текущий хост:', currentHost);
     
-    if (currentHost.includes('railway.app')) {
+    if (currentHost.includes('onrender.com')) {
       WEBHOOK_SERVER_URL = `https://${currentHost}`;
-      console.log('🚀 Автоматически определен Railway URL:', WEBHOOK_SERVER_URL);
+      console.log('🚀 Автоматически определен Render URL:', WEBHOOK_SERVER_URL);
       // Сохраняем для будущего использования
       localStorage.setItem('webhook_server_url', WEBHOOK_SERVER_URL);
     } else if (currentHost.includes('github.io')) {
-      // Для GitHub Pages используем дефолтный Railway URL
-      WEBHOOK_SERVER_URL = "https://lucid-cat-production.up.railway.app";
-      console.log('🌐 GitHub Pages обнаружен, используем дефолтный Railway URL:', WEBHOOK_SERVER_URL);
+      // Для GitHub Pages используем дефолтный URL сервера (Render)
+      WEBHOOK_SERVER_URL = "https://bar-firebase.onrender.com";
+      console.log('🌐 GitHub Pages обнаружен, используем дефолтный серверный URL:', WEBHOOK_SERVER_URL);
       // Сохраняем для будущего использования
       localStorage.setItem('webhook_server_url', WEBHOOK_SERVER_URL);
     } else {
-      // Для локальных файлов и других случаев используем дефолтный Railway URL
-      WEBHOOK_SERVER_URL = "https://lucid-cat-production.up.railway.app";
-      console.log('🚀 Используем дефолтный Railway URL:', WEBHOOK_SERVER_URL);
+      // Для локальных файлов и других случаев используем дефолтный серверный URL (Render)
+      WEBHOOK_SERVER_URL = "https://bar-firebase.onrender.com";
+      console.log('🚀 Используем дефолтный серверный URL:', WEBHOOK_SERVER_URL);
       // Сохраняем для будущего использования
       localStorage.setItem('webhook_server_url', WEBHOOK_SERVER_URL);
     }
@@ -80,13 +80,13 @@ function resetWebhookServerUrl() {
   location.reload();
 }
 
-// Функция для принудительной настройки Railway URL
+// Функция для принудительной настройки URL сервера (раньше Railway)
 function forceRailwayUrl() {
-  const railwayUrl = prompt('🌐 Принудительная настройка Railway URL\n\nВведите ваш Railway URL (например: https://lucid-cat-production.up.railway.app):');
+  const railwayUrl = prompt('🌐 Принудительная настройка URL сервера\n\nВведите URL вашего сервера (например: https://bar-firebase.onrender.com):');
   
   if (railwayUrl && railwayUrl.startsWith('https://')) {
     updateWebhookServerUrl(railwayUrl);
-    showSuccess(`✅ Railway URL принудительно установлен: ${railwayUrl}`);
+    showSuccess(`✅ URL сервера принудительно установлен: ${railwayUrl}`);
     
     // Автоматически проверяем систему
     setTimeout(async () => {
@@ -2146,15 +2146,15 @@ diagnoseBtn?.addEventListener('click', async () => {
         <p><strong>Статус:</strong> Endpoint не найден (404)</p>
         <p><strong>Возможные причины:</strong></p>
         <ul>
-          <li>Railway развертывает не webhook-server.js</li>
+          <li>Сервис развертывает не webhook-server.js</li>
           <li>Сервер не запущен</li>
-          <li>Неправильная конфигурация Railway</li>
+          <li>Неправильная конфигурация окружения (Render)</li>
         </ul>
         <p><strong>Рекомендации:</strong></p>
         <ul>
-          <li>Проверьте Railway Dashboard → Logs</li>
+          <li>Проверьте логи на Render Dashboard → Logs</li>
           <li>Убедитесь, что используется webhook-server.js</li>
-          <li>Перезапустите Railway сервис</li>
+          <li>Перезапустите сервис на Render</li>
         </ul>
       </div>
     `;
@@ -2235,7 +2235,7 @@ autoSetupBtn?.addEventListener('click', async () => {
   
   try {
     // Шаг 1: Настройка URL webhook сервера
-    const railwayUrl = prompt('🌐 Введите ваш Railway URL (например: https://your-app.railway.app):');
+    const railwayUrl = prompt('🌐 Введите URL сервера (например: https://bar-firebase.onrender.com):');
     
     if (!railwayUrl) {
       showError('❌ URL не введен. Автонастройка отменена.');
@@ -6971,23 +6971,23 @@ sendToTelegramBtn?.addEventListener('click', async () => {
         prompt('📋 Скопируйте этот текст и отправьте в Telegram:', message);
       }
     } else {
-      showError('❌ Проверьте, что Railway сервер запущен и URL правильный');
+      showError('❌ Проверьте, что сервер запущен и URL правильный');
     }
   }
 });
 
-// Проверка и обновление Railway URL
+// Проверка и обновление URL сервера (раньше Railway)
 const checkRailwayUrlBtn = document.getElementById('checkRailwayUrlBtn');
 checkRailwayUrlBtn?.addEventListener('click', async () => {
-  const currentUrl = localStorage.getItem('railwayUrl') || 'https://lucid-cat-production.up.railway.app';
+  const currentUrl = localStorage.getItem('webhook_server_url') || 'https://bar-firebase.onrender.com';
   
   const newUrl = prompt(
-    '🔧 Проверьте и обновите Railway URL\n\n' +
+    '🔧 Проверьте и обновите URL сервера\n\n' +
     'Текущий URL:\n' + currentUrl + '\n\n' +
-    'Чтобы найти правильный URL:\n' +
-    '1. Откройте https://railway.app/\n' +
-    '2. Зайдите в ваш проект\n' +
-    '3. Settings → Domains\n' +
+    'Чтобы найти правильный URL Render:\n' +
+    '1. Откройте https://render.com/\n' +
+    '2. Зайдите в ваш сервис\n' +
+    '3. Settings → Custom domains / Service URL\n' +
     '4. Скопируйте публичный URL\n\n' +
     'Введите новый URL (или оставьте пустым для сброса):',
     currentUrl
@@ -7001,8 +7001,9 @@ checkRailwayUrlBtn?.addEventListener('click', async () => {
         return;
       }
       
-      localStorage.setItem('railwayUrl', newUrl.trim());
-      showSuccess('✅ Railway URL обновлен: ' + newUrl.trim());
+      localStorage.setItem('webhook_server_url', newUrl.trim());
+      updateWebhookServerUrl(newUrl.trim());
+      showSuccess('✅ URL сервера обновлен: ' + newUrl.trim());
       
       // Проверяем доступность
       try {
@@ -7010,14 +7011,15 @@ checkRailwayUrlBtn?.addEventListener('click', async () => {
         if (response.ok) {
           showSuccess('✅ Сервер отвечает! URL правильный.');
         } else {
-          showError('⚠️ Сервер недоступен. Проверьте, что приложение запущено в Railway.');
+          showError('⚠️ Сервер недоступен. Проверьте, что приложение запущено на Render и URL правильный.');
         }
       } catch (error) {
-        showError('⚠️ Не удалось подключиться к серверу. Проверьте URL и статус Railway.');
+        showError('⚠️ Не удалось подключиться к серверу. Проверьте URL и статус сервиса на Render.');
       }
     } else {
-      localStorage.removeItem('railwayUrl');
-      showSuccess('✅ Railway URL сброшен на стандартный');
+      localStorage.removeItem('webhook_server_url');
+      resetWebhookServerUrl();
+      showSuccess('✅ URL сервера сброшен на стандартный');
     }
   }
 });

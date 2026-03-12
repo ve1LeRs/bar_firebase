@@ -140,7 +140,7 @@ if (!admin.apps.length) {
     console.log('🔧 Service Account Email:', serviceAccount.client_email);
   } catch (error) {
     console.error('❌ Ошибка инициализации Firebase:', error);
-    console.error('🔍 Проверьте переменные окружения Firebase в Railway');
+    console.error('🔍 Проверьте переменные окружения Firebase на сервере (Render)');
     console.error('🔍 Service Account details:', {
       hasPrivateKey: !!serviceAccount?.private_key,
       hasClientEmail: !!serviceAccount?.client_email,
@@ -270,7 +270,7 @@ app.get('/test-firebase', async (req, res) => {
       success: false, 
       error: error.message,
       code: error.code,
-      details: 'Проверьте переменные окружения Firebase в Railway',
+      details: 'Проверьте переменные окружения Firebase на сервере (Render)',
       environment: {
         FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID ? 'SET' : 'NOT SET',
         FIREBASE_PRIVATE_KEY_ID: process.env.FIREBASE_PRIVATE_KEY_ID ? 'SET' : 'NOT SET',

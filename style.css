@@ -2100,6 +2100,7 @@ body.modal-open.profile-open {
   overflow-y: auto;
 }
 
+/* Центрирование модальных окон относительно видимой области экрана */
 .modal[style*="display: block"] {
   display: flex !important;
   align-items: center;
@@ -2109,7 +2110,7 @@ body.modal-open.profile-open {
 .modal-content {
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(20px);
-  margin: auto;
+  margin: 0 auto;
   padding: 0;
   border-radius: 24px;
   width: 90%;
