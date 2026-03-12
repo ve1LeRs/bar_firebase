@@ -502,41 +502,39 @@ let currentAdminFilter = 'classic'; // Текущий фильтр в админ
 /**
  * Проверяет, хватает ли ингредиентов для приготовления коктейля по его "складскому" рецепту.
  * Если ингредиентов не хватает, автоматически добавляет коктейль в стоп-лист.
+ * Один запрос к Firestore вместо N — быстрее для пользователя.
  * @param {string} cocktailName
  * @returns {Promise<boolean>} true, если коктейль можно приготовить; false, если нет
  */
 async function ensureCocktailHasIngredients(cocktailName) {
   try {
-    // Находим коктейль и его рецепт
     const cocktail = cocktailsData.find(c => c.name === cocktailName);
     if (!cocktail || !Array.isArray(cocktail.stockRecipe) || cocktail.stockRecipe.length === 0) {
-      // Рецепт для склада не задан — не блокируем заказ
       return true;
     }
 
-    // Проверяем наличие каждого ингредиента
+    // Один запрос: все ингредиенты, проверка по рецепту в памяти
+    const ingredientsSnapshot = await db.collection('ingredients').get();
+    const stockByName = new Map();
+    ingredientsSnapshot.forEach(doc => {
+      const d = doc.data();
+      const name = (d.name || '').trim();
+      if (name) stockByName.set(name, { id: doc.id, stock: Number(d.stock) || 0 });
+    });
+
     const lacking = [];
     for (const item of cocktail.stockRecipe) {
       const ingName = (item.ingredientName || '').trim();
       const needed = Number(item.amount) || 0;
       if (!ingName || needed <= 0) continue;
 
-      const snapshot = await db.collection('ingredients')
-        .where('name', '==', ingName)
-        .limit(1)
-        .get();
-
-      if (snapshot.empty) {
+      const entry = stockByName.get(ingName);
+      if (!entry) {
         lacking.push(`${ingName} (нет в списке ингредиентов)`);
         continue;
       }
-
-      const doc = snapshot.docs[0];
-      const data = doc.data();
-      const stock = Number(data.stock) || 0;
-
-      if (stock < needed) {
-        lacking.push(`${ingName} (остаток: ${stock}, нужно: ${needed})`);
+      if (entry.stock < needed) {
+        lacking.push(`${ingName} (остаток: ${entry.stock}, нужно: ${needed})`);
       }
     }
 
@@ -544,20 +542,26 @@ async function ensureCocktailHasIngredients(cocktailName) {
       return true;
     }
 
-    // Если чего-то не хватает — автоматически добавляем в стоп-лист
-    const alreadyInStoplist = stoplistData.some(item => item.cocktailName === cocktailName);
+    const nameNorm = (cocktailName || '').trim();
+    const alreadyInStoplist = stoplistData.some(item => (item.cocktailName || '').trim() === nameNorm);
     const missingList = lacking.join(', ');
 
     if (!alreadyInStoplist) {
-      await db.collection('stoplist').add({
-        cocktailName: cocktailName,
+      const ref = await db.collection('stoplist').add({
+        cocktailName: nameNorm,
         reason: `Недостаточно ингредиентов: ${missingList}`,
         addedBy: 'system',
         timestamp: new Date().toLocaleString('ru-RU')
       });
-
-      // Перезагружаем стоп-лист (без повторной загрузки коктейлей, чтобы избежать циклов)
-      await loadStoplist(true);
+      stoplistData.push({
+        id: ref.id,
+        cocktailName: nameNorm,
+        reason: `Недостаточно ингредиентов: ${missingList}`,
+        addedBy: 'system',
+        timestamp: new Date().toLocaleString('ru-RU')
+      });
+      updateCocktailCardsStoplistState();
+      loadStoplist(true).catch(() => {}); // обновить админку в фоне, не блокировать
     }
 
     showError(
@@ -567,19 +571,17 @@ async function ensureCocktailHasIngredients(cocktailName) {
     return false;
   } catch (error) {
     console.error('❌ Ошибка проверки ингредиентов для коктейля:', error);
-    // Если нет прав на запись в стоп-лист, всё равно блокируем заказ,
-    // чтобы не продавать коктейль без ингредиентов
     if (error && typeof error.message === 'string' && error.message.toLowerCase().includes('permission')) {
       showError('❌ Недостаточно прав для автоматического добавления в стоп-лист. Обратитесь к администратору.');
       return false;
     }
-    // При других ошибках не блокируем заказ, чтобы не ломать UX
     return true;
   }
 }
 
 /**
  * Списывает ингредиенты со склада по рецепту коктейля после успешного заказа.
+ * Один запрос на чтение + один batch на запись. Сразу добавляет коктейль в стоп-лист, если после списания чего-то не хватает.
  * @param {string} cocktailName
  */
 async function deductIngredientsForCocktail(cocktailName) {
@@ -589,35 +591,73 @@ async function deductIngredientsForCocktail(cocktailName) {
       return;
     }
 
+    const ingredientsSnapshot = await db.collection('ingredients').get();
+    const byName = new Map();
+    ingredientsSnapshot.forEach(doc => {
+      const d = doc.data();
+      const name = (d.name || '').trim();
+      if (name) byName.set(name, { id: doc.id, stock: Number(d.stock) || 0 });
+    });
+
+    const batch = db.batch();
+    const newStocks = new Map();
+
     for (const item of cocktail.stockRecipe) {
       const ingName = (item.ingredientName || '').trim();
       const needed = Number(item.amount) || 0;
       if (!ingName || needed <= 0) continue;
 
-      const snapshot = await db.collection('ingredients')
-        .where('name', '==', ingName)
-        .limit(1)
-        .get();
+      const entry = byName.get(ingName);
+      if (!entry) continue;
 
-      if (snapshot.empty) {
-        continue;
-      }
-
-      const doc = snapshot.docs[0];
-      const data = doc.data();
-      const currentStock = Number(data.stock) || 0;
-      const newStock = Math.max(0, currentStock - needed);
-
-      await db.collection('ingredients').doc(doc.id).update({
+      const newStock = Math.max(0, entry.stock - needed);
+      newStocks.set(ingName, newStock);
+      batch.update(db.collection('ingredients').doc(entry.id), {
         stock: newStock,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     }
 
-    // После изменения остатков пересчитаем доступность коктейлей:
-    // - коктейли, для которых теперь хватает ингредиентов, будут автоматически
-    //   удалены из стоп-листа
-    await reevaluateCocktailsAvailability();
+    await batch.commit();
+
+    // Сразу проверяем: если после списания коктейлю чего-то не хватает — в стоп-лист
+    const lacking = [];
+    for (const item of cocktail.stockRecipe) {
+      const ingName = (item.ingredientName || '').trim();
+      const needed = Number(item.amount) || 0;
+      if (!ingName || needed <= 0) continue;
+      const after = newStocks.get(ingName);
+      const stock = after != null ? after : byName.get(ingName)?.stock ?? 0;
+      if (stock < needed) {
+        lacking.push(`${ingName} (остаток: ${stock}, нужно: ${needed})`);
+      }
+    }
+
+    if (lacking.length > 0) {
+      const nameNorm = (cocktailName || '').trim();
+      const alreadyInStoplist = stoplistData.some(item => (item.cocktailName || '').trim() === nameNorm);
+      if (!alreadyInStoplist) {
+        const missingList = lacking.join(', ');
+        const ref = await db.collection('stoplist').add({
+          cocktailName: nameNorm,
+          reason: `Недостаточно ингредиентов: ${missingList}`,
+          addedBy: 'system',
+          timestamp: new Date().toLocaleString('ru-RU')
+        });
+        stoplistData.push({
+          id: ref.id,
+          cocktailName: nameNorm,
+          reason: `Недостаточно ингредиентов: ${missingList}`,
+          addedBy: 'system',
+          timestamp: new Date().toLocaleString('ru-RU')
+        });
+        updateCocktailCardsStoplistState();
+        loadStoplist(true).catch(() => {});
+      }
+    }
+
+    // Полная переоценка стоп-листа — в фоне, не блокируем ответ бармену
+    reevaluateCocktailsAvailability().catch(err => console.warn('reevaluateCocktailsAvailability', err));
   } catch (error) {
     console.error('❌ Ошибка списания ингредиентов для коктейля:', error);
   }
@@ -664,21 +704,24 @@ async function reevaluateCocktailsAvailability() {
 
       // Если всё в порядке с ингредиентами — убираем из стоп-листа (если там есть)
       if (lacking.length === 0) {
+        const nameToFind = (cocktail.name || '').trim();
+        if (!nameToFind) continue;
+        const idsToDelete = new Set();
         const stopSnapshot = await db.collection('stoplist')
-          .where('cocktailName', '==', cocktail.name)
+          .where('cocktailName', '==', nameToFind)
           .get();
-
-        if (!stopSnapshot.empty) {
-          const batch = db.batch();
-          stopSnapshot.forEach(doc => {
-            batch.delete(doc.ref);
-          });
-          await batch.commit();
-        }
+        stopSnapshot.forEach(doc => idsToDelete.add(doc.id));
+        stoplistData.forEach(item => {
+          if ((item.cocktailName || '').trim() === nameToFind && item.id) idsToDelete.add(item.id);
+        });
+        if (idsToDelete.size === 0) continue;
+        const batch = db.batch();
+        idsToDelete.forEach(id => batch.delete(db.collection('stoplist').doc(id)));
+        await batch.commit();
       }
     }
 
-    // Перезагружаем стоп-лист (без повторной загрузки коктейлей, чтобы избежать циклов)
+    // Перезагружаем стоп-лист и обновляем карточки на главной без полной перезагрузки коктейлей
     await loadStoplist(true);
   } catch (error) {
     console.error('❌ Ошибка переоценки доступности коктейлей:', error);
@@ -1042,11 +1085,42 @@ async function loadStoplist(skipCocktailsReload = false) {
     // Перезагружаем коктейли, чтобы обновить статусы (если не запрещено флагом)
     if (!skipCocktailsReload) {
       await loadCocktails();
+    } else {
+      // Стоп-лист изменился, но коктейли не перезагружали — обновляем только состояние карточек
+      updateCocktailCardsStoplistState();
     }
-    
+
   } catch (error) {
     console.error('Ошибка загрузки стоп-листа:', error);
   }
+}
+
+/**
+ * Обновляет класс и кнопку у карточек коктейлей по актуальному stoplistData.
+ * Вызывается после loadStoplist(true), чтобы главная сетка не показывала «в стоп-листе» без перезагрузки коктейлей.
+ */
+function updateCocktailCardsStoplistState() {
+  const cards = document.querySelectorAll('.cocktails-grid .cocktail-card');
+  cards.forEach(card => {
+    const name = (card.getAttribute('data-name') || '').trim();
+    const isInStoplist = stoplistData.some(item => (item.cocktailName || '').trim() === name);
+    card.classList.toggle('stopped', isInStoplist);
+    const btn = card.querySelector('.card-bottom .order-btn');
+    if (!btn) return;
+    if (isInStoplist) {
+      btn.disabled = true;
+      btn.classList.add('disabled');
+      btn.innerHTML = '<i class="fas fa-ban"></i> Недоступен';
+    } else {
+      btn.disabled = false;
+      btn.classList.remove('disabled');
+      const cocktail = cocktailsData.find(c => (c.name || '').trim() === name);
+      const price = cocktail && (cocktail.price != null) ? cocktail.price : 500;
+      btn.setAttribute('data-price', String(price));
+      btn.setAttribute('data-name', name);
+      btn.innerHTML = '<i class="fas fa-glass-martini-alt"></i> Заказать';
+    }
+  });
 }
 
 // Заполнение селекта коктейлей для стоп-листа
@@ -2750,24 +2824,15 @@ confirmOrderBtn?.addEventListener('click', async () => {
       createdAt: firebase.firestore.FieldValue.serverTimestamp ? firebase.firestore.FieldValue.serverTimestamp() : now
     };
     const docRef = await db.collection('orders').add(orderData);
-    
-    // Создаем или обновляем счет пользователя
-    await createOrUpdateBill(currentOrder, docRef.id);
-
-    // После успешного создания заказа списываем ингредиенты со склада (если задан рецепт)
-    await deductIngredientsForCocktail(orderData.name);
 
     const priceInfo = `\n💰 *Цена:* ${currentOrder.price}₽`;
-    
     const message = `
 🆕 *Новый заказ в AsafievBar!*
 🍸 *Коктейль:* ${currentOrder.name}
 👤 *Имя клиента:* ${currentOrder.user}
 🕒 *Время:* ${currentOrder.displayTime}${priceInfo}
 🆔 *ID заказа:* ${docRef.id}
-        `.trim();
-
-    // Создаем inline-кнопки для управления заказом (только актуальные статусы)
+    `.trim();
     const inlineKeyboard = {
       inline_keyboard: [
         [
@@ -2780,9 +2845,8 @@ confirmOrderBtn?.addEventListener('click', async () => {
       ]
     };
 
-    // ИСПРАВЛЕНО: Убран лишний пробел в URL Telegram API
-    const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    const response = await fetch(telegramUrl, {
+    // Отправка бармену, счёт и списание ингредиентов — параллельно, заказ доходит быстрее
+    const sendTelegram = fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2791,11 +2855,15 @@ confirmOrderBtn?.addEventListener('click', async () => {
         parse_mode: 'Markdown',
         reply_markup: inlineKeyboard
       })
+    }).then(response => {
+      if (!response.ok) throw new Error(`Telegram API error: ${response.status}`);
     });
-    
-    if (!response.ok) {
-      throw new Error(`Telegram API error: ${response.status}`);
-    }
+
+    await Promise.all([
+      sendTelegram,
+      createOrUpdateBill(currentOrder, docRef.id),
+      deductIngredientsForCocktail(orderData.name)
+    ]);
 
     // Вибрация при успешном заказе (если поддерживается)
     if (navigator.vibrate) {
@@ -5700,21 +5768,24 @@ async function addTestCocktails() {
 // Инициализация функций
 initThemeToggle();
 
-// Инициализация вкладок категорий
+// Инициализация вкладок категорий (вызываем сразу при загрузке скрипта, чтобы кнопки работали даже при ошибках загрузки данных)
 function initCategoryTabs() {
   const categoryTabs = document.querySelectorAll('.category-tab');
-  
+  if (!categoryTabs.length) return;
+
   categoryTabs.forEach(tab => {
     tab.addEventListener('click', () => {
       const category = tab.getAttribute('data-category');
+      if (!category) return;
       switchCategory(category);
-      
+
       // Обновляем активную вкладку
       categoryTabs.forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
     });
   });
 }
+initCategoryTabs();
 
 // Переключение категории
 function switchCategory(category) {
@@ -6133,10 +6204,7 @@ function getCategoryIcon(category) {
     
     console.log('🔍 Проверяем статус системы...');
     await monitorSystem();
-    
-    console.log('🏷️ Инициализируем вкладки категорий...');
-    initCategoryTabs();
-    
+
     console.log('🔧 Инициализируем фильтры админки...');
     initAdminFilters();
     
