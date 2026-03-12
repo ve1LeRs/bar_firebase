@@ -6055,9 +6055,12 @@ body.dark-theme .control-group h4 {
 }
 
 .monitoring-controls .admin-btn {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Разрешаем перенос подписей на несколько строк,
+     чтобы длинный текст полностью помещался в кнопку */
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  text-align: center;
 }
 
 .system-status {
@@ -6188,9 +6191,12 @@ body.dark-theme .status-details {
 }
 
 .telegram-controls .admin-btn {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Разрешаем перенос длинных подписей на несколько строк,
+     чтобы текст полностью помещался в кнопку */
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  text-align: center;
 }
 
 .telegram-status {
