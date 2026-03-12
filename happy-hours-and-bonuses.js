@@ -6,54 +6,10 @@
 let currentHappyHour = null;
 let happyHourTimer = null;
 
-// Проверка активных "Счастливых часов"
+// Счастливые часы отключены — баннер и скидка не используются
 async function checkActiveHappyHours() {
-  try {
-    const now = new Date();
-    const currentDay = now.getDay(); // 0 = воскресенье, 1 = понедельник, ...
-    const currentTime = now.getHours() * 60 + now.getMinutes(); // Время в минутах от начала дня
-    
-    const happyHoursSnapshot = await db.collection('happyHours')
-      .where('active', '==', true)
-      .get();
-    
-    let activeHappyHour = null;
-    
-    happyHoursSnapshot.forEach(doc => {
-      const hh = doc.data();
-      
-      // Проверяем день недели
-      if (!hh.days || !hh.days.includes(currentDay.toString())) {
-        return;
-      }
-      
-      // Преобразуем время начала и конца в минуты
-      const [startHour, startMin] = hh.startTime.split(':').map(Number);
-      const [endHour, endMin] = hh.endTime.split(':').map(Number);
-      const startTimeMinutes = startHour * 60 + startMin;
-      const endTimeMinutes = endHour * 60 + endMin;
-      
-      // Проверяем, находимся ли мы в диапазоне времени
-      if (currentTime >= startTimeMinutes && currentTime < endTimeMinutes) {
-        activeHappyHour = {
-          id: doc.id,
-          ...hh,
-          endTimeMinutes: endTimeMinutes
-        };
-      }
-    });
-    
-    if (activeHappyHour) {
-      showHappyHourBanner(activeHappyHour);
-      currentHappyHour = activeHappyHour;
-    } else {
-      hideHappyHourBanner();
-      currentHappyHour = null;
-    }
-    
-  } catch (error) {
-    console.error('❌ Ошибка проверки счастливых часов:', error);
-  }
+  hideHappyHourBanner();
+  currentHappyHour = null;
 }
 
 // Показать баннер счастливых часов
@@ -108,12 +64,12 @@ function hideHappyHourBanner() {
 
 // Получить скидку счастливых часов (если активна)
 function getHappyHourDiscount() {
-  return currentHappyHour ? currentHappyHour.discount : 0;
+  return 0;
 }
 
-// Проверяем счастливые часы при загрузке и каждую минуту
+// Проверяем счастливые часы при загрузке и каждую минуту (баннер всегда скрыт)
 checkActiveHappyHours();
-setInterval(checkActiveHappyHours, 60000); // Проверяем каждую минуту
+setInterval(checkActiveHappyHours, 60000);
 
 // ============================================
 // СОЗДАНИЕ СЧАСТЛИВЫХ ЧАСОВ (АДМИН)
