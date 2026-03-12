@@ -2701,7 +2701,7 @@ function showBillModal(billData, billId) {
   modal.style.display = 'block';
 
   modal.innerHTML = `
-    <div class="modal-content bill-content">
+    <div class="modal-content bill-details-modal-content">
       <span class="close">&times;</span>
       <h3><i class="fas fa-receipt"></i> Мой счет</h3>
       

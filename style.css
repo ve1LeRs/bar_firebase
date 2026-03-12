@@ -2124,7 +2124,9 @@ body.modal-open.profile-open {
   text-align: center;
   color: #ffffff;
   animation: modalAppear 0.4s ease;
-  overflow: hidden;
+  /* Разрешаем вертикальную прокрутку содержимого, чтобы ничего не обрезалось */
+  overflow-x: hidden;
+  overflow-y: auto;
   /* Фиксированные размеры для предотвращения сдвигов */
   box-sizing: border-box;
   /* Плавная прокрутка */
@@ -11015,6 +11017,9 @@ body.dark-theme .bill-paid-date {
 /* Детали счета в модалке */
 .bill-details-modal-content {
   padding: 1rem;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .bill-details-modal-content h3 {
