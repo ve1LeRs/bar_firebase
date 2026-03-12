@@ -614,8 +614,75 @@ async function deductIngredientsForCocktail(cocktailName) {
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     }
+
+    // После изменения остатков пересчитаем доступность коктейлей:
+    // - коктейли, для которых теперь хватает ингредиентов, будут автоматически
+    //   удалены из стоп-листа
+    await reevaluateCocktailsAvailability();
   } catch (error) {
     console.error('❌ Ошибка списания ингредиентов для коктейля:', error);
+  }
+}
+
+/**
+ * Переоценивает доступность всех коктейлей на основе текущих остатков ингредиентов.
+ * Если для коктейля снова хватает ингредиентов, он будет удалён из стоп-листа.
+ */
+async function reevaluateCocktailsAvailability() {
+  try {
+    if (!Array.isArray(cocktailsData) || cocktailsData.length === 0) {
+      return;
+    }
+
+    for (const cocktail of cocktailsData) {
+      if (!Array.isArray(cocktail.stockRecipe) || cocktail.stockRecipe.length === 0) continue;
+
+      // Проверяем, хватает ли ингредиентов (используем ту же логику, что и в ensureCocktailHasIngredients)
+      const lacking = [];
+      for (const item of cocktail.stockRecipe) {
+        const ingName = (item.ingredientName || '').trim();
+        const needed = Number(item.amount) || 0;
+        if (!ingName || needed <= 0) continue;
+
+        const snapshot = await db.collection('ingredients')
+          .where('name', '==', ingName)
+          .limit(1)
+          .get();
+
+        if (snapshot.empty) {
+          lacking.push(ingName);
+          continue;
+        }
+
+        const doc = snapshot.docs[0];
+        const data = doc.data();
+        const stock = Number(data.stock) || 0;
+
+        if (stock < needed) {
+          lacking.push(ingName);
+        }
+      }
+
+      // Если всё в порядке с ингредиентами — убираем из стоп-листа (если там есть)
+      if (lacking.length === 0) {
+        const stopSnapshot = await db.collection('stoplist')
+          .where('cocktailName', '==', cocktail.name)
+          .get();
+
+        if (!stopSnapshot.empty) {
+          const batch = db.batch();
+          stopSnapshot.forEach(doc => {
+            batch.delete(doc.ref);
+          });
+          await batch.commit();
+        }
+      }
+    }
+
+    // Перезагружаем стоп-лист и коктейли, чтобы интерфейс обновился
+    await loadStoplist();
+  } catch (error) {
+    console.error('❌ Ошибка переоценки доступности коктейлей:', error);
   }
 }
 
@@ -905,6 +972,9 @@ async function loadCocktails() {
     }
     
     console.log('✅ Коктейли успешно загружены:', cocktailsData.length);
+
+    // После первой загрузки коктейлей можно переоценить доступность на основе текущих остатков
+    await reevaluateCocktailsAvailability();
     
   } catch (error) {
     console.error('❌ Ошибка загрузки коктейлей:', error);
@@ -6764,6 +6834,9 @@ addIngredientBtn?.addEventListener('click', async () => {
     console.log('🔄 Перезагрузка списка ингредиентов...');
     await loadIngredients();
     console.log('✅ Список ингредиентов обновлен');
+
+    // После добавления нового ингредиента также переоцениваем доступность коктейлей
+    await reevaluateCocktailsAvailability();
     
   } catch (error) {
     console.error('❌ Ошибка добавления ингредиента:', error);
@@ -6942,7 +7015,8 @@ window.addStock = async function(ingredientId) {
     });
     
     showSuccess(`✅ Добавлено ${addAmount} ${ingredient.unit} к "${ingredient.name}"`);
-    loadIngredients();
+    await loadIngredients();
+    await reevaluateCocktailsAvailability();
     
   } catch (error) {
     console.error('❌ Ошибка добавления остатка:', error);
@@ -6969,7 +7043,8 @@ window.editIngredient = async function(ingredientId) {
     });
     
     showSuccess(`✅ Ингредиент "${ingredient.name}" обновлен`);
-    loadIngredients();
+    await loadIngredients();
+    await reevaluateCocktailsAvailability();
     
   } catch (error) {
     console.error('❌ Ошибка обновления ингредиента:', error);
@@ -6986,7 +7061,8 @@ window.deleteIngredient = async function(ingredientId, ingredientName) {
   try {
     await db.collection('ingredients').doc(ingredientId).delete();
     showSuccess(`✅ Ингредиент "${ingredientName}" удален`);
-    loadIngredients();
+    await loadIngredients();
+    await reevaluateCocktailsAvailability();
     
   } catch (error) {
     console.error('❌ Ошибка удаления ингредиента:', error);
