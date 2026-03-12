@@ -872,9 +872,11 @@ async function loadCocktails() {
       // Проверяем, не в стоп-листе ли коктейль
       const isInStoplist = stoplistData.some(item => item.cocktailName === cocktail.name);
       
+      const cocktailCategory = getCocktailCategory(cocktail);
       const cocktailCard = document.createElement('div');
       cocktailCard.className = `cocktail-card ${isInStoplist ? 'stopped' : ''}`;
       cocktailCard.setAttribute('data-name', cocktail.name);
+      cocktailCard.setAttribute('data-category', cocktailCategory);
       cocktailCard.setAttribute('data-alcohol', cocktail.alcohol || 0);
       
       // Проверяем наличие изображения (общая логика для всех коктейлей)
@@ -1774,6 +1776,8 @@ addCocktailBtn?.addEventListener('click', () => {
   const cocktailMood = document.getElementById('cocktailMood');
   const cocktailAlcohol = document.getElementById('cocktailAlcohol');
   const cocktailCategory = document.getElementById('cocktailCategory');
+  const cocktailImageUrl = document.getElementById('cocktailImageUrl');
+  const cocktailImage = document.getElementById('cocktailImage');
   const previewImage = document.getElementById('previewImage');
 
   if (formTitle) {
@@ -1791,6 +1795,8 @@ addCocktailBtn?.addEventListener('click', () => {
   if (cocktailPrice) cocktailPrice.value = '';
   
   if (cocktailCategory) cocktailCategory.value = '';
+  if (cocktailImageUrl) cocktailImageUrl.value = '';
+  if (cocktailImage) cocktailImage.value = '';
   if (previewImage) {
     previewImage.style.display = 'none';
     previewImage.src = '';
@@ -2012,6 +2018,9 @@ function editCocktail(id) {
     const cocktailMood = document.getElementById('cocktailMood');
     const cocktailAlcohol = document.getElementById('cocktailAlcohol');
     const cocktailCategory = document.getElementById('cocktailCategory');
+    const cocktailStockRecipeEl = document.getElementById('cocktailStockRecipe');
+    const cocktailImageUrl = document.getElementById('cocktailImageUrl');
+    const cocktailImage = document.getElementById('cocktailImage');
     const previewImage = document.getElementById('previewImage');
 
     if (formTitle) {
@@ -2021,12 +2030,11 @@ function editCocktail(id) {
     if (cocktailId) cocktailId.value = cocktail.id;
     if (cocktailName) cocktailName.value = cocktail.name;
     if (cocktailIngredients) cocktailIngredients.value = cocktail.ingredients || '';
-  if (cocktailStockRecipe) {
-    // Преобразуем сохранённый рецепт в текстовый формат
-    const recipe = cocktail.stockRecipe || [];
-    const lines = recipe.map(item => `${item.ingredientName} = ${item.amount}`);
-    cocktailStockRecipe.value = lines.join('\\n');
-  }
+    if (cocktailStockRecipeEl) {
+      const recipe = cocktail.stockRecipe || [];
+      const lines = recipe.map(item => `${item.ingredientName} = ${item.amount}`);
+      cocktailStockRecipeEl.value = lines.join('\n');
+    }
     if (cocktailMood) cocktailMood.value = cocktail.mood || '';
     if (cocktailAlcohol) cocktailAlcohol.value = cocktail.alcohol || '';
     
@@ -2035,6 +2043,8 @@ function editCocktail(id) {
     
     if (cocktailCategory) cocktailCategory.value = cocktail.category || 'signature';
 
+    if (cocktailImageUrl) cocktailImageUrl.value = cocktail.image || '';
+    if (cocktailImage) cocktailImage.value = '';
     if (cocktail.image) {
       if (previewImage) {
         previewImage.src = cocktail.image;
@@ -2107,6 +2117,8 @@ cocktailForm?.addEventListener('submit', async (e) => {
   const price = cocktailPrice ? parseInt(cocktailPrice.value) : 500;
   const category = cocktailCategory ? cocktailCategory.value : '';
   const imageFile = cocktailImage ? cocktailImage.files[0] : null;
+  const cocktailImageUrlEl = document.getElementById('cocktailImageUrl');
+  const imageUrlFromInput = cocktailImageUrlEl ? cocktailImageUrlEl.value.trim() : '';
   
   // Получаем выбранные теги вкусов
   const tasteTags = [];
@@ -2117,12 +2129,14 @@ cocktailForm?.addEventListener('submit', async (e) => {
   try {
     let imageUrl = '';
     
-    // Если выбран файл изображения, загружаем его
+    // Приоритет: 1) загруженный файл, 2) ссылка из поля URL
     if (imageFile) {
       const storageRef = storage.ref();
       const imageRef = storageRef.child(`cocktails/${Date.now()}_${imageFile.name}`);
       const snapshot = await imageRef.put(imageFile);
       imageUrl = await snapshot.ref.getDownloadURL();
+    } else if (imageUrlFromInput && (imageUrlFromInput.startsWith('http://') || imageUrlFromInput.startsWith('https://'))) {
+      imageUrl = imageUrlFromInput;
     }
     
     const cocktailData = {
@@ -2210,23 +2224,48 @@ cocktailForm?.addEventListener('submit', async (e) => {
   }
 });
 
-// Предпросмотр изображения
+// Предпросмотр изображения: по файлу или по URL
 const cocktailImageInput = document.getElementById('cocktailImage');
+const cocktailImageUrlInput = document.getElementById('cocktailImageUrl');
+const previewImageEl = document.getElementById('previewImage');
+
+function updateImagePreview(src) {
+  if (!previewImageEl) return;
+  if (src) {
+    previewImageEl.src = src;
+    previewImageEl.style.display = 'block';
+    previewImageEl.onerror = function() { previewImageEl.style.display = 'none'; };
+  } else {
+    previewImageEl.style.display = 'none';
+    previewImageEl.src = '';
+  }
+}
+
 if (cocktailImageInput) {
-    cocktailImageInput.addEventListener('change', function(e) {
+  cocktailImageInput.addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-        const preview = document.getElementById('previewImage');
-        if (preview) {
-            preview.src = e.target.result;
-            preview.style.display = 'block';
-        }
-        };
-        reader.readAsDataURL(file);
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        updateImagePreview(ev.target.result);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      const urlVal = cocktailImageUrlInput ? cocktailImageUrlInput.value.trim() : '';
+      updateImagePreview((urlVal && (urlVal.startsWith('http://') || urlVal.startsWith('https://'))) ? urlVal : '');
     }
-    });
+  });
+}
+if (cocktailImageUrlInput) {
+  cocktailImageUrlInput.addEventListener('input', function() {
+    const urlVal = this.value.trim();
+    if (cocktailImageInput && cocktailImageInput.files.length) return;
+    if (urlVal && (urlVal.startsWith('http://') || urlVal.startsWith('https://'))) {
+      updateImagePreview(urlVal);
+    } else {
+      updateImagePreview('');
+    }
+  });
 }
 
 // Добавление в стоп-лист
@@ -5690,13 +5729,19 @@ function filterCocktailsByCategory() {
   
   let visibleCount = 0;
   
+  const normCurrent = currentCategory ? String(currentCategory).trim().toLowerCase() : '';
+  
   cards.forEach(card => {
+    const cardCategory = card.getAttribute('data-category');
     const cocktailName = card.getAttribute('data-name');
     const cocktail = cocktailsData.find(c => c.name === cocktailName);
+    const cocktailCategory = (cardCategory != null && cardCategory !== '') 
+      ? cardCategory 
+      : (cocktail ? getCocktailCategory(cocktail) : '');
     
-    if (!cocktail) return;
+    if (!cocktailCategory) return;
     
-    const shouldShow = shouldShowCocktail(cocktail, currentCategory);
+    const shouldShow = cocktailCategory === normCurrent;
     
     if (shouldShow) {
       card.style.display = 'block';
@@ -5730,16 +5775,16 @@ function filterCocktailsByCategory() {
 
 // Определение, должен ли коктейль отображаться в данной категории
 function shouldShowCocktail(cocktail, category) {
-  // Определяем категорию коктейля на основе его характеристик
   const cocktailCategory = getCocktailCategory(cocktail);
-  return cocktailCategory === category;
+  const normCategory = category ? String(category).trim().toLowerCase() : '';
+  return cocktailCategory === normCategory;
 }
 
 // Определение категории коктейля
 function getCocktailCategory(cocktail) {
-  // Если категория уже задана в базе данных, используем её
-  if (cocktail.category) {
-    return cocktail.category;
+  // Если категория уже задана в базе данных, используем её (нормализуем регистр)
+  if (cocktail.category != null && String(cocktail.category).trim() !== '') {
+    return String(cocktail.category).trim().toLowerCase();
   }
   
   const name = cocktail.name.toLowerCase();
