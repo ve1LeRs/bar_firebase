@@ -256,12 +256,6 @@
           
           <!-- Блок оплаты -->
           <div class="payment-section">
-            <!-- Happy Hour скидка -->
-            <div id="orderHappyHourDiscount" class="discount-info" style="display:none">
-              <span class="discount-label">🎉 Счастливые часы (-<span id="orderHHPercent">20</span>%):</span>
-              <span class="discount-value">-<span id="orderHHAmount">0</span> ₽</span>
-            </div>
-            
             <!-- Блок применения бонусов -->
             <div id="orderBonusSection" class="bonus-payment-section" style="display:none">
               <div class="bonus-available">
@@ -351,7 +345,6 @@
           <button class="tab-btn" data-tab="bills">Счета</button>
           <button class="tab-btn" data-tab="stoplist">Стоп-лист</button>
           <button class="tab-btn" data-tab="promocodes">Промокоды</button>
-          <button class="tab-btn" data-tab="happyhours">Счастливые часы</button>
           <button class="tab-btn" data-tab="bonuses">Бонусы</button>
           <button class="tab-btn" data-tab="wheel">Колесо удачи</button>
           <button class="tab-btn" data-tab="purchases">Закупки</button>
@@ -553,68 +546,6 @@
             </div>
           </div>
         </div>
-        <div class="tab-content" id="happyhours-tab">
-          <h4><i class="fas fa-clock"></i> Управление "Счастливыми часами"</h4>
-          
-          <!-- Форма создания счастливых часов -->
-          <div class="happy-hours-add-section">
-            <h5><i class="fas fa-plus-circle"></i> Создать новые "Счастливые часы"</h5>
-            <div class="happy-hours-form">
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="hhName">Название акции:</label>
-                  <input type="text" id="hhName" placeholder="Например: Вечерний Happy Hour" class="form-input">
-                </div>
-                <div class="form-group">
-                  <label for="hhDiscount">Размер скидки (%):</label>
-                  <input type="number" id="hhDiscount" placeholder="20" class="form-input" min="1" max="100">
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="hhStartTime">Время начала:</label>
-                  <input type="time" id="hhStartTime" class="form-input">
-                </div>
-                <div class="form-group">
-                  <label for="hhEndTime">Время окончания:</label>
-                  <input type="time" id="hhEndTime" class="form-input">
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="hhDays">Дни недели:</label>
-                  <div class="days-selector">
-                    <label><input type="checkbox" value="1" class="hh-day-checkbox"> Пн</label>
-                    <label><input type="checkbox" value="2" class="hh-day-checkbox"> Вт</label>
-                    <label><input type="checkbox" value="3" class="hh-day-checkbox"> Ср</label>
-                    <label><input type="checkbox" value="4" class="hh-day-checkbox"> Чт</label>
-                    <label><input type="checkbox" value="5" class="hh-day-checkbox"> Пт</label>
-                    <label><input type="checkbox" value="6" class="hh-day-checkbox"> Сб</label>
-                    <label><input type="checkbox" value="0" class="hh-day-checkbox"> Вс</label>
-                  </div>
-                </div>
-              </div>
-              <div class="form-group">
-                <label>
-                  <input type="checkbox" id="hhActive" checked>
-                  Активна
-                </label>
-              </div>
-              <button id="createHappyHourBtn" class="admin-btn primary">
-                <i class="fas fa-plus"></i> Создать акцию
-              </button>
-            </div>
-          </div>
-          
-          <!-- Список счастливых часов -->
-          <div class="happy-hours-list-section">
-            <h5><i class="fas fa-list"></i> Активные акции</h5>
-            <div id="happyHoursList" class="admin-list">
-              <!-- Список счастливых часов будет загружен сюда -->
-            </div>
-          </div>
-        </div>
-        
         <div class="tab-content" id="bonuses-tab">
           <h4><i class="fas fa-gift"></i> Управление бонусной системой</h4>
           
@@ -1110,21 +1041,6 @@
         </div>
       </div>
     </div>
-    <!-- Баннер Счастливых часов -->
-    <div id="happyHourBanner" class="happy-hour-banner" style="display:none">
-      <div class="happy-hour-content">
-        <div class="happy-hour-icon">🎉</div>
-        <div class="happy-hour-info">
-          <h3 class="happy-hour-title" id="hhBannerTitle">Счастливые часы!</h3>
-          <p class="happy-hour-description">Скидка <span id="hhBannerDiscount">20%</span> на все коктейли</p>
-        </div>
-        <div class="happy-hour-timer">
-          <div class="timer-label">До конца акции:</div>
-          <div class="timer-countdown" id="hhBannerTimer">25:00</div>
-        </div>
-      </div>
-    </div>
-    
     <!-- Модальное окно Колеса удачи -->
     <div id="wheelOfFortuneModal" class="modal wheel-modal">
       <div class="modal-content wheel-content">
