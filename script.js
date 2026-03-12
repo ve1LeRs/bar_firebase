@@ -878,7 +878,14 @@ async function loadCocktails() {
       cocktailCard.setAttribute('data-alcohol', cocktail.alcohol || 0);
       
       // Проверяем наличие изображения
-      const imageUrl = cocktail.image || 'https://i.pinimg.com/736x/5d/5d/5d/5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d.jpg';
+      // Для коктейля Pornstar принудительно используем заданную картинку
+      const pornstarImageUrl = 'https://www.puredrinkology.com/recipes/pornstar-martini/images/cover_hu15373af8624bff9efb9a9f6bb6f78760_68885_1000x0_resize_q75_box.jpeg';
+      let imageUrl;
+      if (cocktail.name && cocktail.name.toLowerCase().includes('pornstar')) {
+        imageUrl = pornstarImageUrl;
+      } else {
+        imageUrl = cocktail.image || 'https://i.pinimg.com/736x/5d/5d/5d/5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d.jpg';
+      }
       const hasImage = imageUrl && !imageUrl.includes('5d5d5d');
       const displayImage = hasImage ? imageUrl : '';
       
