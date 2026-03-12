@@ -510,9 +510,6 @@ function openModal(modalElement) {
     return;
   }
   
-  // НЕ прокручиваем страницу наверх автоматически
-  // window.scrollTo({ top: 0, behavior: 'smooth' });
-  
   // Сохраняем текущую позицию прокрутки
   scrollY = window.scrollY;
   document.body.style.setProperty('--scroll-y', `${scrollY}px`);
@@ -534,6 +531,13 @@ function openModal(modalElement) {
   }
   
   modalElement.style.display = 'block';
+  
+   // Для модального окна уведомления о заказе явно прокручиваем к верху,
+   // чтобы пользователь сразу увидел его на экране
+  const modalId = modalElement.id || '';
+  if (modalId === 'notificationModal') {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
   
   // Добавляем логирование для отладки
   console.log('🔍 Открыто модальное окно:', modalElement.id || 'без ID');
