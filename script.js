@@ -6917,9 +6917,11 @@ sendToTelegramBtn?.addEventListener('click', async () => {
     
     message += `\n📊 Всего позиций: ${window.currentPurchaseList.length}`;
     
-    // Отправляем запрос на сервер
-    const railwayUrl = localStorage.getItem('railwayUrl');
-    const serverUrl = railwayUrl || 'https://lucid-cat-production.up.railway.app';
+    // Отправляем запрос на актуальный сервер webhook
+    // Используем общий URL сервера, который настраивается через WEBHOOK_SERVER_URL
+    const serverUrl = typeof getWebhookServerUrl === 'function'
+      ? getWebhookServerUrl()
+      : (localStorage.getItem('webhook_server_url') || 'https://bar-firebase.onrender.com');
     
     const response = await fetch(`${serverUrl}/send-purchase-list`, {
       method: 'POST',
