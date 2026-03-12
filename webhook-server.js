@@ -175,6 +175,11 @@ app.get('/', (req, res) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
+  // Разрешаем CORS для фронтенда (GitHub Pages, локальный файл и т.п.)
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
@@ -219,6 +224,11 @@ app.get('/diagnose', (req, res) => {
 // Test Firebase connection
 app.get('/test-firebase', async (req, res) => {
   try {
+    // Разрешаем CORS для фронтенда
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+
     console.log('🔥 Тестируем подключение к Firebase...');
     
     // Проверяем переменные окружения Firebase

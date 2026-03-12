@@ -497,6 +497,78 @@ let stoplistData = [];
 let currentCategory = 'classic'; // Текущая выбранная категория
 let currentAdminFilter = 'classic'; // Текущий фильтр в админке
 
+// === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ СВЯЗКИ КОКТЕЙЛЕЙ И ИНГРЕДИЕНТОВ ===
+
+/**
+ * Проверяет, хватает ли ингредиентов для приготовления коктейля по его "складскому" рецепту.
+ * Если ингредиентов не хватает, автоматически добавляет коктейль в стоп-лист.
+ * @param {string} cocktailName
+ * @returns {Promise<boolean>} true, если коктейль можно приготовить; false, если нет
+ */
+async function ensureCocktailHasIngredients(cocktailName) {
+  try {
+    // Находим коктейль и его рецепт
+    const cocktail = cocktailsData.find(c => c.name === cocktailName);
+    if (!cocktail || !Array.isArray(cocktail.stockRecipe) || cocktail.stockRecipe.length === 0) {
+      // Рецепт для склада не задан — не блокируем заказ
+      return true;
+    }
+
+    // Проверяем наличие каждого ингредиента
+    const lacking = [];
+    for (const item of cocktail.stockRecipe) {
+      const ingName = (item.ingredientName || '').trim();
+      const needed = Number(item.amount) || 0;
+      if (!ingName || needed <= 0) continue;
+
+      const snapshot = await db.collection('ingredients')
+        .where('name', '==', ingName)
+        .limit(1)
+        .get();
+
+      if (snapshot.empty) {
+        lacking.push(`${ingName} (нет в списке ингредиентов)`);
+        continue;
+      }
+
+      const doc = snapshot.docs[0];
+      const data = doc.data();
+      const stock = Number(data.stock) || 0;
+
+      if (stock < needed) {
+        lacking.push(`${ingName} (остаток: ${stock}, нужно: ${needed})`);
+      }
+    }
+
+    if (lacking.length === 0) {
+      return true;
+    }
+
+    // Если чего-то не хватает — автоматически добавляем в стоп-лист
+    const alreadyInStoplist = stoplistData.some(item => item.cocktailName === cocktailName);
+    const reason = `Недостаточно ингредиентов: ${lacking.join(', ')}`;
+
+    if (!alreadyInStoplist) {
+      await db.collection('stoplist').add({
+        cocktailName: cocktailName,
+        reason: reason,
+        addedBy: 'system',
+        timestamp: new Date().toLocaleString('ru-RU')
+      });
+
+      // Перезагружаем стоп-лист и коктейли, чтобы метки "В стоп-листе" обновились
+      await loadStoplist();
+    }
+
+    showError(`❌ Коктейль "${cocktailName}" временно недоступен.\n${reason}\nОн автоматически добавлен в стоп-лист.`);
+    return false;
+  } catch (error) {
+    console.error('❌ Ошибка проверки ингредиентов для коктейля:', error);
+    // При ошибке не блокируем заказ, чтобы не ломать UX
+    return true;
+  }
+}
+
 // === ФУНКЦИИ УПРАВЛЕНИЯ МОДАЛЬНЫМИ ОКНАМИ ===
 
 // Функция для открытия модального окна с блокировкой фона
@@ -1561,6 +1633,7 @@ addCocktailBtn?.addEventListener('click', () => {
   const cocktailId = document.getElementById('cocktailId');
   const cocktailName = document.getElementById('cocktailName');
   const cocktailIngredients = document.getElementById('cocktailIngredients');
+  const cocktailStockRecipe = document.getElementById('cocktailStockRecipe');
   const cocktailMood = document.getElementById('cocktailMood');
   const cocktailAlcohol = document.getElementById('cocktailAlcohol');
   const cocktailCategory = document.getElementById('cocktailCategory');
@@ -1573,6 +1646,7 @@ addCocktailBtn?.addEventListener('click', () => {
   if (cocktailId) cocktailId.value = '';
   if (cocktailName) cocktailName.value = '';
   if (cocktailIngredients) cocktailIngredients.value = '';
+  if (cocktailStockRecipe) cocktailStockRecipe.value = '';
   if (cocktailMood) cocktailMood.value = '';
   if (cocktailAlcohol) cocktailAlcohol.value = '';
   
@@ -1810,6 +1884,12 @@ function editCocktail(id) {
     if (cocktailId) cocktailId.value = cocktail.id;
     if (cocktailName) cocktailName.value = cocktail.name;
     if (cocktailIngredients) cocktailIngredients.value = cocktail.ingredients || '';
+  if (cocktailStockRecipe) {
+    // Преобразуем сохранённый рецепт в текстовый формат
+    const recipe = cocktail.stockRecipe || [];
+    const lines = recipe.map(item => `${item.ingredientName} = ${item.amount}`);
+    cocktailStockRecipe.value = lines.join('\\n');
+  }
     if (cocktailMood) cocktailMood.value = cocktail.mood || '';
     if (cocktailAlcohol) cocktailAlcohol.value = cocktail.alcohol || '';
     
@@ -1869,6 +1949,7 @@ cocktailForm?.addEventListener('submit', async (e) => {
   const cocktailId = document.getElementById('cocktailId');
   const cocktailName = document.getElementById('cocktailName');
   const cocktailIngredients = document.getElementById('cocktailIngredients');
+  const cocktailStockRecipe = document.getElementById('cocktailStockRecipe');
   const cocktailMood = document.getElementById('cocktailMood');
   const cocktailAlcohol = document.getElementById('cocktailAlcohol');
   const cocktailPrice = document.getElementById('cocktailPrice');
@@ -1883,6 +1964,7 @@ cocktailForm?.addEventListener('submit', async (e) => {
   const id = cocktailId ? cocktailId.value : '';
   const name = cocktailName.value;
   const ingredients = cocktailIngredients.value;
+  const stockRecipeText = cocktailStockRecipe ? cocktailStockRecipe.value : '';
   const mood = cocktailMood ? cocktailMood.value : '';
   const alcohol = cocktailAlcohol ? cocktailAlcohol.value : '';
   const price = cocktailPrice ? parseInt(cocktailPrice.value) : 500;
@@ -1916,6 +1998,33 @@ cocktailForm?.addEventListener('submit', async (e) => {
       tasteTags: tasteTags, // Добавляем теги вкусов
       updatedAt: new Date()
     };
+
+    // Парсим рецепт для склада (если указан)
+    if (stockRecipeText && stockRecipeText.trim().length > 0) {
+      const stockRecipe = [];
+      stockRecipeText.split(/\\r?\\n/).forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        const parts = trimmed.split('=');
+        if (parts.length < 2) return;
+        const ingredientName = parts[0].trim();
+        const amountStr = parts[1].trim().replace(',', '.');
+        const amount = parseFloat(amountStr);
+        if (!ingredientName || isNaN(amount) || amount <= 0) return;
+        stockRecipe.push({
+          ingredientName,
+          amount
+        });
+      });
+      if (stockRecipe.length > 0) {
+        cocktailData.stockRecipe = stockRecipe;
+      } else {
+        cocktailData.stockRecipe = firebase.firestore.FieldValue.delete();
+      }
+    } else {
+      // Если поле очистили, удаляем рецепт
+      cocktailData.stockRecipe = firebase.firestore.FieldValue.delete();
+    }
     
     // Если есть новое изображение, добавляем его
     if (imageUrl) {
@@ -2323,7 +2432,7 @@ getWebhookInfoBtn?.addEventListener('click', getTelegramWebhookInfo);
 sendTestMessageBtn?.addEventListener('click', sendTestMessage);
 
 // Заказ (кнопка)
-document.addEventListener('click', (e) => {
+document.addEventListener('click', async (e) => {
   const btn = e.target.closest('.order-btn');
   if (btn && !btn.disabled && !btn.classList.contains('loading')) {
     // Предотвращаем стандартное поведение кнопки
@@ -2342,6 +2451,17 @@ document.addEventListener('click', (e) => {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Загружаем...';
     
     const name = btn.getAttribute('data-name');
+
+    // Сначала проверяем наличие ингредиентов по рецепту склада
+    const canMake = await ensureCocktailHasIngredients(name);
+    if (!canMake) {
+      // Восстанавливаем кнопку и выходим, заказ не оформляем
+      btn.classList.remove('loading');
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+      return;
+    }
+
     const price = parseInt(btn.getAttribute('data-price')) || 500;
     // 👇 Безопасное получение изображения коктейля из родительской карточки
     const card = btn.closest('.cocktail-card');
