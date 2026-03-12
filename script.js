@@ -546,12 +546,12 @@ async function ensureCocktailHasIngredients(cocktailName) {
 
     // Если чего-то не хватает — автоматически добавляем в стоп-лист
     const alreadyInStoplist = stoplistData.some(item => item.cocktailName === cocktailName);
-    const reason = `Недостаточно ингредиентов: ${lacking.join(', ')}`;
+    const missingList = lacking.join(', ');
 
     if (!alreadyInStoplist) {
       await db.collection('stoplist').add({
         cocktailName: cocktailName,
-        reason: reason,
+        reason: `Недостаточно ингредиентов: ${missingList}`,
         addedBy: 'system',
         timestamp: new Date().toLocaleString('ru-RU')
       });
@@ -560,7 +560,10 @@ async function ensureCocktailHasIngredients(cocktailName) {
       await loadStoplist();
     }
 
-    showError(`❌ Коктейль "${cocktailName}" временно недоступен.\n${reason}\nОн автоматически добавлен в стоп-лист (если у вас есть права администратора).`);
+    showError(
+      `Сейчас не можем приготовить заказ.\n` +
+      `У нас закончились ингредиенты: ${missingList}`
+    );
     return false;
   } catch (error) {
     console.error('❌ Ошибка проверки ингредиентов для коктейля:', error);
