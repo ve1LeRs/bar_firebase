@@ -505,6 +505,10 @@ function openModal(modalElement) {
     console.warn('Попытка открыть несуществующее модальное окно');
     return;
   }
+
+  // Привязываем модальное окно к текущей позиции пользователя на странице
+  const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+  modalElement.style.top = `${scrollTop}px`;
   
   // Добавляем специальные классы только для определенных модальных окон
   const modalId = modalElement.id || '';

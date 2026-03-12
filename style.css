@@ -2074,11 +2074,11 @@ body.dark-theme .cocktail-price:hover {
 /* Модальные окна */
 .modal {
   display: none;
-  position: fixed;
+  position: absolute; /* привязываем окно к текущей позиции страницы */
   left: 0;
-  top: 0;
+  top: 0; /* актуальное значение выставляем в JS через openModal */
   width: 100%;
-  height: 100%;
+  height: 100vh; /* занимаем высоту видимой области экрана */
   background-color: rgba(0,0,0,0.7);
   backdrop-filter: blur(5px);
   overflow-y: auto;
