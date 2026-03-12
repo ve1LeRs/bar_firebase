@@ -2975,15 +2975,18 @@ body.dark-theme .order-image-placeholder i {
   min-width: 0;
 }
 
-.bill-item-name {
-  font-weight: 600;
-  font-size: 1.1rem;
-  color: #1a1a1a;
-  margin-bottom: 0.3rem;
+.bill-item-name-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.bill-item-name {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: #1a1a1a;
   word-break: break-word;
 }
 
@@ -3194,6 +3197,19 @@ body.dark-theme #myBillBtn:hover {
   max-height: 85vh;
   overflow-y: auto;
   border-radius: 24px;
+}
+
+/* Отдельные настройки позиционирования для модалки "История счетов",
+   чтобы верхняя часть окна не пряталась за краем экрана */
+#billHistoryModal {
+  overflow-y: auto;
+  padding: 20px 0;
+}
+
+#billHistoryModal[style*="display: block"] {
+  display: flex !important;
+  align-items: flex-start;
+  justify-content: center;
 }
 
 .bills-history-list {
