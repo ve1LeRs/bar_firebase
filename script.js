@@ -442,7 +442,6 @@ const registerModal = document.getElementById('registerModal');
 const successModal = document.getElementById('successModal');
 const errorModal = document.getElementById('errorModal');
 const billHistoryModal = document.getElementById('billHistoryModal');
-const notificationModal = document.getElementById('notificationModal');
 const adminPanel = document.getElementById('adminPanel');
 const cocktailFormModal = document.getElementById('cocktailFormModal');
 const statusModal = document.getElementById('statusModal');
@@ -1638,7 +1637,14 @@ window.addEventListener('click', (e) => {
 
 // Закрытие специфичных модальных окон по отдельным кнопкам
 closeNotification?.addEventListener('click', () => {
-  closeModal(notificationModal);
+  // Возвращаем модалку заказа в исходное состояние и закрываем её
+  const confirmView = document.getElementById('orderConfirmView');
+  const notificationView = document.getElementById('orderNotificationView');
+  if (confirmView && notificationView) {
+    notificationView.style.display = 'none';
+    confirmView.style.display = 'block';
+  }
+  closeModal(orderModal);
   if (champagneAnimation) champagneAnimation.innerHTML = '';
 });
 
@@ -2496,9 +2502,13 @@ confirmOrderBtn?.addEventListener('click', async () => {
       placeholder.style.display = 'none';
     }
     
-    // Показываем уведомление
-    closeModal(orderModal); // Используем новую функцию
-    openModal(notificationModal); // Используем новую функцию
+  // Переключаемся на экран «Заказ отправлён бармену» внутри того же модального окна
+  const confirmView = document.getElementById('orderConfirmView');
+  const notificationView = document.getElementById('orderNotificationView');
+  if (confirmView && notificationView) {
+    confirmView.style.display = 'none';
+    notificationView.style.display = 'block';
+  }
     currentOrder = null;
     
   } catch (error) {
