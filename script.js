@@ -498,9 +498,6 @@ let stoplistData = [];
 let currentCategory = 'classic'; // Текущая выбранная категория
 let currentAdminFilter = 'classic'; // Текущий фильтр в админке
 
-// Переменная для хранения позиции прокрутки
-let scrollY = 0;
-
 // === ФУНКЦИИ УПРАВЛЕНИЯ МОДАЛЬНЫМИ ОКНАМИ ===
 
 // Функция для открытия модального окна с блокировкой фона
@@ -543,11 +540,6 @@ function closeModal(modalElement) {
   
   // Удаляем все классы модальных окон
   document.body.classList.remove('modal-open', 'wheel-open', 'profile-open');
-  
-  // Восстанавливаем позицию прокрутки только если она была сохранена
-  if (scrollY > 0) {
-    window.scrollTo(0, scrollY);
-  }
 }
 
 // === КОНЕЦ ФУНКЦИЙ УПРАВЛЕНИЯ МОДАЛЬНЫМИ ОКНАМИ ===
