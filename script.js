@@ -556,9 +556,8 @@ async function ensureCocktailHasIngredients(cocktailName) {
         timestamp: new Date().toLocaleString('ru-RU')
       });
 
-      // Перезагружаем стоп-лист и коктейли, чтобы метки "Недоступен" обновились
-      // Важно: эту функцию нужно вызывать точечно (например, при заказе), чтобы избежать циклов
-      await loadStoplist();
+      // Перезагружаем стоп-лист (без повторной загрузки коктейлей, чтобы избежать циклов)
+      await loadStoplist(true);
     }
 
     showError(
@@ -679,8 +678,8 @@ async function reevaluateCocktailsAvailability() {
       }
     }
 
-    // Перезагружаем стоп-лист и коктейли, чтобы интерфейс обновился
-    await loadStoplist();
+    // Перезагружаем стоп-лист (без повторной загрузки коктейлей, чтобы избежать циклов)
+    await loadStoplist(true);
   } catch (error) {
     console.error('❌ Ошибка переоценки доступности коктейлей:', error);
   }
@@ -983,7 +982,7 @@ async function loadCocktails() {
 }
 
 // Загрузка стоп-листа
-async function loadStoplist() {
+async function loadStoplist(skipCocktailsReload = false) {
   try {
     const stoplistSnapshot = await db.collection('stoplist').get();
     stoplistData = [];
@@ -1038,8 +1037,10 @@ async function loadStoplist() {
     // Заполняем селект коктейлей для стоп-листа
     await populateStoplistCocktailsSelect();
     
-    // Перезагружаем коктейли, чтобы обновить статусы
-    await loadCocktails();
+    // Перезагружаем коктейли, чтобы обновить статусы (если не запрещено флагом)
+    if (!skipCocktailsReload) {
+      await loadCocktails();
+    }
     
   } catch (error) {
     console.error('Ошибка загрузки стоп-листа:', error);
