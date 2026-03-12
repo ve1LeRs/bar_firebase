@@ -6573,7 +6573,7 @@ body:not(.dark-theme) .status-update-notification .notification-content {
   justify-content: center;
   position: absolute;
   top: 12px;
-  right: 12px;
+  left: 12px;
   z-index: 10;
 }
 
@@ -9845,6 +9845,7 @@ body.dark-theme .profile-header {
 /* Вкладки профиля */
 .profile-tabs {
   display: flex;
+  justify-content: space-between;
   background: transparent;
   border-bottom: 1px solid rgba(0, 0, 0, 0.1);
   gap: 0.5rem;
@@ -9853,6 +9854,7 @@ body.dark-theme .profile-header {
 
 .profile-tab {
   flex: 1;
+  min-width: 0;
   padding: 0.9rem 0.7rem;
   background: rgba(255, 255, 255, 0.5);
   border: 1px solid rgba(0, 0, 0, 0.05);
