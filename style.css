@@ -2606,11 +2606,6 @@ body.dark-theme .order-image-placeholder i {
   z-index: 2000;
 }
 
-.notification-modal[style*="display: block"] {
-  align-items: flex-start;
-  justify-content: center;
-}
-
 .notification-content {
   max-width: 450px;
   padding: 2rem;
@@ -2618,7 +2613,7 @@ body.dark-theme .order-image-placeholder i {
   display: flex;
   flex-direction: column;
   position: relative;
-  margin: 10vh auto 0;
+  margin: 0 auto;
   box-sizing: border-box;
   background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
   border-radius: 24px;
