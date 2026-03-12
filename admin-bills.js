@@ -208,8 +208,7 @@ function showPaymentConfirmModal(billId, billData) {
   `;
   
   // Показываем модальное окно
-  modal.style.display = 'block';
-  document.body.classList.add('modal-open');
+  openModal(modal);
   
   // Обработчик подтверждения
   const confirmBtn = document.getElementById('confirmPaymentBtn');
@@ -263,8 +262,7 @@ function showPaymentConfirmModal(billId, billData) {
 window.closePaymentConfirmModal = function() {
   const modal = document.getElementById('paymentConfirmModal');
   if (modal) {
-    modal.style.display = 'none';
-    document.body.classList.remove('modal-open');
+    closeModal(modal);
   }
   
   // Сбрасываем выбор на "Наличные"

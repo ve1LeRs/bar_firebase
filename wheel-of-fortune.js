@@ -299,12 +299,8 @@ async function openWheelModal() {
     return;
   }
   
-  // Прокручиваем страницу наверх перед открытием модального окна
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-  
-  wheelElements.modal.style.display = 'block';
-  // НЕ добавляем modal-open, чтобы страница могла прокручиваться
-  // document.body.classList.add('modal-open');
+  // Открываем модальное окно колеса через общую логику
+  openModal(wheelElements.modal);
   
   // Проверяем, является ли пользователь админом через role
   const userId = auth.currentUser.uid;
@@ -357,9 +353,8 @@ async function openWheelModal() {
 
 // Закрытие модального окна
 function closeWheelModal() {
-  wheelElements.modal.style.display = 'none';
+  closeModal(wheelElements.modal);
   wheelElements.resultDiv.style.display = 'none';
-  // document.body.classList.remove('modal-open'); // Убираем, так как не добавляли
 }
 
 // Проверка доступности колеса

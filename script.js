@@ -6210,7 +6210,7 @@ function showRatingModal(orderId, cocktailName) {
   ratingText.classList.remove('has-rating');
   
   // Показываем модальное окно
-  ratingModal.style.display = 'flex';
+  openModal(ratingModal);
   
   console.log('✅ Показано окно оценки для:', cocktailName);
 }
