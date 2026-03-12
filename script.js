@@ -2013,8 +2013,10 @@ cocktailForm?.addEventListener('submit', async (e) => {
         const parts = trimmed.split('=');
         if (parts.length < 2) return;
         const ingredientName = parts[0].trim();
-        const amountStr = parts[1].trim().replace(',', '.');
-        const amount = parseFloat(amountStr);
+        const amountPart = parts[1].trim();
+        // Извлекаем первое числовое значение, даже если после него есть текст (например "50 мл")
+        const numberMatch = amountPart.replace(',', '.').match(/[0-9]+(?:\.[0-9]+)?/);
+        const amount = numberMatch ? parseFloat(numberMatch[0]) : NaN;
         if (!ingredientName || isNaN(amount) || amount <= 0) return;
         stockRecipe.push({
           ingredientName,
