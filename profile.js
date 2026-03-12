@@ -13,8 +13,7 @@ profileBtn?.addEventListener('click', () => {
 // Закрытие модального окна
 const profileCloseBtn = profileModal?.querySelector('.close');
 profileCloseBtn?.addEventListener('click', () => {
-  profileModal.style.display = 'none';
-  // document.body.classList.remove('modal-open'); // Убираем, так как не добавляли
+  closeModal(profileModal);
   
   // Отключаем listener при закрытии
   if (profileBillListener) {
@@ -26,7 +25,7 @@ profileCloseBtn?.addEventListener('click', () => {
 // Закрытие модального окна по клику на фон
 profileModal?.addEventListener('click', (e) => {
   if (e.target === profileModal) {
-    profileModal.style.display = 'none';
+    closeModal(profileModal);
     
     // Отключаем listener при закрытии
     if (profileBillListener) {
@@ -41,13 +40,8 @@ async function openProfile() {
   const user = firebase.auth().currentUser;
   if (!user) return;
   
-  // Прокручиваем страницу наверх перед открытием модального окна
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-  
-  // Показываем модальное окно
-  profileModal.style.display = 'block';
-  // НЕ добавляем modal-open, чтобы страница могла прокручиваться
-  // document.body.classList.add('modal-open');
+  // Показываем модальное окно через общую логику
+  openModal(profileModal);
   
   // Загружаем данные профиля
   await loadProfileData(user);
