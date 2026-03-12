@@ -1725,18 +1725,26 @@ billHistoryBtn?.addEventListener('click', async () => {
 
 // Открытие модалки админ-панели
 adminBtn?.addEventListener('click', async () => {
-  if (isAdmin) {
+  if (!isAdmin) {
+    showError('❌ У вас нет прав администратора для открытия админ-панели.');
+    return;
+  }
+
+  try {
     await loadCocktails();
-    await loadAdminOrders(); // Теперь эта функция существует
+    await loadAdminOrders();
     await loadStoplist();
-    
+
     // Загружаем статус мониторинга
     const statusData = await monitorSystem();
     displaySystemStatus(statusData);
-    
+
     // Показываем базовую информацию о Telegram
     displayTelegramInfo();
-    
+  } catch (error) {
+    console.error('❌ Ошибка при подготовке админ-панели:', error);
+    // Даже если что-то не загрузилось, покажем панель, чтобы админ видел другие разделы
+  } finally {
     openModal(adminPanel);
   }
 });
@@ -6069,9 +6077,6 @@ function getCategoryIcon(category) {
   } catch (error) {
     console.error('❌ Ошибка инициализации:', error);
   }
-  
-  // Периодическая проверка системы каждые 5 минут
-  setInterval(monitorSystem, 5 * 60 * 1000);
 })();
 
 // Новая функция для тестирования современного дизайна уведомлений
