@@ -84,15 +84,15 @@ cp env.example .env
 npm start
 ```
 
-#### Развертывание на Railway:
+#### Развертывание backend на Render:
 
 **Быстрый старт:**
-1. Создайте аккаунт на [Railway.app](https://railway.app)
+1. Создайте аккаунт на [Render.com](https://render.com)
 2. Подключите GitHub репозиторий
-3. Настройте переменные окружения (см. `RAILWAY_DEPLOY.md`)
-4. Деплой автоматически запустится
+3. Настройте переменные окружения (Firebase + Telegram) в веб-сервисе
+4. Render автоматически задеплоит Node.js сервер (`npm start` → `webhook-server.js`)
 
-**Подробная инструкция:** См. файл `RAILWAY_DEPLOY.md`
+**Примечание:** старые инструкции Railway больше не актуальны, используйте Render Dashboard.
 
 ### 4. Настройка Webhook в Telegram
 
@@ -109,7 +109,7 @@ npm start
 curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "https://your-webhook-server.railway.app/telegram-webhook",
+    "url": "https://your-webhook-server.onrender.com/telegram-webhook",
     "allowed_updates": ["message", "callback_query"]
   }'
 ```

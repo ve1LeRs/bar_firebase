@@ -6,7 +6,7 @@
 
 const https = require('https');
 
-const WEBHOOK_URL = 'https://web-production-72014.up.railway.app';
+const WEBHOOK_URL = 'https://bar-firebase.onrender.com';
 const TELEGRAM_BOT_TOKEN = '8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo';
 
 console.log('🔍 Проверка статуса системы AsafievBar');
@@ -45,7 +45,7 @@ async function checkSystem() {
     }
 
     // 2. Проверка Firebase подключения
-    console.log('\n2. 🔥 Проверка Firebase подключения...');
+    console.log('\n2. 🔥 Проверка Firebase подключения (Render-сервер)...');
     const firebaseResponse = await makeRequest(`${WEBHOOK_URL}/test-firebase`);
     
     if (firebaseResponse.status === 200 && firebaseResponse.data.success) {
@@ -99,8 +99,8 @@ async function checkSystem() {
       
       console.log('\n🔧 Рекомендации:');
       if (!firebaseOk) {
-        console.log('   1. Добавьте переменные окружения Firebase в Railway');
-        console.log('   2. Запустите: node fix-railway-env.js');
+      console.log('   1. Добавьте переменные окружения Firebase в панели Render (Environment)');
+      console.log('   2. Убедитесь, что сервис перезапущен после обновления переменных');
       }
       if (!webhookOk) {
         console.log('   3. Настройте webhook в Telegram');
