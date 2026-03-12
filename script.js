@@ -2006,7 +2006,8 @@ cocktailForm?.addEventListener('submit', async (e) => {
     // Парсим рецепт для склада (если указан)
     if (stockRecipeText && stockRecipeText.trim().length > 0) {
       const stockRecipe = [];
-      stockRecipeText.split(/\\r?\\n/).forEach(line => {
+      // Делим по реальным переводам строки
+      stockRecipeText.split(/\r?\n/).forEach(line => {
         const trimmed = line.trim();
         if (!trimmed) return;
         const parts = trimmed.split('=');
