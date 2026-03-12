@@ -5620,9 +5620,6 @@ filterAdminCocktails();
 function showCategoryChangeModal(cocktailId, currentCategory) {
   console.log('📋 showCategoryChangeModal вызвана для:', cocktailId, currentCategory);
   
-  // Прокручиваем страницу наверх перед открытием модального окна
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-  
   const cocktail = cocktailsData.find(c => c.id === cocktailId);
   if (!cocktail) {
     console.error('❌ Коктейль не найден:', cocktailId);

@@ -662,14 +662,8 @@ async function onSpinComplete(prize) {
 async function claimPrize(prize) {
   if (!auth.currentUser) return;
   
-  // Прокручиваем модальное окно к верху, чтобы пользователь увидел уведомление
-  const modalContent = wheelElements.modal.querySelector('.modal-content');
-  if (modalContent) {
-    modalContent.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-  
-  // Также прокручиваем всю страницу наверх
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  // Прокрутку страницы и модального окна не меняем,
+  // чтобы пользователь оставался на своей позиции
   
   try {
     const userId = auth.currentUser.uid;
