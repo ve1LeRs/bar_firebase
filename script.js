@@ -560,11 +560,17 @@ async function ensureCocktailHasIngredients(cocktailName) {
       await loadStoplist();
     }
 
-    showError(`❌ Коктейль "${cocktailName}" временно недоступен.\n${reason}\nОн автоматически добавлен в стоп-лист.`);
+    showError(`❌ Коктейль "${cocktailName}" временно недоступен.\n${reason}\nОн автоматически добавлен в стоп-лист (если у вас есть права администратора).`);
     return false;
   } catch (error) {
     console.error('❌ Ошибка проверки ингредиентов для коктейля:', error);
-    // При ошибке не блокируем заказ, чтобы не ломать UX
+    // Если нет прав на запись в стоп-лист, всё равно блокируем заказ,
+    // чтобы не продавать коктейль без ингредиентов
+    if (error && typeof error.message === 'string' && error.message.toLowerCase().includes('permission')) {
+      showError('❌ Недостаточно прав для автоматического добавления в стоп-лист. Обратитесь к администратору.');
+      return false;
+    }
+    // При других ошибках не блокируем заказ, чтобы не ломать UX
     return true;
   }
 }
