@@ -510,10 +510,6 @@ function openModal(modalElement) {
     return;
   }
   
-  // Сохраняем текущую позицию прокрутки
-  scrollY = window.scrollY;
-  document.body.style.setProperty('--scroll-y', `${scrollY}px`);
-  
   // Добавляем специальные классы только для определенных модальных окон
   const modalId = modalElement.id || '';
   if (modalId.includes('wheel') || modalId.includes('profile') || modalId.includes('admin')) {
@@ -531,10 +527,6 @@ function openModal(modalElement) {
   }
   
   modalElement.style.display = 'block';
-
-  // При открытии любого модального окна плавно прокручиваем к началу страницы,
-  // чтобы окно гарантированно оказалось в видимой области экрана
-  window.scrollTo({ top: 0, behavior: 'smooth' });
   
   // Добавляем логирование для отладки
   console.log('🔍 Открыто модальное окно:', modalElement.id || 'без ID');
