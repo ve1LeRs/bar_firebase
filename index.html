@@ -159,20 +159,6 @@
               </div>
             </div>
             
-            <!-- Колесо удачи -->
-            <div class="wheel-of-fortune-card">
-              <div class="wheel-card-header">
-                <div class="wheel-card-icon">🎰</div>
-                <div class="wheel-card-info">
-                  <h4>Колесо удачи</h4>
-                  <p id="wheelCardStatus">Доступно сегодня!</p>
-                </div>
-              </div>
-              <button id="openWheelBtn" class="wheel-open-btn">
-                <i class="fas fa-dice"></i> Испытать удачу
-              </button>
-            </div>
-            
             <div class="bonus-stats-grid">
               <div class="bonus-stat-item">
                 <i class="fas fa-coins"></i>
@@ -346,7 +332,6 @@
           <button class="tab-btn" data-tab="stoplist">Стоп-лист</button>
           <button class="tab-btn" data-tab="promocodes">Промокоды</button>
           <button class="tab-btn" data-tab="bonuses">Бонусы</button>
-          <button class="tab-btn" data-tab="wheel">Колесо удачи</button>
           <button class="tab-btn" data-tab="purchases">Закупки</button>
           <button class="tab-btn" data-tab="monitoring">Мониторинг</button>
         </div>
@@ -626,91 +611,6 @@
             </div>
             <div id="bonusUsersList" class="admin-list">
               <!-- Список пользователей с бонусами будет загружен сюда -->
-            </div>
-          </div>
-        </div>
-        
-        <div class="tab-content" id="wheel-tab">
-          <h4><i class="fas fa-dice"></i> Управление колесом удачи</h4>
-          
-          <!-- Статистика колеса -->
-          <div class="wheel-admin-stats">
-            <div class="stat-card">
-              <i class="fas fa-users"></i>
-              <div class="stat-info">
-                <span class="stat-value" id="wheelSpinsToday">0</span>
-                <span class="stat-label">Вращений сегодня</span>
-              </div>
-            </div>
-            <div class="stat-card">
-              <i class="fas fa-gift"></i>
-              <div class="stat-info">
-                <span class="stat-value" id="wheelPrizesGiven">0</span>
-                <span class="stat-label">Призов выдано</span>
-              </div>
-            </div>
-            <div class="stat-card">
-              <i class="fas fa-chart-line"></i>
-              <div class="stat-info">
-                <span class="stat-value" id="wheelTotalSpins">0</span>
-                <span class="stat-label">Всего вращений</span>
-              </div>
-            </div>
-          </div>
-          
-          <!-- Настройки колеса -->
-          <div class="wheel-settings-section">
-            <h5><i class="fas fa-cog"></i> Настройки колеса удачи</h5>
-            <div class="wheel-settings-form">
-              <div class="form-group">
-                <label>
-                  <input type="checkbox" id="wheelActive" checked>
-                  Колесо активно
-                </label>
-              </div>
-              <div class="form-group">
-                <label for="wheelCooldown">Период ожидания (часов):</label>
-                <input type="number" id="wheelCooldown" placeholder="24" class="form-input" min="1" max="168">
-                <small>Сколько часов должно пройти до следующего вращения</small>
-              </div>
-              <button id="saveWheelSettingsBtn" class="admin-btn primary">
-                <i class="fas fa-save"></i> Сохранить настройки
-              </button>
-            </div>
-          </div>
-          
-          <!-- Управление призами -->
-          <div class="wheel-prizes-section">
-            <h5><i class="fas fa-trophy"></i> Призы колеса</h5>
-            <p class="section-description">Настройте призы и вероятность их выпадения. Сумма вероятностей должна быть 100%.</p>
-            
-            <div class="prizes-list" id="wheelPrizesList">
-              <!-- Список призов будет загружен динамически -->
-            </div>
-            
-            <button id="addWheelPrizeBtn" class="admin-btn primary">
-              <i class="fas fa-plus"></i> Добавить новый приз
-            </button>
-          </div>
-          
-          <!-- История вращений -->
-          <div class="wheel-spins-history">
-            <div class="section-header">
-              <h5><i class="fas fa-history"></i> История вращений</h5>
-              <div class="filter-buttons">
-                <button class="filter-btn active" data-wheel-filter="today">
-                  <i class="fas fa-calendar-day"></i> Сегодня
-                </button>
-                <button class="filter-btn" data-wheel-filter="week">
-                  <i class="fas fa-calendar-week"></i> Неделя
-                </button>
-                <button class="filter-btn" data-wheel-filter="all">
-                  <i class="fas fa-list"></i> Все
-                </button>
-              </div>
-            </div>
-            <div id="wheelSpinsHistoryList" class="admin-list">
-              <!-- История вращений будет загружена сюда -->
             </div>
           </div>
         </div>
