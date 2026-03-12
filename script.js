@@ -1724,29 +1724,42 @@ billHistoryBtn?.addEventListener('click', async () => {
 });
 
 // Открытие модалки админ-панели
-adminBtn?.addEventListener('click', async () => {
-  if (!isAdmin) {
-    showError('❌ У вас нет прав администратора для открытия админ-панели.');
+adminBtn?.addEventListener('click', () => {
+  if (!adminPanel) {
+    console.error('❌ adminPanel не найден в DOM');
+    showError('❌ Не удалось открыть админ-панель. Обновите страницу.');
     return;
   }
 
-  try {
-    await loadCocktails();
-    await loadAdminOrders();
-    await loadStoplist();
-
-    // Загружаем статус мониторинга
-    const statusData = await monitorSystem();
-    displaySystemStatus(statusData);
-
-    // Показываем базовую информацию о Telegram
-    displayTelegramInfo();
-  } catch (error) {
-    console.error('❌ Ошибка при подготовке админ-панели:', error);
-    // Даже если что-то не загрузилось, покажем панель, чтобы админ видел другие разделы
-  } finally {
-    openModal(adminPanel);
+  // Если пользователь не админ, всё равно откроем панель, но предупредим,
+  // а Firestore-правила защитят от записей
+  if (!isAdmin) {
+    console.warn('⚠️ Кнопка админки нажата пользователем без роли admin');
+    showError('⚠️ У вас может не быть прав на изменение данных, но панель откроется в режиме просмотра.');
   }
+
+  // Сначала показываем панель, чтобы интерфейс откликался мгновенно
+  openModal(adminPanel);
+
+  // Данные для админки подгружаем асинхронно, без блокировки открытия окна
+  (async () => {
+    try {
+      await loadCocktails();
+      await loadAdminOrders();
+      await loadStoplist();
+
+      // Загружаем статус мониторинга
+      const statusData = await monitorSystem();
+      displaySystemStatus(statusData);
+
+      // Показываем базовую информацию о Telegram
+      displayTelegramInfo();
+    } catch (error) {
+      console.error('❌ Ошибка при загрузке данных админ-панели:', error);
+      // Покажем мягкое уведомление, но панель уже открыта
+      showError('❌ Не удалось полностью загрузить данные админ-панели. Проверьте консоль ошибок.');
+    }
+  })();
 });
 
 // Добавление коктейля (открывает модальное окно поверх админ-панели)
