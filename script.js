@@ -667,26 +667,32 @@ async function deductIngredientsForCocktail(cocktailName) {
       }
     }
 
-    // Полная переоценка стоп-листа — в фоне, не блокируем ответ бармену
-    reevaluateCocktailsAvailability().catch(err => console.warn('reevaluateCocktailsAvailability', err));
+    _debouncedReevaluate();
   } catch (error) {
     console.error('❌ Ошибка списания ингредиентов для коктейля:', error);
   }
 }
 
+let _reevaluateTimeout = null;
+function _debouncedReevaluate() {
+  if (_reevaluateTimeout) clearTimeout(_reevaluateTimeout);
+  _reevaluateTimeout = setTimeout(() => {
+    _reevaluateTimeout = null;
+    reevaluateCocktailsAvailability().catch(() => {});
+  }, 400);
+}
+
 /**
- * Вызывать после любого изменения количества/остатка ингредиента через админ-панель
- * (добавление остатка, редактирование, удаление ингредиента, добавление нового).
- * Переоценивает доступность коктейлей и выводит из стоп-листа те, для которых снова хватает ингредиентов.
+ * Вызывать после любого изменения количества/остатка ингредиента через админ-панель.
+ * Переоценка выполняется с задержкой 400 мс (несколько изменений подряд = один запрос).
  */
 async function refreshStoplistAfterIngredientChange() {
-  await reevaluateCocktailsAvailability();
+  _debouncedReevaluate();
 }
 
 /**
  * Переоценивает доступность всех коктейлей на основе текущих остатков ингредиентов.
- * Если для коктейля снова хватает ингредиентов, он будет удалён из стоп-листа.
- * Оптимизировано: 1 запрос ингредиентов + проверка в памяти (без лишних обращений к Firestore).
+ * Оптимизировано: 1 запрос ингредиентов + проверка в памяти.
  */
 async function reevaluateCocktailsAvailability() {
   try {
@@ -1103,7 +1109,7 @@ async function loadStoplist(skipCocktailsReload = false) {
     }
     
     // Заполняем селект коктейлей для стоп-листа
-    await populateStoplistCocktailsSelect();
+    populateStoplistCocktailsSelect();
     
     // Перезагружаем коктейли, чтобы обновить статусы (если не запрещено флагом)
     if (!skipCocktailsReload) {
@@ -1149,28 +1155,15 @@ function updateCocktailCardsStoplistState() {
   });
 }
 
-// Заполнение селекта коктейлей для стоп-листа
-async function populateStoplistCocktailsSelect() {
+// Заполнение селекта коктейлей для стоп-листа (используем cocktailsData — без лишнего запроса к Firestore)
+function populateStoplistCocktailsSelect() {
   if (!stoplistCocktails) return;
   
-  try {
-    // Очищаем селект
-    stoplistCocktails.innerHTML = '<option value="">Выберите коктейль</option>';
-    
-    // Получаем все коктейли
-    const cocktailsSnapshot = await db.collection('cocktails').get();
-    
-    // Сортируем коктейли по алфавиту
-    const cocktails = [];
-    cocktailsSnapshot.forEach(doc => {
-      const cocktail = { id: doc.id, ...doc.data() };
-      cocktails.push(cocktail);
-    });
-    
-    cocktails.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-    
-    // Добавляем опции в селект, исключая уже находящиеся в стоп-листе
-    cocktails.forEach(cocktail => {
+  stoplistCocktails.innerHTML = '<option value="">Выберите коктейль</option>';
+  
+  const cocktails = (cocktailsData || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'));
+  
+  cocktails.forEach(cocktail => {
       const isInStoplist = stoplistData.some(item => item.cocktailName === cocktail.name);
       
       if (!isInStoplist) {
@@ -1182,17 +1175,12 @@ async function populateStoplistCocktailsSelect() {
       }
     });
     
-    // Если нет доступных коктейлей для добавления в стоп-лист
-    if (stoplistCocktails.children.length === 1) {
-      const option = document.createElement('option');
-      option.value = '';
-      option.textContent = 'Все коктейли уже в стоп-листе';
-      option.disabled = true;
-      stoplistCocktails.appendChild(option);
-    }
-    
-  } catch (error) {
-    console.error('Ошибка заполнения селекта коктейлей:', error);
+  if (stoplistCocktails.children.length === 1) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'Все коктейли уже в стоп-листе';
+    option.disabled = true;
+    stoplistCocktails.appendChild(option);
   }
 }
 
@@ -1451,9 +1439,10 @@ function initGlobalOrderStatusListener() {
     globalOrdersListener = null;
   }
   
-  // Инициализируем listener для заказов текущего пользователя
+  // Listener заказов пользователя (лимит 50 — экономия квоты Firestore)
   globalOrdersListener = db.collection('orders')
     .where('userId', '==', currentUser.uid)
+    .limit(50)
     .onSnapshot((snapshot) => {
       console.log('📊 Получено обновление заказов:', snapshot.docChanges().length, 'изменений');
       console.log('📋 Всего документов в snapshot:', snapshot.docs.length);
@@ -1537,9 +1526,9 @@ async function loadOrderHistory(userId) {
     
     ordersList.innerHTML = '';
     
-    // Устанавливаем real-time listener для заказов пользователя
     userOrdersListener = db.collection('orders')
       .where('userId', '==', userId)
+      .limit(50)
       .onSnapshot((snapshot) => {
         ordersList.innerHTML = '';
         
@@ -1624,9 +1613,10 @@ async function loadAdminOrders() {
 
     adminOrdersList.innerHTML = '';
 
-    // Устанавливаем real-time listener для всех заказов
+    // Устанавливаем listener для заказов (лимит 80 — экономия квоты Firestore)
     adminOrdersListener = db.collection('orders')
       .orderBy('createdAt', 'desc')
+      .limit(80)
       .onSnapshot((snapshot) => {
         adminOrdersList.innerHTML = '';
 
@@ -6217,20 +6207,19 @@ function getCategoryIcon(category) {
 
 
 
-// Загружаем начальные данные последовательно, чтобы статусы стоп-листа применились к карточкам
+// Загружаем начальные данные (loadStoplist уже вызывает loadCocktails внутри — без дубля)
 (async () => {
   console.log('🚀 Начинаем инициализацию приложения...');
   
   try {
-    console.log('📋 Загружаем стоп-лист...');
+    console.log('📋 Загружаем стоп-лист и коктейли...');
     await loadStoplist();
     
-    console.log('🍸 Загружаем коктейли...');
-    await loadCocktails();
-    
-    // Сразу переоцениваем стоп-лист: выводим коктейли, для которых снова хватает ингредиентов (в т.ч. после перезагрузки)
-    console.log('🔄 Проверяем стоп-лист по остаткам ингредиентов...');
-    await reevaluateCocktailsAvailability();
+    // Переоценка стоп-листа только если в нём есть записи — экономия чтений Firestore
+    if (stoplistData.length > 0) {
+      console.log('🔄 Проверяем стоп-лист по остаткам ингредиентов...');
+      await reevaluateCocktailsAvailability();
+    }
     
     console.log('🔍 Проверяем статус системы...');
     await monitorSystem();
@@ -6562,9 +6551,9 @@ async function startTrackingUserOrders(userId) {
     console.error('❌ Ошибка загрузки оцененных коктейлей:', error);
   }
   
-  // Устанавливаем слушатель для заказов текущего пользователя
   userOrdersListener = db.collection('orders')
     .where('userId', '==', userId)
+    .limit(50)
     .onSnapshot((snapshot) => {
       snapshot.docChanges().forEach((change) => {
         const order = change.doc.data();

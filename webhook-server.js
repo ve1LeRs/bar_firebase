@@ -890,19 +890,7 @@ async function updateOrderStatus(orderId, newStatus) {
     const orderDoc = await orderRef.get();
 
     if (!orderDoc.exists) {
-      const projectId = admin.app().options?.projectId || serviceAccount?.project_id || '?';
-      let recentIds = [];
-      try {
-        const recent = await db.collection('orders').limit(5).get();
-        recent.forEach(d => recentIds.push(d.id));
-      } catch (e) {
-        recentIds = ['(не удалось прочитать)'];
-      }
-      console.error('❌ Заказ не найден в Firestore:', {
-        orderId: orderIdTrimmed,
-        projectId,
-        recentOrderIds: recentIds
-      });
+      console.error('❌ Заказ не найден:', orderIdTrimmed);
       return { success: false, error: 'Заказ не найден' };
     }
 
@@ -920,7 +908,13 @@ async function updateOrderStatus(orderId, newStatus) {
     }
 
     if (newStatus === 'completed' && orderData.queuePosition) {
-      await updateQueuePositions(orderIdTrimmed);
+      try {
+        await updateQueuePositions(orderIdTrimmed);
+      } catch (queueErr) {
+        const isQuota = queueErr?.code === 8 || (queueErr?.message && String(queueErr.message).toLowerCase().includes('quota'));
+        if (isQuota) console.warn('⚠️ Квота при обновлении очереди, пропуск');
+        else console.error('❌ Ошибка обновления очереди:', queueErr);
+      }
     }
 
     return {
@@ -931,7 +925,11 @@ async function updateOrderStatus(orderId, newStatus) {
   } catch (error) {
     const code = error?.code || error?.message;
     const msg = error?.message || String(error);
+    const isQuota = code === 8 || code === 'resource-exhausted' || (msg && String(msg).toLowerCase().includes('quota'));
     console.error('❌ Ошибка обновления заказа в Firebase:', { orderId: orderIdTrimmed, code, message: msg }, error);
+    if (isQuota) {
+      return { success: false, error: 'Квота Firestore исчерпана. Попробуйте позже.' };
+    }
     return { success: false, error: msg };
   }
 }
@@ -976,21 +974,14 @@ async function updateTelegramMessage(messageId, orderId, newStatus, orderData, c
     
     const emoji = statusEmojis[newStatus] || '📝';
     const statusText = getStatusText(newStatus);
-    
-    // Получаем информацию об очереди для отображения позиции
-    const queueInfo = await getQueueInfo();
     const queuePosition = orderData.queuePosition;
-    const totalInQueue = queueInfo.totalOrders;
-    
-    // Формируем информацию о позиции в очереди
+
     let queueInfoText = '';
     if (queuePosition && ['confirmed', 'preparing', 'ready'].includes(newStatus)) {
-      queueInfoText = `🎯 *Позиция в очереди:* #${queuePosition} из ${totalInQueue}\n`;
-      
-      // Добавляем примерное время ожидания
-      const estimatedMinutes = queuePosition * 3; // Примерно 3 минуты на заказ
+      queueInfoText = `🎯 *Позиция в очереди:* #${queuePosition}\n`;
+      const estimatedMinutes = queuePosition * 3;
       if (estimatedMinutes > 0) {
-        queueInfoText += `⏰ *Примерное время ожидания:* ${estimatedMinutes} мин\n`;
+        queueInfoText += `⏰ *Примерное время:* ${estimatedMinutes} мин\n`;
       }
     } else if (newStatus === 'completed') {
       queueInfoText = `🎉 *Заказ выполнен!*\n`;
