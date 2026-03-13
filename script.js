@@ -664,6 +664,15 @@ async function deductIngredientsForCocktail(cocktailName) {
 }
 
 /**
+ * Вызывать после любого изменения количества/остатка ингредиента через админ-панель
+ * (добавление остатка, редактирование, удаление ингредиента, добавление нового).
+ * Переоценивает доступность коктейлей и выводит из стоп-листа те, для которых снова хватает ингредиентов.
+ */
+async function refreshStoplistAfterIngredientChange() {
+  await reevaluateCocktailsAvailability();
+}
+
+/**
  * Переоценивает доступность всех коктейлей на основе текущих остатков ингредиентов.
  * Если для коктейля снова хватает ингредиентов, он будет удалён из стоп-листа.
  */
@@ -706,13 +715,16 @@ async function reevaluateCocktailsAvailability() {
       if (lacking.length === 0) {
         const nameToFind = (cocktail.name || '').trim();
         if (!nameToFind) continue;
+        const nameLower = nameToFind.toLowerCase();
         const idsToDelete = new Set();
         const stopSnapshot = await db.collection('stoplist')
           .where('cocktailName', '==', nameToFind)
           .get();
         stopSnapshot.forEach(doc => idsToDelete.add(doc.id));
+        // Совпадение по названию без учёта регистра и пробелов (на случай отличий в базе)
         stoplistData.forEach(item => {
-          if ((item.cocktailName || '').trim() === nameToFind && item.id) idsToDelete.add(item.id);
+          const itemName = (item.cocktailName || '').trim().toLowerCase();
+          if (itemName === nameLower && item.id) idsToDelete.add(item.id);
         });
         if (idsToDelete.size === 0) continue;
         const batch = db.batch();
@@ -6202,6 +6214,10 @@ function getCategoryIcon(category) {
     console.log('🍸 Загружаем коктейли...');
     await loadCocktails();
     
+    // Сразу переоцениваем стоп-лист: выводим коктейли, для которых снова хватает ингредиентов (в т.ч. после перезагрузки)
+    console.log('🔄 Проверяем стоп-лист по остаткам ингредиентов...');
+    await reevaluateCocktailsAvailability();
+    
     console.log('🔍 Проверяем статус системы...');
     await monitorSystem();
 
@@ -6976,8 +6992,7 @@ addIngredientBtn?.addEventListener('click', async () => {
     await loadIngredients();
     console.log('✅ Список ингредиентов обновлен');
 
-    // После добавления нового ингредиента также переоцениваем доступность коктейлей
-    await reevaluateCocktailsAvailability();
+    await refreshStoplistAfterIngredientChange();
     
   } catch (error) {
     console.error('❌ Ошибка добавления ингредиента:', error);
@@ -7157,7 +7172,7 @@ window.addStock = async function(ingredientId) {
     
     showSuccess(`✅ Добавлено ${addAmount} ${ingredient.unit} к "${ingredient.name}"`);
     await loadIngredients();
-    await reevaluateCocktailsAvailability();
+    await refreshStoplistAfterIngredientChange();
     
   } catch (error) {
     console.error('❌ Ошибка добавления остатка:', error);
@@ -7185,7 +7200,7 @@ window.editIngredient = async function(ingredientId) {
     
     showSuccess(`✅ Ингредиент "${ingredient.name}" обновлен`);
     await loadIngredients();
-    await reevaluateCocktailsAvailability();
+    await refreshStoplistAfterIngredientChange();
     
   } catch (error) {
     console.error('❌ Ошибка обновления ингредиента:', error);
@@ -7203,7 +7218,7 @@ window.deleteIngredient = async function(ingredientId, ingredientName) {
     await db.collection('ingredients').doc(ingredientId).delete();
     showSuccess(`✅ Ингредиент "${ingredientName}" удален`);
     await loadIngredients();
-    await reevaluateCocktailsAvailability();
+    await refreshStoplistAfterIngredientChange();
     
   } catch (error) {
     console.error('❌ Ошибка удаления ингредиента:', error);
