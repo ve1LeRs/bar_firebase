@@ -686,7 +686,16 @@ app.post('/send-purchase-list', async (req, res) => {
 // Основной webhook для Telegram
 app.post('/telegram-webhook', async (req, res) => {
   try {
-    const body = req.body || {};
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (e) {
+        console.error('❌ Webhook body не JSON:', body?.slice(0, 200));
+        return res.status(400).json({ error: 'Invalid JSON' });
+      }
+    }
+    body = body || {};
     const callback_query = body.callback_query;
     if (callback_query) {
       console.log('📨 Callback от кнопки:', { data: callback_query.data, id: callback_query.id });
@@ -701,16 +710,21 @@ app.post('/telegram-webhook', async (req, res) => {
   }
 });
 
-// Обработка callback query от inline кнопок
+// Обработка callback query от inline кнопок (ответ в Telegram можно отправить только один раз)
 async function handleCallbackQuery(callbackQuery) {
   const id = callbackQuery.id;
   const data = callbackQuery.data != null ? String(callbackQuery.data) : '';
   const message = callbackQuery.message;
-  const from = callbackQuery.from;
+  let answered = false;
+  const answerOnce = async (text, showAlert = false) => {
+    if (answered) return;
+    answered = true;
+    await answerCallbackQuery(id, text, showAlert);
+  };
 
-  console.log('🔘 Callback:', { callbackId: id, data, dataLength: data.length, from: from?.username });
+  console.log('🔘 Callback:', { callbackId: id, data, dataLength: data.length });
   if (!data) {
-    await answerCallbackQuery(id, '❌ Нет данных кнопки (data)', true);
+    await answerOnce('❌ Нет данных кнопки', true);
     return;
   }
   if (data.length > 64) {
@@ -718,53 +732,46 @@ async function handleCallbackQuery(callbackQuery) {
   }
 
   try {
-    // Парсим: "status_orderId" (orderId может содержать подчёркивание)
     const sep = data.indexOf('_');
     if (sep <= 0) {
-      console.error('❌ Неверный формат callback data:', data);
-      await answerCallbackQuery(id, '❌ Неверный формат данных кнопки', true);
+      await answerOnce('❌ Неверный формат данных кнопки', true);
       return;
     }
     const status = data.slice(0, sep);
-    const orderId = data.slice(sep + 1);
+    const orderId = data.slice(sep + 1).trim();
     if (!status || !orderId) {
-      console.error('❌ Пустой status или orderId:', { status, orderId });
-      await answerCallbackQuery(id, '❌ Пустой ID заказа', true);
+      await answerOnce('❌ Пустой ID заказа', true);
       return;
     }
     const validStatuses = ['confirmed', 'preparing', 'ready', 'completed', 'cancelled'];
     if (!validStatuses.includes(status)) {
-      console.error('❌ Неизвестный статус:', status);
-      await answerCallbackQuery(id, '❌ Неизвестный статус: ' + status, true);
+      await answerOnce('❌ Неизвестный статус', true);
       return;
     }
-    
-    // Обновляем статус заказа в Firebase
+
     const updateResult = await updateOrderStatus(orderId, status);
-    
+
     if (updateResult.success) {
-      await answerCallbackQuery(id, `✅ Статус изменен на: ${getStatusText(status)}`, false);
+      await answerOnce(`✅ Статус: ${getStatusText(status)}`, false);
       if (message && message.message_id != null) {
-        await updateTelegramMessage(message.message_id, orderId, status, updateResult.orderData);
-      } else {
-        console.warn('⚠️ Нет message.message_id, сообщение в Telegram не обновлено');
+        try {
+          const chatId = message.chat?.id || TELEGRAM_CHAT_ID;
+          await updateTelegramMessage(message.message_id, orderId, status, updateResult.orderData, chatId);
+        } catch (editErr) {
+          console.warn('⚠️ Не удалось обновить текст сообщения в Telegram:', editErr?.message);
+        }
       }
-      console.log('✅ Статус заказа успешно обновлен:', { orderId, status });
+      console.log('✅ Статус заказа обновлен:', { orderId, status });
     } else {
-      const errText = updateResult.error === 'Заказ не найден'
-        ? `❌ Заказ не найден (ID: ${orderId}). Проверьте /orders-last на сервере — тот же Firebase?`
-        : `❌ ${(updateResult.error || '').slice(0, 120)}`;
-      await answerCallbackQuery(id, errText, true);
+      const errMsg = updateResult.error === 'Заказ не найден'
+        ? `❌ Заказ не найден. Проверьте /orders-last на сервере.`
+        : `❌ ${(updateResult.error || '').slice(0, 100)}`;
+      await answerOnce(errMsg, true);
       console.error('❌ Ошибка обновления статуса:', updateResult.error);
     }
-    
   } catch (error) {
     console.error('❌ Ошибка обработки callback query:', error);
-    try {
-      await answerCallbackQuery(id, '❌ Произошла ошибка');
-    } catch (answerErr) {
-      console.error('❌ Не удалось ответить на callback:', answerErr);
-    }
+    await answerOnce('❌ Ошибка сервера. Попробуйте позже.', true);
   }
 }
 
@@ -902,14 +909,14 @@ async function updateOrderStatus(orderId, newStatus) {
     const orderData = orderDoc.data();
 
     try {
-      await orderRef.update({
+      await orderRef.set({
         status: newStatus,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedBy: 'telegram_admin'
-      });
-    } catch (updateErr) {
-      console.error('❌ Firestore update() ошибка:', updateErr?.code, updateErr?.message);
-      throw updateErr;
+      }, { merge: true });
+    } catch (writeErr) {
+      console.error('❌ Firestore write ошибка:', writeErr?.code, writeErr?.message);
+      return { success: false, error: writeErr?.message || String(writeErr) };
     }
 
     if (newStatus === 'completed' && orderData.queuePosition) {
@@ -956,7 +963,8 @@ async function answerCallbackQuery(callbackQueryId, text, showAlert = false) {
 }
 
 // Обновление сообщения в Telegram с новыми кнопками
-async function updateTelegramMessage(messageId, orderId, newStatus, orderData) {
+async function updateTelegramMessage(messageId, orderId, newStatus, orderData, chatIdParam) {
+  const chatId = chatIdParam || TELEGRAM_CHAT_ID;
   try {
     const statusEmojis = {
       'confirmed': '✅',
@@ -1011,15 +1019,15 @@ ${queueInfoText}🕒 *Время:* ${orderData.displayTime || new Date().toLocal
       ]
     };
     
-    if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-      console.error('❌ TELEGRAM_BOT_TOKEN или TELEGRAM_CHAT_ID не заданы');
+    if (!TELEGRAM_BOT_TOKEN || !chatId) {
+      console.error('❌ TELEGRAM_BOT_TOKEN или chat_id не заданы');
       return;
     }
     const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
+        chat_id: chatId,
         message_id: messageId,
         text: updatedMessage,
         parse_mode: 'Markdown',
