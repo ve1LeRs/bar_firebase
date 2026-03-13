@@ -168,6 +168,7 @@ app.get('/', (req, res) => {
       diagnose: '/diagnose',
       testFirebase: '/test-firebase',
       queueInfo: '/queue-info',
+      ordersLast: '/orders-last',
       webhook: '/telegram-webhook'
     }
   });
@@ -308,6 +309,25 @@ app.get('/queue-info', async (req, res) => {
       success: false,
       error: error.message
     });
+  }
+});
+
+// Диагностика: заказы, которые видит webhook — сверьте id с ID в кнопке Telegram
+app.get('/orders-last', async (req, res) => {
+  try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const limit = Math.min(parseInt(req.query.limit, 10) || 10, 20);
+    const snap = await db.collection('orders').limit(limit).get();
+    const projectId = admin.app().options?.projectId || serviceAccount?.project_id || '?';
+    const orders = [];
+    snap.forEach(doc => {
+      const d = doc.data();
+      orders.push({ id: doc.id, name: d.name, status: d.status });
+    });
+    res.json({ projectId, count: orders.length, orders });
+  } catch (e) {
+    console.error('orders-last error', e);
+    res.status(500).json({ error: e.message, projectId: admin.app().options?.projectId || serviceAccount?.project_id });
   }
 });
 
@@ -666,14 +686,14 @@ app.post('/send-purchase-list', async (req, res) => {
 // Основной webhook для Telegram
 app.post('/telegram-webhook', async (req, res) => {
   try {
-    console.log('📨 Получен webhook от Telegram:', JSON.stringify(req.body, null, 2));
-    
-    const { callback_query } = req.body;
-    
+    const body = req.body || {};
+    const callback_query = body.callback_query;
     if (callback_query) {
+      console.log('📨 Callback от кнопки:', { data: callback_query.data, id: callback_query.id });
       await handleCallbackQuery(callback_query);
+    } else {
+      console.log('📨 Webhook (не кнопка):', body.update_id ? 'update_id=' + body.update_id : Object.keys(body));
     }
-    
     res.status(200).json({ status: 'OK' });
   } catch (error) {
     console.error('❌ Ошибка обработки webhook:', error);
@@ -683,23 +703,39 @@ app.post('/telegram-webhook', async (req, res) => {
 
 // Обработка callback query от inline кнопок
 async function handleCallbackQuery(callbackQuery) {
-  const { id, data, message, from } = callbackQuery;
-  
-  console.log('🔘 Обработка callback query:', { id, data, from: from?.username });
-  
+  const id = callbackQuery.id;
+  const data = callbackQuery.data != null ? String(callbackQuery.data) : '';
+  const message = callbackQuery.message;
+  const from = callbackQuery.from;
+
+  console.log('🔘 Callback:', { callbackId: id, data, dataLength: data.length, from: from?.username });
+  if (!data) {
+    await answerCallbackQuery(id, '❌ Нет данных кнопки (data)', true);
+    return;
+  }
+  if (data.length > 64) {
+    console.warn('⚠️ callback_data обрезан Telegram (макс 64 байта), длина:', data.length);
+  }
+
   try {
-    // Парсим данные кнопки (формат: "status_orderId"); orderId может содержать подчёркивание
-    const sep = (data || '').indexOf('_');
+    // Парсим: "status_orderId" (orderId может содержать подчёркивание)
+    const sep = data.indexOf('_');
     if (sep <= 0) {
       console.error('❌ Неверный формат callback data:', data);
-      await answerCallbackQuery(id, '❌ Ошибка: неверный формат данных');
+      await answerCallbackQuery(id, '❌ Неверный формат данных кнопки', true);
       return;
     }
     const status = data.slice(0, sep);
     const orderId = data.slice(sep + 1);
     if (!status || !orderId) {
       console.error('❌ Пустой status или orderId:', { status, orderId });
-      await answerCallbackQuery(id, '❌ Ошибка: неверный формат данных');
+      await answerCallbackQuery(id, '❌ Пустой ID заказа', true);
+      return;
+    }
+    const validStatuses = ['confirmed', 'preparing', 'ready', 'completed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      console.error('❌ Неизвестный статус:', status);
+      await answerCallbackQuery(id, '❌ Неизвестный статус: ' + status, true);
       return;
     }
     
@@ -716,8 +752,8 @@ async function handleCallbackQuery(callbackQuery) {
       console.log('✅ Статус заказа успешно обновлен:', { orderId, status });
     } else {
       const errText = updateResult.error === 'Заказ не найден'
-        ? '❌ Заказ не найден в базе. Проверьте, что webhook и сайт используют один и тот же Firebase-проект.'
-        : `❌ ${updateResult.error}`;
+        ? `❌ Заказ не найден (ID: ${orderId}). Проверьте /orders-last на сервере — тот же Firebase?`
+        : `❌ ${(updateResult.error || '').slice(0, 120)}`;
       await answerCallbackQuery(id, errText, true);
       console.error('❌ Ошибка обновления статуса:', updateResult.error);
     }
@@ -848,17 +884,33 @@ async function updateOrderStatus(orderId, newStatus) {
 
     if (!orderDoc.exists) {
       const projectId = admin.app().options?.projectId || serviceAccount?.project_id || '?';
-      console.error('❌ Заказ не найден в Firestore:', { orderId: orderIdTrimmed, projectId });
+      let recentIds = [];
+      try {
+        const recent = await db.collection('orders').limit(5).get();
+        recent.forEach(d => recentIds.push(d.id));
+      } catch (e) {
+        recentIds = ['(не удалось прочитать)'];
+      }
+      console.error('❌ Заказ не найден в Firestore:', {
+        orderId: orderIdTrimmed,
+        projectId,
+        recentOrderIds: recentIds
+      });
       return { success: false, error: 'Заказ не найден' };
     }
 
     const orderData = orderDoc.data();
 
-    await orderRef.update({
-      status: newStatus,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedBy: 'telegram_admin'
-    });
+    try {
+      await orderRef.update({
+        status: newStatus,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: 'telegram_admin'
+      });
+    } catch (updateErr) {
+      console.error('❌ Firestore update() ошибка:', updateErr?.code, updateErr?.message);
+      throw updateErr;
+    }
 
     if (newStatus === 'completed' && orderData.queuePosition) {
       await updateQueuePositions(orderIdTrimmed);
