@@ -707,17 +707,18 @@ async function handleCallbackQuery(callbackQuery) {
     const updateResult = await updateOrderStatus(orderId, status);
     
     if (updateResult.success) {
-      await answerCallbackQuery(id, `✅ Статус изменен на: ${getStatusText(status)}`);
-      
+      await answerCallbackQuery(id, `✅ Статус изменен на: ${getStatusText(status)}`, false);
       if (message && message.message_id != null) {
         await updateTelegramMessage(message.message_id, orderId, status, updateResult.orderData);
       } else {
         console.warn('⚠️ Нет message.message_id, сообщение в Telegram не обновлено');
       }
-      
       console.log('✅ Статус заказа успешно обновлен:', { orderId, status });
     } else {
-      await answerCallbackQuery(id, '❌ Ошибка обновления статуса');
+      const errText = updateResult.error === 'Заказ не найден'
+        ? '❌ Заказ не найден в базе. Проверьте, что webhook и сайт используют один и тот же Firebase-проект.'
+        : `❌ ${updateResult.error}`;
+      await answerCallbackQuery(id, errText, true);
       console.error('❌ Ошибка обновления статуса:', updateResult.error);
     }
     
@@ -831,41 +832,53 @@ async function getQueueInfo() {
 
 // Обновление статуса заказа в Firebase
 async function updateOrderStatus(orderId, newStatus) {
+  if (!orderId || typeof orderId !== 'string') {
+    console.error('❌ updateOrderStatus: неверный orderId', orderId);
+    return { success: false, error: 'Неверный ID заказа' };
+  }
+  const orderIdTrimmed = orderId.trim();
+  if (!orderIdTrimmed) {
+    return { success: false, error: 'Пустой ID заказа' };
+  }
+
   try {
-    const orderRef = db.collection('orders').doc(orderId);
+    const orderRef = db.collection('orders').doc(orderIdTrimmed);
+    console.log('📋 Читаем заказ из Firestore:', orderIdTrimmed);
     const orderDoc = await orderRef.get();
-    
+
     if (!orderDoc.exists) {
+      const projectId = admin.app().options?.projectId || serviceAccount?.project_id || '?';
+      console.error('❌ Заказ не найден в Firestore:', { orderId: orderIdTrimmed, projectId });
       return { success: false, error: 'Заказ не найден' };
     }
-    
+
     const orderData = orderDoc.data();
-    
-    // Обновляем статус и время обновления
+
     await orderRef.update({
       status: newStatus,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedBy: 'telegram_admin'
     });
-    
-    // Если заказ завершен, обновляем позиции в очереди
+
     if (newStatus === 'completed' && orderData.queuePosition) {
-      await updateQueuePositions(orderId);
+      await updateQueuePositions(orderIdTrimmed);
     }
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       orderData: { ...orderData, status: newStatus }
     };
-    
+
   } catch (error) {
-    console.error('❌ Ошибка обновления заказа в Firebase:', error?.code || error?.message, error);
-    return { success: false, error: error?.message || String(error) };
+    const code = error?.code || error?.message;
+    const msg = error?.message || String(error);
+    console.error('❌ Ошибка обновления заказа в Firebase:', { orderId: orderIdTrimmed, code, message: msg }, error);
+    return { success: false, error: msg };
   }
 }
 
 // Ответ на callback query (обязательно вызвать, иначе у пользователя крутится загрузка на кнопке)
-async function answerCallbackQuery(callbackQueryId, text) {
+async function answerCallbackQuery(callbackQueryId, text, showAlert = false) {
   try {
     if (!TELEGRAM_BOT_TOKEN) {
       console.error('❌ TELEGRAM_BOT_TOKEN не задан');
@@ -876,8 +889,8 @@ async function answerCallbackQuery(callbackQueryId, text) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         callback_query_id: callbackQueryId,
-        text: text || 'OK',
-        show_alert: false
+        text: (text || 'OK').slice(0, 200),
+        show_alert: !!showAlert
       })
     });
     
