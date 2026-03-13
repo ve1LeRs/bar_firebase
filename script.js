@@ -497,6 +497,13 @@ let stoplistData = [];
 let currentCategory = 'classic'; // Текущая выбранная категория
 let currentAdminFilter = 'classic'; // Текущий фильтр в админке
 
+function isQuotaExhaustedError(error) {
+  if (!error) return false;
+  const code = error.code;
+  const msg = (error.message || '').toLowerCase();
+  return code === 8 || code === 'resource-exhausted' || msg.includes('resource_exhausted') || msg.includes('quota exceeded');
+}
+
 // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ СВЯЗКИ КОКТЕЙЛЕЙ И ИНГРЕДИЕНТОВ ===
 
 /**
@@ -573,6 +580,10 @@ async function ensureCocktailHasIngredients(cocktailName) {
     console.error('❌ Ошибка проверки ингредиентов для коктейля:', error);
     if (error && typeof error.message === 'string' && error.message.toLowerCase().includes('permission')) {
       showError('❌ Недостаточно прав для автоматического добавления в стоп-лист. Обратитесь к администратору.');
+      return false;
+    }
+    if (isQuotaExhaustedError(error)) {
+      showError('Превышена квота Firestore. Попробуйте заказ позже.');
       return false;
     }
     return true;
@@ -675,6 +686,7 @@ async function refreshStoplistAfterIngredientChange() {
 /**
  * Переоценивает доступность всех коктейлей на основе текущих остатков ингредиентов.
  * Если для коктейля снова хватает ингредиентов, он будет удалён из стоп-листа.
+ * Оптимизировано: 1 запрос ингредиентов + проверка в памяти (без лишних обращений к Firestore).
  */
 async function reevaluateCocktailsAvailability() {
   try {
@@ -682,60 +694,55 @@ async function reevaluateCocktailsAvailability() {
       return;
     }
 
+    // Один запрос — все ингредиенты (экономия квоты)
+    const ingredientsSnapshot = await db.collection('ingredients').get();
+    const stockByName = new Map();
+    ingredientsSnapshot.forEach(doc => {
+      const d = doc.data();
+      const name = (d.name || '').trim();
+      if (name) stockByName.set(name, Number(d.stock) || 0);
+    });
+
+    const idsToDelete = new Set();
+
     for (const cocktail of cocktailsData) {
       if (!Array.isArray(cocktail.stockRecipe) || cocktail.stockRecipe.length === 0) continue;
 
-      // Проверяем, хватает ли ингредиентов (используем ту же логику, что и в ensureCocktailHasIngredients)
-      const lacking = [];
+      let lacking = 0;
       for (const item of cocktail.stockRecipe) {
         const ingName = (item.ingredientName || '').trim();
         const needed = Number(item.amount) || 0;
         if (!ingName || needed <= 0) continue;
-
-        const snapshot = await db.collection('ingredients')
-          .where('name', '==', ingName)
-          .limit(1)
-          .get();
-
-        if (snapshot.empty) {
-          lacking.push(ingName);
-          continue;
-        }
-
-        const doc = snapshot.docs[0];
-        const data = doc.data();
-        const stock = Number(data.stock) || 0;
-
-        if (stock < needed) {
-          lacking.push(ingName);
+        const stock = stockByName.get(ingName);
+        if (stock == null || stock < needed) {
+          lacking++;
+          break;
         }
       }
 
-      // Если всё в порядке с ингредиентами — убираем из стоп-листа (если там есть)
-      if (lacking.length === 0) {
-        const nameToFind = (cocktail.name || '').trim();
-        if (!nameToFind) continue;
-        const nameLower = nameToFind.toLowerCase();
-        const idsToDelete = new Set();
-        const stopSnapshot = await db.collection('stoplist')
-          .where('cocktailName', '==', nameToFind)
-          .get();
-        stopSnapshot.forEach(doc => idsToDelete.add(doc.id));
-        // Совпадение по названию без учёта регистра и пробелов (на случай отличий в базе)
-        stoplistData.forEach(item => {
-          const itemName = (item.cocktailName || '').trim().toLowerCase();
-          if (itemName === nameLower && item.id) idsToDelete.add(item.id);
-        });
-        if (idsToDelete.size === 0) continue;
-        const batch = db.batch();
-        idsToDelete.forEach(id => batch.delete(db.collection('stoplist').doc(id)));
-        await batch.commit();
-      }
+      if (lacking > 0) continue;
+
+      const nameToFind = (cocktail.name || '').trim();
+      if (!nameToFind) continue;
+      const nameLower = nameToFind.toLowerCase();
+      stoplistData.forEach(item => {
+        const itemName = (item.cocktailName || '').trim().toLowerCase();
+        if (itemName === nameLower && item.id) idsToDelete.add(item.id);
+      });
     }
 
-    // Перезагружаем стоп-лист и обновляем карточки на главной без полной перезагрузки коктейлей
+    if (idsToDelete.size > 0) {
+      const batch = db.batch();
+      idsToDelete.forEach(id => batch.delete(db.collection('stoplist').doc(id)));
+      await batch.commit();
+    }
+
     await loadStoplist(true);
   } catch (error) {
+    if (isQuotaExhaustedError(error)) {
+      console.warn('⚠️ Квота Firestore исчерпана, переоценка стоп-листа пропущена');
+      return;
+    }
     console.error('❌ Ошибка переоценки доступности коктейлей:', error);
   }
 }
@@ -1034,7 +1041,11 @@ async function loadCocktails() {
     
   } catch (error) {
     console.error('❌ Ошибка загрузки коктейлей:', error);
-    showError('Ошибка загрузки коктейлей');
+    if (isQuotaExhaustedError(error)) {
+      showError('Превышена квота Firestore. Обновите страницу позже или проверьте тариф в Firebase.');
+    } else {
+      showError('Ошибка загрузки коктейлей');
+    }
   }
 }
 
@@ -1104,6 +1115,9 @@ async function loadStoplist(skipCocktailsReload = false) {
 
   } catch (error) {
     console.error('Ошибка загрузки стоп-листа:', error);
+    if (isQuotaExhaustedError(error)) {
+      console.warn('⚠️ Квота Firestore при загрузке стоп-листа');
+    }
   }
 }
 
