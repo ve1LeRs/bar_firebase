@@ -2087,10 +2087,6 @@ body.dark-theme .cocktail-price:hover {
 }
 
 /* Предотвращаем прокрутку страницы только для определенных модальных окон */
-body.modal-open.wheel-open {
-  overflow: hidden;
-}
-
 body.modal-open.profile-open {
   overflow: hidden;
 }
@@ -11680,122 +11676,6 @@ body.dark-theme .confirm-btn.cancel:hover {
     width: 100%;
     min-width: auto;
   }
-}
-
-/* ========================================
-   КОЛЕСО УДАЧИ - СТИЛИ
-   ======================================== */
-
-/* Анимации для колеса */
-@keyframes wheelSpin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(1800deg);
-  }
-}
-
-@keyframes wheelPulse {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-}
-
-@keyframes wheelShake {
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-  20%, 40%, 60%, 80% { transform: translateX(5px); }
-}
-
-@keyframes resultPopup {
-  0% {
-    opacity: 0;
-    transform: scale(0.5) translateY(50px);
-  }
-  50% {
-    transform: scale(1.1) translateY(-10px);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-@keyframes confettiDrop {
-  0% {
-    opacity: 1;
-    transform: translateY(-100%) rotate(0deg);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(100vh) rotate(720deg);
-  }
-}
-
-/* Карточка колеса в профиле */
-.wheel-of-fortune-card {
-  background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%);
-  border-radius: 15px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 8px 24px rgba(251, 140, 0, 0.3);
-  transition: all 0.3s ease;
-}
-
-.wheel-of-fortune-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 12px 32px rgba(251, 140, 0, 0.4);
-}
-
-.wheel-card-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.wheel-card-icon {
-  font-size: 3rem;
-  animation: wheelPulse 2s ease-in-out infinite;
-}
-
-.wheel-card-info h4 {
-  color: white;
-  margin: 0;
-  font-size: 1.4rem;
-  font-weight: 600;
-}
-
-.wheel-card-info p {
-  color: rgba(255, 255, 255, 0.9);
-  margin: 0.25rem 0 0 0;
-  font-size: 0.95rem;
-}
-
-.wheel-open-btn {
-  width: 100%;
-  padding: 1rem;
-  background: white;
-  color: #ff9800;
-  border: none;
-  border-radius: 10px;
-  font-size: 1.1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
-.wheel-open-btn:hover {
-  background: rgba(255, 255, 255, 0.95);
-  transform: scale(1.02);
 }
 
 .wheel-open-btn:disabled {

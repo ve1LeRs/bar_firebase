@@ -690,9 +690,6 @@
                 <button id="sendToTelegramBtn" class="admin-btn primary">
                   <i class="fab fa-telegram"></i> Отправить в Telegram
                 </button>
-                <button id="checkRailwayUrlBtn" class="admin-btn warning">
-                  <i class="fas fa-server"></i> Проверить URL сервера
-                </button>
               </div>
             </div>
             
@@ -948,60 +945,6 @@
         </div>
       </div>
     </div>
-    <!-- Модальное окно Колеса удачи -->
-    <div id="wheelOfFortuneModal" class="modal wheel-modal">
-      <div class="modal-content wheel-content">
-        <span class="close" onclick="closeWheelModal()"></span>
-        <div class="wheel-header">
-          <div class="wheel-header-icon">🎰</div>
-          <h3 class="wheel-title">Колесо удачи</h3>
-          <p class="wheel-subtitle">Крути колесо и выиграй призы!</p>
-        </div>
-        
-        <!-- Информация о доступности -->
-        <div class="wheel-availability" id="wheelAvailability">
-          <div class="availability-info" id="availabilityInfo">
-            <!-- Информация будет загружена динамически -->
-          </div>
-        </div>
-        
-        <!-- Контейнер колеса -->
-        <div class="wheel-container" id="wheelContainer">
-          <div class="wheel-arrow">▼</div>
-          <div style="position: relative; display: inline-block;">
-            <canvas id="wheelCanvas" width="500" height="500"></canvas>
-            <button id="spinButton" class="spin-button" disabled>
-              <span class="spin-icon">🎯</span>
-              <span class="spin-text">КРУТИТЬ</span>
-            </button>
-          </div>
-          <button id="adminInfiniteMode" class="admin-infinite-mode" style="display:none">
-            <i class="fas fa-infinity"></i> Бесконечный режим: ВЫКЛ
-          </button>
-        </div>
-        
-        <!-- Результат -->
-        <div class="wheel-result" id="wheelResult" style="display:none">
-          <div class="result-animation">
-            <div class="result-icon" id="resultIcon">🎉</div>
-            <h4 class="result-title" id="resultTitle">Поздравляем!</h4>
-            <p class="result-description" id="resultDescription">Вы выиграли приз!</p>
-            <button class="result-claim-btn" id="claimPrizeBtn">
-              <i class="fas fa-gift"></i> Получить приз
-            </button>
-          </div>
-        </div>
-        
-        <!-- История выигрышей -->
-        <div class="wheel-history">
-          <h5><i class="fas fa-history"></i> Ваши выигрыши</h5>
-          <div id="wheelHistoryList" class="wheel-history-list">
-            <!-- История будет загружена динамически -->
-          </div>
-        </div>
-      </div>
-    </div>
-    
     <!-- Вкладки категорий коктейлей -->
     <div class="cocktails-categories">
         <div class="categories-tabs">
@@ -1129,7 +1072,6 @@
   <script src="order-integration.js"></script>
   <script src="profile.js"></script>
   <script src="admin-bills.js"></script>
-  <script src="wheel-of-fortune.js"></script>
   
   <!-- Инструкции для разработчиков -->
   <script>

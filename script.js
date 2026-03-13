@@ -80,24 +80,6 @@ function resetWebhookServerUrl() {
   location.reload();
 }
 
-// Функция для принудительной настройки URL сервера (раньше Railway)
-function forceRailwayUrl() {
-  const railwayUrl = prompt('🌐 Принудительная настройка URL сервера\n\nВведите URL вашего сервера (например: https://bar-firebase.onrender.com):');
-  
-  if (railwayUrl && railwayUrl.startsWith('https://')) {
-    updateWebhookServerUrl(railwayUrl);
-    showSuccess(`✅ URL сервера принудительно установлен: ${railwayUrl}`);
-    
-    // Автоматически проверяем систему
-    setTimeout(async () => {
-      const statusData = await monitorSystem();
-      displaySystemStatus(statusData);
-    }, 1000);
-  } else if (railwayUrl) {
-    showError('❌ URL должен начинаться с https://');
-  }
-}
-
 // Инициализация Firebase
 console.log('🔥 Инициализация Firebase...');
 const app = firebase.initializeApp(firebaseConfig);
@@ -768,10 +750,8 @@ function openModal(modalElement) {
   
   // Добавляем специальные классы только для определенных модальных окон
   const modalId = modalElement.id || '';
-  if (modalId.includes('wheel') || modalId.includes('profile') || modalId.includes('admin')) {
-    if (modalId.includes('wheel')) {
-      document.body.classList.add('modal-open', 'wheel-open');
-    } else if (modalId.includes('profile')) {
+  if (modalId.includes('profile') || modalId.includes('admin')) {
+    if (modalId.includes('profile')) {
       document.body.classList.add('modal-open', 'profile-open');
     } else if (modalId.includes('admin')) {
       // Для админ-панели НЕ блокируем прокрутку
@@ -798,7 +778,7 @@ function closeModal(modalElement) {
   modalElement.style.display = 'none';
   
   // Удаляем все классы модальных окон
-  document.body.classList.remove('modal-open', 'wheel-open', 'profile-open');
+  document.body.classList.remove('modal-open', 'profile-open');
 }
 
 // === КОНЕЦ ФУНКЦИЙ УПРАВЛЕНИЯ МОДАЛЬНЫМИ ОКНАМИ ===
@@ -2596,11 +2576,8 @@ setupWebhookUrlBtn?.addEventListener('click', () => {
   }
 });
 
-// Обработчик для принудительной настройки Railway URL
 const forceRailwayBtn = document.getElementById('forceRailwayBtn');
-forceRailwayBtn?.addEventListener('click', () => {
-  forceRailwayUrl();
-});
+forceRailwayBtn?.addEventListener('click', () => {});
 
 // Обработчик для сброса URL
 const resetUrlBtn = document.getElementById('resetUrlBtn');
@@ -4606,10 +4583,9 @@ async function testWebhookServer() {
 async function setupTelegramWebhook() {
   try {
     // Проверяем, что у нас есть правильный URL
-    if (WEBHOOK_SERVER_URL.includes('localhost') || WEBHOOK_SERVER_URL.includes('your-railway-app')) {
+    if (WEBHOOK_SERVER_URL.includes('localhost')) {
       showError('❌ Необходимо настроить URL webhook сервера!');
       showError('📝 Используйте кнопку "Настроить URL сервера" в админ панели');
-      showError('💡 Введите ваш Railway URL (например: https://your-app.railway.app)');
       return;
     }
     
