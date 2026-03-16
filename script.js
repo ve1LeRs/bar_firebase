@@ -928,19 +928,23 @@ async function loadCocktails() {
       cocktailCard.setAttribute('data-alcohol', cocktail.alcohol || 0);
       
       // Проверяем наличие изображения (общая логика для всех коктейлей)
-      const imageUrl = cocktail.image || 'https://i.pinimg.com/736x/5d/5d/5d/5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d.jpg';
-      const hasImage = imageUrl && !imageUrl.includes('5d5d5d');
-      const displayImage = hasImage ? imageUrl : '';
+      const imageUrl = cocktail.image || '';
+      const hasImage = !!imageUrl;
       
       cocktailCard.innerHTML = `
         <div class="image-container">
-          ${displayImage ? 
-            `<img src="${displayImage}" alt="${cocktail.name}">` : 
-            `<div class="no-image-placeholder">
-              <i class="fas fa-camera"></i>
-              <p>Коктейль уже делает селфи,<br>скоро выложит сюда</p>
-            </div>`
+          ${hasImage ? 
+            `<img src="${imageUrl}" alt="${cocktail.name}" onerror="
+              this.style.display='none';
+              const ph = this.parentNode.querySelector('.no-image-placeholder');
+              if (ph) ph.style.display='flex';
+            ">` 
+            : ''
           }
+          <div class="no-image-placeholder" style="${hasImage ? 'display:none;' : ''}">
+            <i class="fas fa-camera"></i>
+            <p>Коктейль уже делает селфи,<br>скоро выложит сюда</p>
+          </div>
           ${(cocktail.alcohol !== undefined && cocktail.alcohol !== null) ? `
             <div class="alcohol-indicator">
               <i class="fas fa-wine-bottle"></i>
@@ -7243,14 +7247,16 @@ generatePurchaseListBtn?.addEventListener('click', async () => {
     
     ingredientsSnapshot.forEach(doc => {
       const ingredient = doc.data();
-      // Добавляем в список, если остаток меньше или равен минимуму
-      if (ingredient.stock <= ingredient.minStock) {
-        const needed = ingredient.minStock * 2 - ingredient.stock; // Закупаем в 2 раза больше минимума
+      const current = Number(ingredient.stock) || 0;
+      const min = Number(ingredient.minStock) || 0;
+      // Добавляем в список, если остаток меньше минимума
+      if (current < min) {
+        const needed = min - current;
         purchaseList.push({
           name: ingredient.name,
-          current: ingredient.stock,
-          min: ingredient.minStock,
-          needed: Math.max(needed, ingredient.minStock),
+          current,
+          min,
+          needed,
           unit: ingredient.unit
         });
       }

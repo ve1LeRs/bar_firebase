@@ -2079,8 +2079,8 @@ body.dark-theme .cocktail-price:hover {
   top: 0; /* актуальное значение выставляем в JS через openModal */
   width: 100%;
   height: 100vh; /* занимаем высоту видимой области экрана */
-  background-color: rgba(0,0,0,0.7);
-  backdrop-filter: blur(5px);
+  /* Полупрозрачное затемнение заднего фона в видимой зоне */
+  background-color: rgba(0, 0, 0, 0.6);
   overflow-y: auto;
   padding: 0;
   z-index: 1000;
@@ -9942,6 +9942,12 @@ body.dark-theme .profile-tab.active {
   padding: 1rem;
   display: flex;
   flex-direction: column;
+}
+
+@media (max-width: 600px) {
+  .profile-content-wrapper {
+    padding-top: 1.25rem; /* добавляем запас под вкладками, чтобы карточка бонусов не наезжала на кнопки */
+  }
 }
 
 .profile-tab-content {
