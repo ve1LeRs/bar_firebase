@@ -1670,11 +1670,6 @@ async function loadAdminOrders() {
         });
 
         // Кнопки изменения статуса убраны - статус меняется только через Telegram
-
-        // Показываем уведомление о обновлении, если админ-панель открыта
-        if (adminPanel && adminPanel.style.display === 'block') {
-          showAdminStatusUpdateNotification();
-        }
       }, (error) => {
         console.error('Ошибка real-time listener для админских заказов:', error);
         if (adminOrdersList) {
