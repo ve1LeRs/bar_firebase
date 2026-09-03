@@ -1397,7 +1397,7 @@
         : 'Telegram Mini App';
     els.avatar.textContent = (name || 'A').charAt(0).toUpperCase();
     els.profileBonus.textContent = String(state.bonusBalance);
-    els.bonusChip.textContent = `◆ ${state.bonusBalance}`;
+    els.bonusChip.textContent = formatBonusChip(state.bonusBalance);
     els.profileBill.textContent =
       state.openBillTotal == null ? '—' : `${state.openBillTotal} ₽`;
     renderProfileBillItems();
@@ -2055,6 +2055,20 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  function formatBonusWord(n) {
+    const abs = Math.abs(Number(n) || 0) % 100;
+    const last = abs % 10;
+    if (abs > 10 && abs < 20) return 'бонусов';
+    if (last === 1) return 'бонус';
+    if (last >= 2 && last <= 4) return 'бонуса';
+    return 'бонусов';
+  }
+
+  function formatBonusChip(n) {
+    const value = Number(n) || 0;
+    return `${value} ${formatBonusWord(value)}`;
   }
 
   function escapeAttr(str) {

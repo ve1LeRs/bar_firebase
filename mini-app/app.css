@@ -142,7 +142,12 @@ button, input {
   padding: 8px 12px;
   color: var(--accent);
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  max-width: 46vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 .shell {
