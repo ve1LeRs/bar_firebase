@@ -94,6 +94,8 @@
   }
 
   function setLoader(on) {
+    if (!els.loader) return;
+    els.loader.classList.toggle('is-on', Boolean(on));
     els.loader.hidden = !on;
   }
 
@@ -133,12 +135,16 @@
       return false;
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     try {
       setLoader(true);
       const res = await fetch(`${state.apiBase}/api/mini-app/auth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initData })
+        body: JSON.stringify({ initData }),
+        signal: controller.signal
       });
       const data = await res.json();
       if (!res.ok || !data.success || !data.customToken) {
@@ -155,10 +161,12 @@
       return true;
     } catch (err) {
       console.error(err);
-      els.authStatus.textContent = `Не удалось войти: ${err.message}. Меню доступно для просмотра.`;
+      const msg = err.name === 'AbortError' ? 'Таймаут авторизации' : err.message;
+      els.authStatus.textContent = `Не удалось войти: ${msg}. Меню доступно для просмотра.`;
       showToast('Авторизация недоступна');
       return false;
     } finally {
+      clearTimeout(timeoutId);
       setLoader(false);
     }
   }
