@@ -230,6 +230,7 @@ app.get('/', (req, res) => {
       queueInfo: '/queue-info',
       ordersLast: '/orders-last',
       webhook: '/telegram-webhook',
+      miniAppWebhook: '/telegram-miniapp-webhook',
       miniApp: '/mini-app/',
       miniAppAuth: '/api/mini-app/auth',
       miniAppCreateOrder: '/api/mini-app/create-order'
@@ -719,7 +720,76 @@ app.post('/send-purchase-list', async (req, res) => {
   }
 });
 
-// Основной webhook для Telegram
+function getMiniAppPublicUrl() {
+  const base = (process.env.PUBLIC_BASE_URL || 'https://asafievbar.duckdns.org').replace(/\/$/, '');
+  return `${base}/mini-app/`;
+}
+
+const MINIAPP_BOT_DESCRIPTION =
+  'Официальный бот бара AsafievBar.\n\n' +
+  'Откройте Mini App кнопкой «Открыть» внизу экрана, чтобы:\n' +
+  '• смотреть коктейли\n' +
+  '• делать заказ\n' +
+  '• следить за статусом\n' +
+  '• пользоваться бонусами\n\n' +
+  'Добро пожаловать в AsafievBar.';
+
+const MINIAPP_START_TEXT =
+  '👋 Добро пожаловать в <b>AsafievBar</b>!\n\n' +
+  'Чтобы открыть меню и сделать заказ, нажмите синюю кнопку <b>«Открыть»</b> внизу экрана 👇\n\n' +
+  'Или нажмите кнопку ниже:';
+
+async function sendMiniAppBotMessage(chatId, text, replyMarkup) {
+  if (!TELEGRAM_MINIAPP_BOT_TOKEN || !chatId) {
+    return { ok: false, error: 'missing_token_or_chat' };
+  }
+  const payload = {
+    chat_id: chatId,
+    text,
+    parse_mode: 'HTML',
+    disable_web_page_preview: true
+  };
+  if (replyMarkup) payload.reply_markup = replyMarkup;
+  const response = await fetch(
+    `https://api.telegram.org/bot${TELEGRAM_MINIAPP_BOT_TOKEN}/sendMessage`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }
+  );
+  return response.json().catch(() => ({ ok: false }));
+}
+
+function buildMiniAppOpenKeyboard(miniAppUrl) {
+  return {
+    inline_keyboard: [[{
+      text: '🍸 Открыть меню',
+      web_app: { url: miniAppUrl }
+    }]]
+  };
+}
+
+async function handleMiniAppBotMessage(message) {
+  if (!message?.chat?.id) return;
+  const text = String(message.text || '').trim();
+  const isStart = text === '/start' || text.startsWith('/start@') || text.startsWith('/start ');
+  if (!isStart) return;
+
+  const miniAppUrl = getMiniAppPublicUrl();
+  const result = await sendMiniAppBotMessage(
+    message.chat.id,
+    MINIAPP_START_TEXT,
+    buildMiniAppOpenKeyboard(miniAppUrl)
+  );
+  if (!result.ok) {
+    console.error('❌ Mini App /start reply failed:', result);
+  } else {
+    console.log('✅ Mini App /start reply sent to', message.chat.id);
+  }
+}
+
+// Основной webhook для Telegram (alerts bot — callback buttons)
 app.post('/telegram-webhook', async (req, res) => {
   try {
     let body = req.body;
@@ -742,6 +812,31 @@ app.post('/telegram-webhook', async (req, res) => {
     res.status(200).json({ status: 'OK' });
   } catch (error) {
     console.error('❌ Ошибка обработки webhook:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Webhook для Mini App бота (@asafievbar_bot) — /start → подсказка открыть Mini App
+app.post('/telegram-miniapp-webhook', async (req, res) => {
+  try {
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (e) {
+        console.error('❌ Mini App webhook body не JSON:', body?.slice(0, 200));
+        return res.status(400).json({ error: 'Invalid JSON' });
+      }
+    }
+    body = body || {};
+    if (body.message) {
+      await handleMiniAppBotMessage(body.message);
+    } else {
+      console.log('📨 Mini App webhook (не message):', body.update_id ? 'update_id=' + body.update_id : Object.keys(body));
+    }
+    res.status(200).json({ status: 'OK' });
+  } catch (error) {
+    console.error('❌ Ошибка Mini App webhook:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1820,9 +1915,8 @@ app.post('/api/mini-app/setup-bot-profile', async (req, res) => {
       'https://asafievbar.duckdns.org/mini-app/?v=domain1';
     const name = req.body?.name || 'AsafievBar';
     const shortDescription = req.body?.shortDescription ||
-      'Коктейли AsafievBar — заказ из Telegram';
-    const description = req.body?.description ||
-      'Официальное Mini App бара AsafievBar. Смотрите меню, заказывайте коктейли и следите за статусом заказа в реальном времени.';
+      'Коктейли AsafievBar — нажмите «Открыть»';
+    const description = req.body?.description || MINIAPP_BOT_DESCRIPTION;
 
     const calls = [];
 
@@ -2606,11 +2700,62 @@ app.post('/api/mini-app/ensure-admin', async (req, res) => {
   }
 });
 
+async function ensureMiniAppBotWebhook() {
+  if (!TELEGRAM_MINIAPP_BOT_TOKEN) {
+    console.warn('⚠️ TELEGRAM_MINIAPP_BOT_TOKEN missing — skip mini app webhook');
+    return;
+  }
+  const publicBase = (process.env.PUBLIC_BASE_URL || 'https://asafievbar.duckdns.org').replace(/\/$/, '');
+  const webhookUrl = `${publicBase}/telegram-miniapp-webhook`;
+  try {
+    const setRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_MINIAPP_BOT_TOKEN}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: webhookUrl,
+        allowed_updates: ['message'],
+        drop_pending_updates: false
+      })
+    }).then((r) => r.json());
+    console.log('📲 Mini App webhook:', setRes.ok ? webhookUrl : setRes);
+
+    const descRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_MINIAPP_BOT_TOKEN}/setMyDescription`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: MINIAPP_BOT_DESCRIPTION })
+    }).then((r) => r.json());
+    if (!descRes.ok) console.warn('⚠️ setMyDescription:', descRes);
+
+    const shortRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_MINIAPP_BOT_TOKEN}/setMyShortDescription`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ short_description: 'Коктейли AsafievBar — нажмите «Открыть»' })
+    }).then((r) => r.json());
+    if (!shortRes.ok) console.warn('⚠️ setMyShortDescription:', shortRes);
+
+    const menuRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_MINIAPP_BOT_TOKEN}/setChatMenuButton`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        menu_button: {
+          type: 'web_app',
+          text: 'Открыть',
+          web_app: { url: getMiniAppPublicUrl() }
+        }
+      })
+    }).then((r) => r.json());
+    if (!menuRes.ok) console.warn('⚠️ setChatMenuButton:', menuRes);
+  } catch (e) {
+    console.warn('⚠️ ensureMiniAppBotWebhook failed:', e.message);
+  }
+}
+
 // Запуск сервера
 app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   console.log(`🚀 Webhook сервер запущен на порту ${PORT}`);
   const publicBase = process.env.PUBLIC_BASE_URL || process.env.RAILWAY_PUBLIC_DOMAIN || 'https://asafievbar.duckdns.org';
   console.log(`📱 Telegram webhook: ${publicBase}/telegram-webhook`);
+  console.log(`📲 Mini App webhook: ${publicBase}/telegram-miniapp-webhook`);
   console.log(`📲 Mini App: ${publicBase}/mini-app/`);
   console.log(`🔍 Health check: ${publicBase}/health`);
 
@@ -2618,6 +2763,8 @@ app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   ensureTelegramAdmin(process.env.TELEGRAM_CHAT_ID || '1743362083')
     .then((r) => console.log('👑 Owner admin ensured:', r.uid))
     .catch((e) => console.warn('Owner admin ensure failed:', e.message));
+
+  ensureMiniAppBotWebhook().catch((e) => console.warn('Mini App webhook ensure failed:', e.message));
 });
 
 module.exports = app;
