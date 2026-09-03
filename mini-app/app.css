@@ -486,6 +486,74 @@ button, input {
   border: 1px solid var(--line);
 }
 
+.bill-accordion {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.bill-accordion.is-open-bill {
+  border-color: rgba(212, 163, 92, 0.35);
+  background: rgba(212, 163, 92, 0.06);
+}
+
+.bill-accordion-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bill-accordion-title {
+  min-width: 0;
+  flex: 1;
+}
+
+.bill-accordion-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.bill-chevron {
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.18s ease;
+  margin-left: 2px;
+}
+
+.bill-accordion.is-open .bill-chevron {
+  transform: rotate(-135deg);
+  margin-top: 4px;
+}
+
+.bill-accordion-body {
+  padding: 0 10px 10px;
+  border-top: 1px solid var(--line);
+}
+
+.bill-accordion-body[hidden] {
+  display: none !important;
+}
+
+.order-card-nested {
+  margin-top: 8px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
 .order-top {
   display: flex;
   justify-content: space-between;

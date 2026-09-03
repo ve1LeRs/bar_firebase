@@ -63,6 +63,7 @@
     adminOrdersTimer: null,
     adminTab: 'cocktails',
     knownOrderStatuses: new Map(),
+    expandedBills: new Set(),
     ratingOrder: null,
     ratingValue: 0
   };
@@ -2357,34 +2358,121 @@
     }
   }
 
-  function renderOrders(orders) {
-    if (!orders?.length) {
+  function renderOrders(orders, bills) {
+    const billList = Array.isArray(bills) ? bills : [];
+    if (!billList.length && !orders?.length) {
       els.ordersList.innerHTML = '<div class="empty-state">Пока нет заказов</div>';
       return;
     }
 
+    if (!state.expandedBills) state.expandedBills = new Set();
+    // Default: open bills expanded, newest paid expanded once
+    billList.forEach((bill, idx) => {
+      if (state.expandedBills.has(bill.id) || state.expandedBills.has(`closed:${bill.id}`)) return;
+      if (bill.status === 'open' || idx === 0) state.expandedBills.add(bill.id);
+    });
+
     els.ordersList.innerHTML = '';
-    orders.forEach((order) => {
-      const status = order.status || 'pending';
+    if (!billList.length) {
+      // fallback flat list
+      orders.forEach((order) => {
+        els.ordersList.appendChild(buildOrderItemCard(order));
+      });
+      return;
+    }
+
+    billList.forEach((bill) => {
+      const expanded = state.expandedBills.has(bill.id);
+      const isOpen = bill.status === 'open';
+      const isOrphan = bill.id === 'orphan';
+      const whenMs = isOpen ? bill.createdAtMs : (bill.paidAtMs || bill.createdAtMs);
+      const when = whenMs ? new Date(whenMs).toLocaleString('ru-RU') : '';
+      const pay = PAY_METHOD_RU[bill.paymentMethod] || bill.paymentMethod || '';
+      const title = isOrphan
+        ? 'Без счёта'
+        : isOpen
+          ? 'Открытый счёт'
+          : 'Закрытый счёт';
+      const statusLabel = isOrphan
+        ? 'активные'
+        : isOpen
+          ? 'открыт'
+          : 'оплачен';
+      const itemsCount = (bill.items || []).length;
+      const activeCount = (bill.items || []).filter((i) =>
+        ['pending', 'confirmed', 'preparing', 'ready'].includes(i.status)
+      ).length;
+
       const card = document.createElement('article');
-      card.className = 'order-card';
+      card.className = `bill-accordion${expanded ? ' is-open' : ''}${isOpen ? ' is-open-bill' : ''}`;
       card.innerHTML = `
-        <div class="order-top">
-          <div>
-            <p class="order-name">${escapeHtml(order.name || 'Заказ')}</p>
-            <p class="order-time">${escapeHtml(order.displayTime || '')}</p>
+        <button type="button" class="bill-accordion-head" aria-expanded="${expanded ? 'true' : 'false'}">
+          <div class="bill-accordion-title">
+            <p class="order-name">${escapeHtml(title)}</p>
+            <p class="order-time">
+              ${escapeHtml(when)}
+              · ${itemsCount} поз.
+              ${activeCount ? ` · в работе ${activeCount}` : ''}
+              ${pay ? ` · ${escapeHtml(pay)}` : ''}
+              ${bill.promoCode ? ` · ${escapeHtml(bill.promoCode)}` : ''}
+            </p>
           </div>
-          <span class="status ${escapeAttr(status)}">${STATUS_LABELS[status] || status}</span>
-        </div>
-        ${
-          order.queuePosition && ['pending', 'confirmed', 'preparing', 'ready'].includes(status)
-            ? `<div class="queue">Позиция в очереди: #${order.queuePosition}</div>`
-            : ''
-        }
-        <div class="queue">${Number(order.price) || 0} ₽</div>
+          <div class="bill-accordion-meta">
+            <span class="status ${isOpen ? 'preparing' : 'completed'}">${statusLabel}</span>
+            <strong class="price">${Number(bill.totalAmount) || 0} ₽</strong>
+            <span class="bill-chevron" aria-hidden="true"></span>
+          </div>
+        </button>
+        <div class="bill-accordion-body" ${expanded ? '' : 'hidden'}></div>
       `;
+
+      const body = card.querySelector('.bill-accordion-body');
+      (bill.items || []).forEach((item) => {
+        body.appendChild(buildOrderItemCard({
+          id: item.orderId,
+          name: item.cocktailName,
+          status: item.status,
+          price: item.price,
+          displayTime: item.displayTime,
+          queuePosition: item.queuePosition,
+          rated: item.rated
+        }, { compact: true }));
+      });
+
+      card.querySelector('.bill-accordion-head')?.addEventListener('click', () => {
+        const willOpen = !state.expandedBills.has(bill.id);
+        if (willOpen) state.expandedBills.add(bill.id);
+        else state.expandedBills.delete(bill.id);
+        card.classList.toggle('is-open', willOpen);
+        body.hidden = !willOpen;
+        card.querySelector('.bill-accordion-head')?.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        haptic('light');
+      });
+
       els.ordersList.appendChild(card);
     });
+  }
+
+  function buildOrderItemCard(order, { compact = false } = {}) {
+    const status = order.status || 'pending';
+    const card = document.createElement('article');
+    card.className = `order-card${compact ? ' order-card-nested' : ''}`;
+    card.innerHTML = `
+      <div class="order-top">
+        <div>
+          <p class="order-name">${escapeHtml(order.name || 'Заказ')}</p>
+          <p class="order-time">${escapeHtml(order.displayTime || '')}</p>
+        </div>
+        <span class="status ${escapeAttr(status)}">${STATUS_LABELS[status] || status}</span>
+      </div>
+      ${
+        order.queuePosition && ['pending', 'confirmed', 'preparing', 'ready'].includes(status)
+          ? `<div class="queue">Позиция в очереди: #${order.queuePosition}</div>`
+          : ''
+      }
+      <div class="queue">${Number(order.price) || 0} ₽</div>
+    `;
+    return card;
   }
 
   async function refreshOrders() {
@@ -2399,7 +2487,7 @@
       if (data.success) {
         const orders = data.orders || [];
         noteOrderStatusChanges(orders);
-        renderOrders(orders);
+        renderOrders(orders, data.bills || []);
       }
     } catch (err) {
       console.warn('orders refresh failed', err);

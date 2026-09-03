@@ -2048,17 +2048,96 @@ app.post('/api/mini-app/my-orders', async (req, res) => {
       console.warn('my-orders reconcile:', reconcileErr?.message || reconcileErr);
     }
 
-    orders = orders.slice(0, 20).map((o) => ({
+    orders = orders.slice(0, 30).map((o) => ({
       id: o.id,
       name: o.name,
       status: o.status,
       price: o.price,
       displayTime: o.displayTime,
       queuePosition: o.queuePosition,
-      rated: Boolean(o.rated)
+      rated: Boolean(o.rated),
+      createdAtMs: o.createdAt?.toMillis?.() || 0
     }));
 
-    res.json({ success: true, orders });
+    const orderById = new Map(orders.map((o) => [o.id, o]));
+    let bills = [];
+    try {
+      const allBills = await db.collection('bills')
+        .where('userId', '==', session.userId)
+        .limit(40)
+        .get();
+      bills = allBills.docs.map((doc) => {
+        const d = doc.data() || {};
+        const rawItems = Array.isArray(d.items) ? d.items : [];
+        const items = rawItems.map((item) => {
+          const oid = String(item.orderId || '').trim();
+          const live = oid ? orderById.get(oid) : null;
+          const status = live?.status || item.status || 'pending';
+          return {
+            orderId: oid,
+            cocktailName: item.cocktailName || item.name || live?.name || 'Коктейль',
+            price: Number(item.price) || Number(live?.price) || 0,
+            status,
+            displayTime: live?.displayTime || '',
+            queuePosition: live?.queuePosition || 0,
+            rated: Boolean(live?.rated)
+          };
+        });
+        const chargeable = items
+          .filter((i) => i.status !== 'cancelled')
+          .reduce((s, i) => s + (Number(i.price) || 0), 0);
+        return {
+          id: doc.id,
+          status: d.status || 'open',
+          totalAmount: d.status === 'open'
+            ? (Number.isFinite(Number(d.totalAmount)) ? Number(d.totalAmount) : chargeable)
+            : (Number(d.totalAmount) || chargeable),
+          paymentMethod: d.paymentMethod || null,
+          promoCode: d.promoCode || null,
+          discount: d.discount || 0,
+          createdAtMs: d.createdAt?.toMillis?.() || 0,
+          paidAtMs: d.paidAt?.toMillis?.() || d.updatedAt?.toMillis?.() || 0,
+          items
+        };
+      });
+      bills.sort((a, b) => {
+        if (a.status === 'open' && b.status !== 'open') return -1;
+        if (b.status === 'open' && a.status !== 'open') return 1;
+        return (b.paidAtMs || b.createdAtMs) - (a.paidAtMs || a.createdAtMs);
+      });
+    } catch (billErr) {
+      console.warn('my-orders bills:', billErr?.message || billErr);
+    }
+
+    // Orders that somehow are not attached to a bill
+    const linked = new Set();
+    bills.forEach((b) => b.items.forEach((i) => { if (i.orderId) linked.add(i.orderId); }));
+    const orphanOrders = orders.filter((o) => !linked.has(o.id));
+    if (orphanOrders.length) {
+      bills.push({
+        id: 'orphan',
+        status: 'open',
+        totalAmount: orphanOrders
+          .filter((o) => o.status !== 'cancelled')
+          .reduce((s, o) => s + (Number(o.price) || 0), 0),
+        paymentMethod: null,
+        promoCode: null,
+        discount: 0,
+        createdAtMs: Date.now(),
+        paidAtMs: 0,
+        items: orphanOrders.map((o) => ({
+          orderId: o.id,
+          cocktailName: o.name,
+          price: o.price,
+          status: o.status,
+          displayTime: o.displayTime,
+          queuePosition: o.queuePosition,
+          rated: o.rated
+        }))
+      });
+    }
+
+    res.json({ success: true, orders, bills });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
