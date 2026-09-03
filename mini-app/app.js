@@ -10,7 +10,7 @@
     appId: '1:493608422842:web:3b4b6bd8a4cb681c436183'
   };
 
-  const DEFAULT_API = 'https://bar-firebase.onrender.com';
+  const DEFAULT_API = 'https://myvpnrus.duckdns.org:10443';
   const MENU_CACHE_KEY = 'asafiev_mini_menu_v1';
   const MENU_CACHE_TTL_MS = 5 * 60 * 1000;
   const STATUS_LABELS = {
