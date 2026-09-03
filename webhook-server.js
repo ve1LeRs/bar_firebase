@@ -1525,28 +1525,29 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Не указан коктейль или цена' });
     }
 
-    const stopSnap = await db.collection('stoplist')
-      .where('cocktailName', '==', name)
-      .limit(1)
-      .get();
-    if (!stopSnap.empty) {
-      return res.status(409).json({ success: false, error: 'Коктейль в стоп-листе' });
-    }
-
     const bonusAmount = Math.max(0, Number(bonusUsed) || 0);
     const finalPrice = Math.max(0, Number(price) || 0);
     const now = new Date();
     const displayName = user || session.displayName || 'Гость Telegram';
 
+    // Parallel: stoplist check + lightweight queue estimate (avoid slow IN queries)
+    const [stopSnap, recentSnap] = await Promise.all([
+      db.collection('stoplist').where('cocktailName', '==', name).limit(1).get(),
+      db.collection('orders').orderBy('createdAt', 'desc').limit(30).get().catch(() => null)
+    ]);
+    if (!stopSnap.empty) {
+      return res.status(409).json({ success: false, error: 'Коктейль в стоп-листе' });
+    }
+
     let nextQueue = Number(queuePosition) || 0;
     if (!nextQueue) {
-      try {
-        const active = await db.collection('orders')
-          .where('status', 'in', ['pending', 'confirmed', 'preparing', 'ready'])
-          .select()
-          .get();
-        nextQueue = active.size + 1;
-      } catch (_) {
+      if (recentSnap) {
+        const active = recentSnap.docs.filter((d) => {
+          const st = d.data().status;
+          return ['pending', 'confirmed', 'preparing', 'ready', 'accepted'].includes(st);
+        }).length;
+        nextQueue = active + 1;
+      } else {
         nextQueue = 1;
       }
     }
@@ -1825,10 +1826,15 @@ app.post('/api/mini-app/admin/orders', async (req, res) => {
       return res.status(403).json({ success: false, error: 'Нет прав админа', reason: session.reason });
     }
 
-    let orders = [];
-    // Avoid composite/IN index issues: read recent docs and filter in memory
-    const snap = await db.collection('orders').limit(80).get();
-    orders = snap.docs
+    const activeStatuses = new Set(['pending', 'confirmed', 'preparing', 'ready', 'accepted']);
+    let snap;
+    try {
+      snap = await db.collection('orders').orderBy('createdAt', 'desc').limit(150).get();
+    } catch (_) {
+      snap = await db.collection('orders').limit(150).get();
+    }
+
+    let orders = snap.docs
       .map((doc) => {
         const d = doc.data();
         return {
@@ -1842,7 +1848,7 @@ app.post('/api/mini-app/admin/orders', async (req, res) => {
           createdAtMs: d.createdAt?.toMillis?.() || 0
         };
       })
-      .filter((o) => ['pending', 'confirmed', 'preparing', 'ready'].includes(o.status));
+      .filter((o) => activeStatuses.has(o.status));
     orders.sort((a, b) => (a.queuePosition || 99) - (b.queuePosition || 99) || b.createdAtMs - a.createdAtMs);
 
     res.json({ success: true, orders });
@@ -2096,7 +2102,7 @@ app.post('/api/mini-app/admin/promos', async (req, res) => {
   }
 });
 
-// Admin: bonus settings
+// Admin: bonus settings + users
 app.post('/api/mini-app/admin/bonuses', async (req, res) => {
   try {
     const session = await resolveMiniAppAdmin(req);
@@ -2123,7 +2129,52 @@ app.post('/api/mini-app/admin/bonuses', async (req, res) => {
     const settings = doc.exists ? doc.data() : {
       percentage: 5, minOrder: 300, maxUsage: 50, expireDays: 180, active: true
     };
-    res.json({ success: true, settings });
+
+    // Users with bonus balances (same source as website admin)
+    let users = [];
+    let stats = { usersCount: 0, totalPoints: 0, issuedToday: 0 };
+    try {
+      const accountsSnap = await db.collection('bonusAccounts').limit(80).get();
+      const accountRows = accountsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      accountRows.sort((a, b) => (Number(b.balance) || 0) - (Number(a.balance) || 0));
+
+      const userIds = accountRows.slice(0, 40).map((a) => a.id);
+      const userMap = new Map();
+      await Promise.all(userIds.map(async (uid) => {
+        try {
+          const u = await db.collection('users').doc(uid).get();
+          if (u.exists) userMap.set(uid, u.data());
+        } catch (_) { /* ignore */ }
+      }));
+
+      users = accountRows.slice(0, 40).map((a) => {
+        const u = userMap.get(a.id) || {};
+        return {
+          id: a.id,
+          name: u.displayName || u.firstName || u.name || a.id,
+          phone: u.phoneNumber || u.phone || '',
+          balance: Number(a.balance) || 0,
+          totalEarned: Number(a.totalEarned) || 0,
+          totalSpent: Number(a.totalSpent) || 0
+        };
+      });
+
+      stats.usersCount = accountRows.filter((a) => (Number(a.balance) || 0) > 0).length;
+      stats.totalPoints = accountRows.reduce((s, a) => s + (Number(a.balance) || 0), 0);
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const txSnap = await db.collection('bonusTransactions').limit(200).get();
+      txSnap.forEach((doc) => {
+        const d = doc.data();
+        if (d.type !== 'earn' || !d.createdAt?.toDate) return;
+        if (d.createdAt.toDate() >= today) stats.issuedToday += Number(d.amount) || 0;
+      });
+    } catch (err) {
+      console.warn('bonus users load:', err.message);
+    }
+
+    res.json({ success: true, settings, users, stats });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -2136,6 +2187,44 @@ app.post('/api/mini-app/admin/purchases', async (req, res) => {
     if (!session.ok) return res.status(403).json({ success: false, error: 'Нет прав админа', reason: session.reason });
 
     const action = req.body?.action || 'list';
+
+    if (action === 'upsert') {
+      const ing = req.body?.ingredient || {};
+      const name = String(ing.name || '').trim();
+      const unit = String(ing.unit || 'шт').trim() || 'шт';
+      const stock = Number(ing.stock);
+      const minStock = Number(ing.minStock);
+      if (!name) return res.status(400).json({ success: false, error: 'Название обязательно' });
+      if (!Number.isFinite(stock) || stock < 0 || !Number.isFinite(minStock) || minStock < 0) {
+        return res.status(400).json({ success: false, error: 'Остатки некорректны' });
+      }
+      const payload = {
+        name,
+        unit,
+        stock,
+        minStock,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+      if (ing.id) {
+        await db.collection('ingredients').doc(String(ing.id)).set(payload, { merge: true });
+        return res.json({ success: true, id: String(ing.id) });
+      }
+      const existing = await db.collection('ingredients').where('name', '==', name).limit(1).get();
+      if (!existing.empty) {
+        return res.status(400).json({ success: false, error: 'Ингредиент с таким названием уже есть' });
+      }
+      payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
+      const ref = await db.collection('ingredients').add(payload);
+      return res.json({ success: true, id: ref.id });
+    }
+
+    if (action === 'delete') {
+      const id = String(req.body?.id || '').trim();
+      if (!id) return res.status(400).json({ success: false, error: 'id required' });
+      await db.collection('ingredients').doc(id).delete();
+      return res.json({ success: true });
+    }
+
     const snap = await db.collection('ingredients').get();
     const items = snap.docs.map((doc) => {
       const d = doc.data();
@@ -2147,7 +2236,8 @@ app.post('/api/mini-app/admin/purchases', async (req, res) => {
         unit: d.unit || '',
         stock,
         minStock,
-        low: stock <= minStock
+        low: stock <= minStock,
+        out: stock <= 0
       };
     }).sort((a, b) => Number(b.low) - Number(a.low) || String(a.name).localeCompare(String(b.name), 'ru'));
 
@@ -2164,7 +2254,12 @@ app.post('/api/mini-app/admin/purchases', async (req, res) => {
       return res.json({ success: true, sent: low.length });
     }
 
-    res.json({ success: true, items, lowCount: items.filter((i) => i.low).length });
+    const stats = {
+      total: items.length,
+      low: items.filter((i) => i.low && !i.out).length,
+      out: items.filter((i) => i.out).length
+    };
+    res.json({ success: true, items, lowCount: items.filter((i) => i.low).length, stats });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
