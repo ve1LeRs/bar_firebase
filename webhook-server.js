@@ -1677,7 +1677,7 @@ app.post('/api/mini-app/setup-menu-button', async (req, res) => {
       body: JSON.stringify({
         menu_button: {
           type: 'web_app',
-          text: 'Меню',
+          text: 'Открыть',
           web_app: { url: miniAppUrl }
         }
       })
@@ -1694,7 +1694,8 @@ app.post('/api/mini-app/setup-menu-button', async (req, res) => {
     res.json({
       success: true,
       url: miniAppUrl,
-      message: 'Menu Button настроен'
+      message: 'Menu Button настроен',
+      mainMiniAppHint: 'Для кнопки ОТКРЫТЬ в списке чатов: @BotFather → Configure Mini App → Enable Mini App'
     });
   } catch (error) {
     console.error('❌ Mini App setup-menu-button error:', error);
@@ -1743,7 +1744,7 @@ app.post('/api/mini-app/setup-bot-profile', async (req, res) => {
       body: JSON.stringify({
         menu_button: {
           type: 'web_app',
-          text: 'Меню',
+          text: 'Открыть',
           web_app: { url: miniAppUrl }
         }
       })
