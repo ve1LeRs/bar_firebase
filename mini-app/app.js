@@ -36,7 +36,11 @@
     bonusToUse: 0,
     ordersUnsub: null,
     maxBonusUsage: 50,
-    authReady: false
+    authReady: false,
+    sessionOk: false,
+    uid: null,
+    authError: null,
+    ordersPollTimer: null
   };
 
   // Wake Render ASAP (cold start) — do not await
@@ -155,8 +159,9 @@
     const initData = tg?.initData || '';
 
     if (!initData) {
+      state.authError = 'no_init_data';
       els.authStatus.textContent =
-        'Режим просмотра: откройте Mini App из бота, чтобы заказывать и видеть свои заказы.';
+        'Нет данных Telegram. Откройте Mini App кнопкой меню бота (не через браузер).';
       updateProfileUI();
       return false;
     }
@@ -166,7 +171,6 @@
     const timeoutId = setTimeout(() => controller.abort(), 12000);
 
     try {
-      // Soft status only — no fullscreen loader blocking the menu
       const res = await fetch(`${state.apiBase}/api/mini-app/auth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -174,29 +178,54 @@
         signal: controller.signal
       });
       const data = await res.json();
-      if (!res.ok || !data.success || !data.customToken) {
-        throw new Error(data.error || 'Ошибка авторизации');
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || `Ошибка авторизации (${data.reason || res.status})`);
       }
 
-      initFirebase();
-      const cred = await auth.signInWithCustomToken(data.customToken);
-      state.firebaseUser = cred.user;
       state.user = data.user || state.user;
-      state.authReady = true;
+      state.uid = data.user?.uid || null;
+      state.sessionOk = Boolean(data.session || data.success);
+      state.authReady = state.sessionOk;
+      state.authError = null;
+
+      if (typeof data.bonusBalance === 'number') {
+        state.bonusBalance = data.bonusBalance;
+      }
+      if (typeof data.openBillTotal === 'number') {
+        state.openBillTotal = data.openBillTotal;
+      }
+
+      // Optional Firebase client auth (may fail if domain not allowlisted)
+      if (data.customToken) {
+        try {
+          initFirebase();
+          const cred = await auth.signInWithCustomToken(data.customToken);
+          state.firebaseUser = cred.user;
+        } catch (firebaseErr) {
+          console.warn('Firebase custom token skipped:', firebaseErr.message);
+          state.firebaseUser = null;
+        }
+      }
+
       els.authStatus.textContent = 'Вход через Telegram выполнен. Можно заказывать.';
       updateProfileUI();
-      // Profile extras in background
-      Promise.all([loadBonuses(), loadOpenBill()]).catch(() => {});
-      subscribeOrders();
+      startOrdersPolling();
       return true;
     } catch (err) {
       console.error(err);
-      const msg = err.name === 'AbortError' ? 'Сервер просыпается, попробуйте ещё раз' : err.message;
-      els.authStatus.textContent = `Не удалось войти: ${msg}. Меню доступно для просмотра.`;
+      state.sessionOk = false;
+      state.authReady = false;
+      state.authError = err.name === 'AbortError' ? 'timeout' : 'auth_failed';
+      const msg = err.name === 'AbortError' ? 'Сервер просыпается, откройте ещё раз' : err.message;
+      els.authStatus.textContent = `Не удалось войти: ${msg}`;
       return false;
     } finally {
       clearTimeout(timeoutId);
     }
+  }
+
+  function canOrder() {
+    return Boolean(state.sessionOk && tg?.initData);
   }
 
   function updateProfileUI() {
@@ -362,9 +391,20 @@
       showToast('Коктейль временно недоступен');
       return;
     }
-    if (!state.firebaseUser) {
-      showToast('Откройте Mini App из бота, чтобы заказать');
-      tg?.showAlert?.('Для заказа откройте приложение через кнопку бота AsafievBar.');
+    if (!canOrder()) {
+      if (state.authError === 'timeout' || state.authError === 'auth_failed') {
+        showToast('Сессия не готова — подождите или откройте Mini App снова');
+        tg?.showAlert?.('Авторизация ещё не завершилась. Закройте Mini App и откройте снова через кнопку бота.');
+        authenticate();
+      } else if (!tg?.initData) {
+        showToast('Нет Telegram-сессии');
+        tg?.showAlert?.('Откройте Mini App кнопкой меню внутри бота AsafievBar.');
+      } else {
+        showToast('Подключаем сессию…');
+        authenticate().then((ok) => {
+          if (ok) openOrderSheet(cocktail);
+        });
+      }
       return;
     }
 
@@ -490,7 +530,7 @@
   }
 
   async function placeOrder() {
-    if (!state.selected || !state.firebaseUser) return;
+    if (!state.selected || !canOrder()) return;
 
     const cocktail = state.selected;
     const price = Number(cocktail.price) || 0;
@@ -501,14 +541,21 @@
     setLoader(true);
 
     try {
-      const idToken = await state.firebaseUser.getIdToken();
       const queuePosition = await getNextQueuePosition();
       const displayName =
         [state.user?.first_name, state.user?.last_name].filter(Boolean).join(' ') ||
-        state.firebaseUser.displayName ||
+        state.firebaseUser?.displayName ||
         'Гость Telegram';
 
+      const headers = { 'Content-Type': 'application/json' };
+      if (state.firebaseUser) {
+        try {
+          headers.Authorization = `Bearer ${await state.firebaseUser.getIdToken()}`;
+        } catch (_) { /* initData is enough */ }
+      }
+
       const payload = {
+        initData: tg.initData,
         cocktailId: cocktail.id,
         name: cocktail.name,
         price: finalPrice,
@@ -522,10 +569,7 @@
 
       const res = await fetch(`${state.apiBase}/api/mini-app/create-order`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`
-        },
+        headers,
         body: JSON.stringify(payload)
       });
 
@@ -541,9 +585,10 @@
 
       haptic('medium');
       closeOrderSheet();
-      showToast(`Заказ принят · очередь #${queuePosition}`);
+      showToast(`Заказ принят · очередь #${data.queuePosition || queuePosition}`);
       switchView('orders');
-      await loadOpenBill();
+      refreshOrders();
+      refreshProfile();
     } catch (err) {
       console.error(err);
       showToast(err.message || 'Ошибка заказа');
@@ -552,6 +597,76 @@
       els.confirmOrderBtn.disabled = false;
       setLoader(false);
     }
+  }
+
+  function renderOrders(orders) {
+    if (!orders?.length) {
+      els.ordersList.innerHTML = '<div class="empty-state">Пока нет заказов</div>';
+      return;
+    }
+
+    els.ordersList.innerHTML = '';
+    orders.forEach((order) => {
+      const status = order.status || 'pending';
+      const card = document.createElement('article');
+      card.className = 'order-card';
+      card.innerHTML = `
+        <div class="order-top">
+          <div>
+            <p class="order-name">${escapeHtml(order.name || 'Заказ')}</p>
+            <p class="order-time">${escapeHtml(order.displayTime || '')}</p>
+          </div>
+          <span class="status ${escapeAttr(status)}">${STATUS_LABELS[status] || status}</span>
+        </div>
+        ${
+          order.queuePosition && ['pending', 'confirmed', 'preparing', 'ready'].includes(status)
+            ? `<div class="queue">Позиция в очереди: #${order.queuePosition}</div>`
+            : ''
+        }
+        <div class="queue">${Number(order.price) || 0} ₽</div>
+      `;
+      els.ordersList.appendChild(card);
+    });
+  }
+
+  async function refreshOrders() {
+    if (!canOrder()) return;
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/my-orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData: tg.initData })
+      });
+      const data = await res.json();
+      if (data.success) renderOrders(data.orders || []);
+    } catch (err) {
+      console.warn('orders refresh failed', err);
+    }
+  }
+
+  async function refreshProfile() {
+    if (!canOrder()) return;
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/me`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData: tg.initData })
+      });
+      const data = await res.json();
+      if (!data.success) return;
+      state.bonusBalance = Number(data.bonusBalance) || 0;
+      state.openBillTotal = Number(data.openBillTotal) || 0;
+      if (data.maxBonusUsage) state.maxBonusUsage = Number(data.maxBonusUsage) || 50;
+      updateProfileUI();
+    } catch (err) {
+      console.warn('profile refresh failed', err);
+    }
+  }
+
+  function startOrdersPolling() {
+    refreshOrders();
+    if (state.ordersPollTimer) clearInterval(state.ordersPollTimer);
+    state.ordersPollTimer = setInterval(refreshOrders, 5000);
   }
 
   function subscribeOrders() {

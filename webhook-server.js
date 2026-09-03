@@ -1068,16 +1068,32 @@ function getStatusText(status) {
 // ============================================
 
 function validateTelegramWebAppData(initData, botToken) {
-  if (!initData || !botToken) return null;
+  if (!initData || !botToken) {
+    return { ok: false, reason: 'missing_init_data_or_token' };
+  }
 
-  const params = new URLSearchParams(initData);
-  const hash = params.get('hash');
-  if (!hash) return null;
+  // Parse raw pairs to avoid decoding mismatches
+  const pairs = String(initData).split('&').filter(Boolean).map((part) => {
+    const idx = part.indexOf('=');
+    if (idx === -1) return [part, ''];
+    return [part.slice(0, idx), part.slice(idx + 1)];
+  });
 
-  params.delete('hash');
-  const dataCheckString = [...params.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, value]) => `${key}=${value}`)
+  const map = new Map(pairs);
+  const hash = map.get('hash');
+  if (!hash) return { ok: false, reason: 'missing_hash' };
+
+  const dataCheckString = pairs
+    .filter(([key]) => key !== 'hash')
+    .map(([key, value]) => {
+      // Telegram signs URL-decoded values
+      try {
+        return `${key}=${decodeURIComponent(value.replace(/\+/g, ' '))}`;
+      } catch (_) {
+        return `${key}=${value}`;
+      }
+    })
+    .sort()
     .join('\n');
 
   const secretKey = crypto
@@ -1090,21 +1106,84 @@ function validateTelegramWebAppData(initData, botToken) {
     .update(dataCheckString)
     .digest('hex');
 
-  if (calculatedHash !== hash) return null;
+  if (calculatedHash !== hash) {
+    // Fallback: URLSearchParams style (some clients)
+    const params = new URLSearchParams(initData);
+    const hash2 = params.get('hash');
+    params.delete('hash');
+    const dataCheckString2 = [...params.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}=${value}`)
+      .join('\n');
+    const calculatedHash2 = crypto
+      .createHmac('sha256', secretKey)
+      .update(dataCheckString2)
+      .digest('hex');
+    if (calculatedHash2 !== hash2) {
+      return { ok: false, reason: 'bad_hash' };
+    }
+  }
 
+  const params = new URLSearchParams(initData);
   const authDate = Number(params.get('auth_date') || 0);
   const ageSec = Math.floor(Date.now() / 1000) - authDate;
-  if (!authDate || ageSec > 86400) return null;
+  if (!authDate || ageSec > 86400) {
+    return { ok: false, reason: 'expired', ageSec };
+  }
 
   let user = null;
   try {
     user = JSON.parse(params.get('user') || 'null');
   } catch (_) {
-    return null;
+    return { ok: false, reason: 'bad_user_json' };
   }
 
-  if (!user?.id) return null;
-  return { user, authDate, queryId: params.get('query_id') || null };
+  if (!user?.id) return { ok: false, reason: 'missing_user' };
+  return { ok: true, user, authDate, queryId: params.get('query_id') || null };
+}
+
+function getTelegramUserFromRequest(req) {
+  const initData =
+    req.body?.initData ||
+    req.headers['x-telegram-init-data'] ||
+    '';
+  const parsed = validateTelegramWebAppData(initData, TELEGRAM_BOT_TOKEN);
+  if (!parsed.ok) return { ok: false, reason: parsed.reason };
+  const uid = `tg_${parsed.user.id}`;
+  return { ok: true, uid, user: parsed.user, initData };
+}
+
+async function resolveMiniAppUser(req) {
+  // Prefer Telegram initData (works without Firebase authorized domains)
+  const tg = getTelegramUserFromRequest(req);
+  if (tg.ok) {
+    return {
+      ok: true,
+      userId: tg.uid,
+      telegramId: tg.user.id,
+      displayName: [tg.user.first_name, tg.user.last_name].filter(Boolean).join(' ') || 'Гость Telegram',
+      via: 'initData'
+    };
+  }
+
+  const authHeader = req.headers.authorization || '';
+  const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (idToken) {
+    try {
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      return {
+        ok: true,
+        userId: decoded.uid,
+        telegramId: decoded.telegramId || null,
+        displayName: decoded.name || 'Гость Telegram',
+        via: 'firebase'
+      };
+    } catch (_) {
+      return { ok: false, reason: 'bad_firebase_token' };
+    }
+  }
+
+  return { ok: false, reason: tg.reason || 'unauthorized' };
 }
 
 async function createOrUpdateBillAdmin(userId, userName, orderData, orderId) {
@@ -1234,16 +1313,18 @@ async function deductIngredientsAdmin(cocktailName) {
   }
 }
 
-// Auth: validate Telegram initData → Firebase custom token
+// Auth: validate Telegram initData → session (+ optional Firebase custom token)
 app.post('/api/mini-app/auth', async (req, res) => {
   try {
     const { initData } = req.body || {};
     const parsed = validateTelegramWebAppData(initData, TELEGRAM_BOT_TOKEN);
 
-    if (!parsed) {
+    if (!parsed.ok) {
+      console.warn(' Mini App auth rejected:', parsed.reason);
       return res.status(401).json({
         success: false,
-        error: 'Недействительные данные Telegram WebApp'
+        error: 'Недействительные данные Telegram WebApp',
+        reason: parsed.reason
       });
     }
 
@@ -1252,19 +1333,16 @@ app.post('/api/mini-app/auth', async (req, res) => {
     const displayName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Гость Telegram';
 
     try {
-      await admin.auth().updateUser(uid, {
-        displayName,
-        photoURL: tgUser.photo_url || undefined
-      });
+      const updatePayload = { displayName };
+      if (tgUser.photo_url) updatePayload.photoURL = tgUser.photo_url;
+      await admin.auth().updateUser(uid, updatePayload);
     } catch (error) {
       if (error.code === 'auth/user-not-found') {
-        await admin.auth().createUser({
-          uid,
-          displayName,
-          photoURL: tgUser.photo_url || undefined
-        });
+        const createPayload = { uid, displayName };
+        if (tgUser.photo_url) createPayload.photoURL = tgUser.photo_url;
+        await admin.auth().createUser(createPayload);
       } else {
-        throw error;
+        console.warn('Firebase user upsert skipped:', error.message);
       }
     }
 
@@ -1281,14 +1359,38 @@ app.post('/api/mini-app/auth', async (req, res) => {
       ...(existingUser.exists ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
     }, { merge: true });
 
-    const customToken = await admin.auth().createCustomToken(uid, {
-      telegramId: tgUser.id,
-      provider: 'telegram-mini-app'
-    });
+    let customToken = null;
+    try {
+      customToken = await admin.auth().createCustomToken(uid, {
+        telegramId: tgUser.id,
+        provider: 'telegram-mini-app'
+      });
+    } catch (tokenError) {
+      console.warn('Custom token unavailable:', tokenError.message);
+    }
+
+    const bonusDoc = await db.collection('bonusAccounts').doc(uid).get();
+    const bonusBalance = bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0;
+
+    let openBillTotal = 0;
+    try {
+      const billsSnap = await db.collection('bills')
+        .where('userId', '==', uid)
+        .where('status', '==', 'open')
+        .limit(1)
+        .get();
+      if (!billsSnap.empty) {
+        openBillTotal = Number(billsSnap.docs[0].data().totalAmount || 0);
+      }
+    } catch (_) { /* index optional */ }
 
     res.json({
       success: true,
+      // Session works even if client cannot use Firebase Auth domains
+      session: true,
       customToken,
+      bonusBalance,
+      openBillTotal,
       user: {
         id: tgUser.id,
         first_name: tgUser.first_name,
@@ -1307,17 +1409,87 @@ app.post('/api/mini-app/auth', async (req, res) => {
   }
 });
 
-// Create order from Mini App (auth via Firebase ID token)
-app.post('/api/mini-app/create-order', async (req, res) => {
+// Profile snapshot via initData
+app.post('/api/mini-app/me', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization || '';
-    const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    if (!idToken) {
-      return res.status(401).json({ success: false, error: 'Требуется авторизация' });
+    const session = await resolveMiniAppUser(req);
+    if (!session.ok) {
+      return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
     }
 
-    const decoded = await admin.auth().verifyIdToken(idToken);
-    const userId = decoded.uid;
+    const [bonusDoc, settingsDoc, billsSnap] = await Promise.all([
+      db.collection('bonusAccounts').doc(session.userId).get(),
+      db.collection('settings').doc('bonusSystem').get(),
+      db.collection('bills').where('userId', '==', session.userId).where('status', '==', 'open').limit(1).get()
+    ]);
+
+    res.json({
+      success: true,
+      userId: session.userId,
+      bonusBalance: bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0,
+      maxBonusUsage: settingsDoc.exists ? Number(settingsDoc.data().maxUsage) || 50 : 50,
+      openBillTotal: billsSnap.empty ? 0 : Number(billsSnap.docs[0].data().totalAmount || 0)
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Orders list via initData
+app.post('/api/mini-app/my-orders', async (req, res) => {
+  try {
+    const session = await resolveMiniAppUser(req);
+    if (!session.ok) {
+      return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
+    }
+
+    let orders = [];
+    try {
+      const snap = await db.collection('orders')
+        .where('userId', '==', session.userId)
+        .orderBy('createdAt', 'desc')
+        .limit(20)
+        .get();
+      orders = snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), createdAt: undefined }));
+    } catch (_) {
+      const snap = await db.collection('orders')
+        .where('userId', '==', session.userId)
+        .limit(20)
+        .get();
+      orders = snap.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => String(b.displayTime || '').localeCompare(String(a.displayTime || '')));
+    }
+
+    // Strip heavy/unserializable fields
+    orders = orders.map((o) => ({
+      id: o.id,
+      name: o.name,
+      status: o.status,
+      price: o.price,
+      displayTime: o.displayTime,
+      queuePosition: o.queuePosition
+    }));
+
+    res.json({ success: true, orders });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Create order from Mini App (initData or Firebase ID token)
+app.post('/api/mini-app/create-order', async (req, res) => {
+  try {
+    const session = await resolveMiniAppUser(req);
+    if (!session.ok) {
+      return res.status(401).json({
+        success: false,
+        error: 'Требуется авторизация',
+        reason: session.reason
+      });
+    }
+
+    const userId = session.userId;
 
     const {
       name,
@@ -1346,7 +1518,7 @@ app.post('/api/mini-app/create-order', async (req, res) => {
     const bonusAmount = Math.max(0, Number(bonusUsed) || 0);
     const finalPrice = Math.max(0, Number(price) || 0);
     const now = new Date();
-    const displayName = user || decoded.name || 'Гость Telegram';
+    const displayName = user || session.displayName || 'Гость Telegram';
 
     const orderData = {
       name,
@@ -1363,7 +1535,7 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       queuePosition: Number(queuePosition) || 0,
       cocktailId: cocktailId || '',
       source,
-      telegramId: decoded.telegramId || null,
+      telegramId: session.telegramId || null,
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     };
 
