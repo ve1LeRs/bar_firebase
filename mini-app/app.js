@@ -478,15 +478,15 @@
     }
     if (!canOrder()) {
       if (state.authError === 'timeout' || state.authError === 'auth_failed') {
-        showToast('Сессия не готова — подождите или откройте Mini App снова');
-        tg?.showAlert?.('Авторизация ещё не завершилась. Закройте Mini App и откройте снова через кнопку бота.');
-        authenticate();
+        showToast('Сервер ещё не готов — повторяем вход');
+        switchView('profile');
+        authenticate({ manual: true });
       } else if (!tg?.initData) {
         showToast('Нет Telegram-сессии');
         tg?.showAlert?.('Откройте Mini App кнопкой меню внутри бота AsafievBar.');
       } else {
         showToast('Подключаем сессию…');
-        authenticate().then((ok) => {
+        authenticate({ manual: true }).then((ok) => {
           if (ok) openOrderSheet(cocktail);
         });
       }
