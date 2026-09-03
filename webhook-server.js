@@ -722,7 +722,7 @@ app.post('/send-purchase-list', async (req, res) => {
 
 function getMiniAppPublicUrl() {
   const base = (process.env.PUBLIC_BASE_URL || 'https://asafievbar.duckdns.org').replace(/\/$/, '');
-  return `${base}/mini-app/`;
+  return `${base}/mini-app/?v=taste1`;
 }
 
 const MINIAPP_BOT_DESCRIPTION =

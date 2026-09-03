@@ -11,7 +11,7 @@
   };
 
   const DEFAULT_API = 'https://asafievbar.duckdns.org';
-  const MENU_CACHE_KEY = 'asafiev_mini_menu_v2';
+  const MENU_CACHE_KEY = 'asafiev_mini_menu_v3';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
   const STATUS_LABELS = {
     pending: 'Ожидание',

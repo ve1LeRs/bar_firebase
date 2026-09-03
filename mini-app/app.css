@@ -382,14 +382,15 @@ button, input {
 .taste-chip {
   display: inline-flex;
   align-items: center;
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-size: 0.68rem;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  color: var(--muted);
-  background: rgba(244, 238, 230, 0.05);
-  border: 1px solid rgba(244, 238, 230, 0.08);
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  font-weight: 450;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  color: rgba(185, 169, 154, 0.85);
+  background: rgba(244, 238, 230, 0.04);
+  border: 1px solid rgba(244, 238, 230, 0.06);
 }
 
 .cocktail-rating {
