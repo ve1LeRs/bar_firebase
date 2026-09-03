@@ -2297,26 +2297,179 @@ app.post('/api/mini-app/admin/purchases', async (req, res) => {
   }
 });
 
-// Admin: monitoring
+// Admin: monitoring (detailed)
 app.post('/api/mini-app/admin/monitoring', async (req, res) => {
   try {
     const session = await resolveMiniAppAdmin(req);
     if (!session.ok) return res.status(403).json({ success: false, error: 'Нет прав админа', reason: session.reason });
 
+    const started = Date.now();
     let firebaseOk = false;
+    let firebaseMs = null;
+    let firebaseError = null;
     try {
+      const t0 = Date.now();
       await db.collection('test').doc('connection').get();
+      firebaseMs = Date.now() - t0;
       firebaseOk = true;
-    } catch (_) { firebaseOk = false; }
+    } catch (err) {
+      firebaseOk = false;
+      firebaseError = err.message;
+    }
+
+    const botCheck = async (token) => {
+      if (!token) return { ok: false, status: 'NOT SET' };
+      try {
+        const t0 = Date.now();
+        const r = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+        const j = await r.json();
+        return {
+          ok: Boolean(j.ok),
+          status: j.ok ? 'OK' : 'ERROR',
+          username: j.result?.username || null,
+          name: j.result?.first_name || null,
+          hasMainWebApp: Boolean(j.result?.has_main_web_app),
+          ms: Date.now() - t0,
+          error: j.ok ? null : (j.description || 'getMe failed')
+        };
+      } catch (err) {
+        return { ok: false, status: 'ERROR', error: err.message };
+      }
+    };
+
+    const webhookCheck = async (token) => {
+      if (!token) return { ok: false, status: 'NOT SET' };
+      try {
+        const r = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+        const j = await r.json();
+        if (!j.ok) return { ok: false, status: 'ERROR', error: j.description };
+        const info = j.result || {};
+        return {
+          ok: Boolean(info.url),
+          status: info.url ? 'OK' : 'EMPTY',
+          url: info.url || null,
+          pending: info.pending_update_count || 0,
+          lastError: info.last_error_message || null,
+          lastErrorDate: info.last_error_date || null
+        };
+      } catch (err) {
+        return { ok: false, status: 'ERROR', error: err.message };
+      }
+    };
+
+    const [alertsBot, miniAppBot, alertsWebhook] = await Promise.all([
+      botCheck(TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN),
+      botCheck(TELEGRAM_MINIAPP_BOT_TOKEN),
+      webhookCheck(TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN)
+    ]);
+
+    // Business metrics (best-effort, capped reads)
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    let ordersToday = 0;
+    let revenueToday = 0;
+    let activeOrders = 0;
+    let openBills = 0;
+    let stoplistCount = 0;
+    let cocktailsCount = 0;
+    let ingredientsLow = 0;
+    let ingredientsOut = 0;
+
+    try {
+      const [ordersSnap, billsSnap, stopSnap, cocktailsSnap, ingSnap] = await Promise.all([
+        db.collection('orders').orderBy('createdAt', 'desc').limit(120).get().catch(() => null),
+        db.collection('bills').where('status', '==', 'open').limit(80).get().catch(() => null),
+        db.collection('stoplist').select().get().catch(() => null),
+        db.collection('cocktails').select().get().catch(() => null),
+        db.collection('ingredients').get().catch(() => null)
+      ]);
+
+      if (ordersSnap) {
+        ordersSnap.docs.forEach((doc) => {
+          const d = doc.data() || {};
+          const created = d.createdAt?.toDate?.() || null;
+          const st = d.status || '';
+          if (['pending', 'confirmed', 'preparing', 'ready', 'accepted'].includes(st)) activeOrders += 1;
+          if (created && created >= todayStart) {
+            ordersToday += 1;
+            if (!['cancelled'].includes(st)) revenueToday += Number(d.price) || 0;
+          }
+        });
+      }
+      if (billsSnap) openBills = billsSnap.size;
+      if (stopSnap) stoplistCount = stopSnap.size;
+      if (cocktailsSnap) cocktailsCount = cocktailsSnap.size;
+      if (ingSnap) {
+        ingSnap.docs.forEach((doc) => {
+          const d = doc.data() || {};
+          const stock = Number(d.stock) || 0;
+          const minStock = Number(d.minStock) || 0;
+          if (stock <= 0) ingredientsOut += 1;
+          else if (stock <= minStock) ingredientsLow += 1;
+        });
+      }
+    } catch (err) {
+      console.warn('monitoring metrics:', err.message);
+    }
+
+    const mem = process.memoryUsage();
+    let hostMem = null;
+    try {
+      const os = require('os');
+      hostMem = {
+        totalMb: Math.round(os.totalmem() / 1024 / 1024),
+        freeMb: Math.round(os.freemem() / 1024 / 1024),
+        load1: Number(os.loadavg()[0].toFixed(2)),
+        cpus: os.cpus()?.length || 1
+      };
+    } catch (_) { /* ignore */ }
 
     res.json({
       success: true,
       status: {
         server: 'OK',
         firebase: firebaseOk ? 'OK' : 'ERROR',
-        alertsBot: TELEGRAM_BOT_TOKEN ? 'SET' : 'NOT SET',
-        miniAppBot: TELEGRAM_MINIAPP_BOT_TOKEN ? 'SET' : 'NOT SET',
+        alertsBot: alertsBot.status,
+        miniAppBot: miniAppBot.status,
         timestamp: new Date().toISOString()
+      },
+      services: {
+        api: {
+          ok: true,
+          status: 'OK',
+          host: process.env.HOST || '0.0.0.0',
+          port: Number(process.env.PORT || PORT),
+          uptimeSec: Math.round(process.uptime()),
+          node: process.version,
+          responseMs: Date.now() - started
+        },
+        firebase: {
+          ok: firebaseOk,
+          status: firebaseOk ? 'OK' : 'ERROR',
+          projectId: process.env.FIREBASE_PROJECT_ID || null,
+          latencyMs: firebaseMs,
+          error: firebaseError
+        },
+        alertsBot,
+        miniAppBot,
+        webhook: alertsWebhook
+      },
+      metrics: {
+        ordersToday,
+        revenueToday,
+        activeOrders,
+        openBills,
+        stoplistCount,
+        cocktailsCount,
+        ingredientsLow,
+        ingredientsOut
+      },
+      host: {
+        memory: {
+          rssMb: Math.round(mem.rss / 1024 / 1024),
+          heapMb: Math.round(mem.heapUsed / 1024 / 1024)
+        },
+        system: hostMem
       }
     });
   } catch (error) {

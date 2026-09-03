@@ -586,10 +586,55 @@ body.has-admin .tabbar {
   display: none !important;
 }
 
-.admin-form-title {
-  margin: 0 0 4px;
-  font-family: var(--font-display);
-  font-size: 1.05rem;
+.monitor-list {
+  display: grid;
+  gap: 10px;
+}
+
+.monitor-card {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.monitor-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.monitor-card h4 {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.monitor-card .monitor-ok {
+  color: var(--good);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.monitor-card .monitor-bad {
+  color: var(--bad);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.monitor-card .monitor-warn {
+  color: var(--warn);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.monitor-card p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  word-break: break-word;
 }
 
 .admin-label {
