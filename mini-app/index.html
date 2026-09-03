@@ -13,8 +13,8 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://telegram.org">
-  <link rel="preload" href="app.css?v=vps1" as="style">
-  <link rel="stylesheet" href="app.css?v=vps1">
+  <link rel="preload" href="app.css?v=ingedit1" as="style">
+  <link rel="stylesheet" href="app.css?v=ingedit1">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;600&display=swap" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;600&display=swap"></noscript>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -169,10 +169,15 @@
       </div>
 
       <div class="admin-pane" id="adminPurchasesPane">
-        <p class="admin-section-title">Система закупок</p>
+        <p class="admin-section-title">Ингредиенты и закупки</p>
+        <p class="section-sub" style="margin-top:-4px">Нажмите «Изменить» у позиции — поля заполнятся сверху, поправьте и сохраните.</p>
         <div id="adminPurchaseStats" class="stat-row" style="margin-bottom:12px"></div>
-        <div class="admin-add">
-          <input id="adminIngName" class="admin-input" type="text" placeholder="Название ингредиента">
+
+        <div class="admin-add" id="adminIngFormBox">
+          <p class="admin-form-title" id="adminIngFormTitle">Новый ингредиент</p>
+          <label class="admin-label" for="adminIngName">Название</label>
+          <input id="adminIngName" class="admin-input" type="text" placeholder="Например: Водка" autocomplete="off">
+          <label class="admin-label" for="adminIngUnit">Единица</label>
           <select id="adminIngUnit" class="admin-select">
             <option value="мл">мл</option>
             <option value="г">г</option>
@@ -180,12 +185,17 @@
             <option value="л">л</option>
             <option value="кг">кг</option>
           </select>
-          <input id="adminIngStock" class="admin-input" type="number" placeholder="Остаток" min="0">
-          <input id="adminIngMin" class="admin-input" type="number" placeholder="Минимум" min="0">
+          <label class="admin-label" for="adminIngStock">Текущий остаток</label>
+          <input id="adminIngStock" class="admin-input" type="number" placeholder="1000" min="0" step="any">
+          <label class="admin-label" for="adminIngMin">Минимум (когда пора закупать)</label>
+          <input id="adminIngMin" class="admin-input" type="number" placeholder="200" min="0" step="any">
           <input id="adminIngId" type="hidden" value="">
-          <button class="cta" id="adminIngSaveBtn" type="button">Сохранить ингредиент</button>
+          <button class="cta" id="adminIngSaveBtn" type="button">Добавить ингредиент</button>
+          <button class="ghost" id="adminIngCancelBtn" type="button" hidden>Отменить редактирование</button>
           <button class="ghost" id="adminPurchaseSendBtn" type="button">Отправить список закупок в Telegram</button>
         </div>
+
+        <p class="admin-section-title">Список ингредиентов</p>
         <div class="admin-subtabs" id="adminPurchaseFilters">
           <button class="filter active" type="button" data-ing-filter="all">Все</button>
           <button class="filter" type="button" data-ing-filter="low">Заканчиваются</button>

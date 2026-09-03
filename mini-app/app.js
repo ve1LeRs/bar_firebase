@@ -1000,7 +1000,7 @@
     if (filter === 'low') list = list.filter((i) => i.low && !i.out);
     if (filter === 'out') list = list.filter((i) => i.out || i.stock <= 0);
     if (!list.length) {
-      box.innerHTML = '<div class="empty-state">Ингредиентов нет</div>';
+      box.innerHTML = '<div class="empty-state">Ингредиентов нет — добавьте первый формой выше</div>';
       return;
     }
     box.innerHTML = '';
@@ -1008,34 +1008,106 @@
       const card = document.createElement('article');
       card.className = 'order-card';
       const statusClass = item.out || item.stock <= 0 ? 'cancelled' : item.low ? 'preparing' : 'ready';
+      const unit = item.unit ? ` ${item.unit}` : '';
       card.innerHTML = `
         <div class="order-top">
           <div>
             <p class="order-name">${escapeHtml(item.name)}</p>
-            <p class="order-time">мин ${item.minStock}${item.unit ? ' ' + item.unit : ''}</p>
+            <p class="order-time">минимум ${item.minStock}${unit}</p>
           </div>
-          <span class="status ${statusClass}">${item.stock}${item.unit ? ' ' + item.unit : ''}</span>
+          <span class="status ${statusClass}">${item.stock}${unit}</span>
+        </div>
+        <div class="ing-stock-row">
+          <button type="button" data-stock-delta="-1" data-ing-id="${escapeAttr(item.id)}" aria-label="Минус">−</button>
+          <div class="ing-stock-val">остаток ${item.stock}${unit}</div>
+          <button type="button" data-stock-delta="1" data-ing-id="${escapeAttr(item.id)}" aria-label="Плюс">+</button>
         </div>
         <div class="admin-actions">
-          <button type="button" data-edit-ing="${escapeAttr(item.id)}">Изменить</button>
+          <button type="button" class="primary" data-edit-ing="${escapeAttr(item.id)}">Изменить</button>
           <button type="button" class="danger" data-del-ing="${escapeAttr(item.id)}">Удалить</button>
         </div>
       `;
-      card.querySelector('[data-edit-ing]')?.addEventListener('click', () => fillIngredientForm(item));
+      card.querySelector('[data-edit-ing]')?.addEventListener('click', () => {
+        fillIngredientForm(item);
+        showToast(`Редактируем: ${item.name}`);
+      });
       card.querySelector('[data-del-ing]')?.addEventListener('click', async () => {
-        if (!confirm(`Удалить ${item.name}?`)) return;
+        if (!confirm(`Удалить «${item.name}»?`)) return;
         await deleteAdminIngredient(item.id);
+      });
+      card.querySelectorAll('[data-stock-delta]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const delta = Number(btn.dataset.stockDelta) || 0;
+          const step = item.unit === 'шт' ? 1 : Math.max(1, Math.round((Number(item.minStock) || 100) * 0.1));
+          const next = Math.max(0, Number(item.stock) + delta * step);
+          await quickUpdateIngredientStock(item, next);
+        });
       });
       box.appendChild(card);
     });
   }
 
+  function resetIngredientForm() {
+    const title = document.getElementById('adminIngFormTitle');
+    const box = document.getElementById('adminIngFormBox');
+    const saveBtn = document.getElementById('adminIngSaveBtn');
+    const cancelBtn = document.getElementById('adminIngCancelBtn');
+    document.getElementById('adminIngId').value = '';
+    document.getElementById('adminIngName').value = '';
+    document.getElementById('adminIngUnit').value = 'шт';
+    document.getElementById('adminIngStock').value = '';
+    document.getElementById('adminIngMin').value = '';
+    if (title) title.textContent = 'Новый ингредиент';
+    if (saveBtn) saveBtn.textContent = 'Добавить ингредиент';
+    if (cancelBtn) cancelBtn.hidden = true;
+    box?.classList.remove('is-editing');
+  }
+
   function fillIngredientForm(item) {
+    const title = document.getElementById('adminIngFormTitle');
+    const box = document.getElementById('adminIngFormBox');
+    const saveBtn = document.getElementById('adminIngSaveBtn');
+    const cancelBtn = document.getElementById('adminIngCancelBtn');
     document.getElementById('adminIngId').value = item?.id || '';
     document.getElementById('adminIngName').value = item?.name || '';
     document.getElementById('adminIngUnit').value = item?.unit || 'шт';
     document.getElementById('adminIngStock').value = item?.stock ?? '';
     document.getElementById('adminIngMin').value = item?.minStock ?? '';
+    if (item?.id) {
+      if (title) title.textContent = `Редактирование: ${item.name || 'ингредиент'}`;
+      if (saveBtn) saveBtn.textContent = 'Сохранить изменения';
+      if (cancelBtn) cancelBtn.hidden = false;
+      box?.classList.add('is-editing');
+      box?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.getElementById('adminIngStock')?.focus();
+    } else {
+      resetIngredientForm();
+    }
+  }
+
+  async function quickUpdateIngredientStock(item, stock) {
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/purchases`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: adminBody({
+          action: 'upsert',
+          ingredient: {
+            id: item.id,
+            name: item.name,
+            unit: item.unit || 'шт',
+            stock,
+            minStock: Number(item.minStock) || 0
+          }
+        })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Ошибка');
+      showToast(`${item.name}: ${stock}${item.unit ? ' ' + item.unit : ''}`);
+      await refreshAdminPurchases();
+    } catch (err) {
+      showToast(err.message || 'Ошибка');
+    }
   }
 
   async function saveAdminIngredient() {
@@ -1050,18 +1122,22 @@
       showToast('Укажите название ингредиента');
       return;
     }
+    if (!Number.isFinite(ingredient.stock) || ingredient.stock < 0) {
+      showToast('Укажите остаток');
+      return;
+    }
+    if (!Number.isFinite(ingredient.minStock) || ingredient.minStock < 0) {
+      showToast('Укажите минимум');
+      return;
+    }
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/admin/purchases`, {
         method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'upsert', ingredient })
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Ошибка');
-      showToast(ingredient.id ? 'Ингредиент обновлён' : 'Ингредиент добавлен');
-      fillIngredientForm(null);
-      document.getElementById('adminIngId').value = '';
-      document.getElementById('adminIngName').value = '';
-      document.getElementById('adminIngStock').value = '';
-      document.getElementById('adminIngMin').value = '';
+      showToast(ingredient.id ? 'Изменения сохранены' : 'Ингредиент добавлен');
+      resetIngredientForm();
       refreshAdminPurchases();
     } catch (err) {
       showToast(err.message || 'Ошибка');
@@ -1782,6 +1858,10 @@
     document.getElementById('adminPromoSaveBtn')?.addEventListener('click', saveAdminPromo);
     document.getElementById('adminBonusSaveBtn')?.addEventListener('click', saveAdminBonuses);
     document.getElementById('adminIngSaveBtn')?.addEventListener('click', saveAdminIngredient);
+    document.getElementById('adminIngCancelBtn')?.addEventListener('click', () => {
+      resetIngredientForm();
+      showToast('Редактирование отменено');
+    });
     document.getElementById('adminPurchaseSendBtn')?.addEventListener('click', sendAdminPurchases);
     document.getElementById('adminMonitoringRefreshBtn')?.addEventListener('click', refreshAdminMonitoring);
     document.getElementById('adminBillFilters')?.addEventListener('click', (e) => {
