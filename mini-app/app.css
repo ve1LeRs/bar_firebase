@@ -881,6 +881,32 @@ body.has-admin .tabbar {
   align-items: center;
 }
 
+.stoplist-row > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.stoplist-row button,
+.order-card > .stoplist-row button.danger,
+button.danger {
+  flex-shrink: 0;
+  border: 1px solid rgba(216, 122, 106, 0.45);
+  background: rgba(216, 122, 106, 0.16);
+  color: #f0b4a8;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  min-height: 34px;
+}
+
+.admin-actions button.danger {
+  background: rgba(216, 122, 106, 0.16);
+  color: #f0b4a8;
+  border-color: rgba(216, 122, 106, 0.45);
+}
+
 .tab {
   border: 0;
   background: transparent;
