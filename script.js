@@ -42,17 +42,14 @@ if (window.location.hostname === 'localhost' || window.location.hostname === '12
       console.log('🚀 Автоматически определен Render URL:', WEBHOOK_SERVER_URL);
       // Сохраняем для будущего использования
       localStorage.setItem('webhook_server_url', WEBHOOK_SERVER_URL);
-    } else if (currentHost.includes('github.io')) {
-      // Для GitHub Pages используем дефолтный URL сервера (Render)
-      WEBHOOK_SERVER_URL = "https://bar-firebase.onrender.com";
-      console.log('🌐 GitHub Pages обнаружен, используем дефолтный серверный URL:', WEBHOOK_SERVER_URL);
-      // Сохраняем для будущего использования
+    } else if (currentHost.includes('github.io') || currentHost.includes('asafievbar.duckdns.org')) {
+      // GitHub Pages / домен бара → VPS API
+      WEBHOOK_SERVER_URL = "https://asafievbar.duckdns.org";
+      console.log('🌐 Используем AsafievBar API:', WEBHOOK_SERVER_URL);
       localStorage.setItem('webhook_server_url', WEBHOOK_SERVER_URL);
     } else {
-      // Для локальных файлов и других случаев используем дефолтный серверный URL (Render)
-      WEBHOOK_SERVER_URL = "https://bar-firebase.onrender.com";
-      console.log('🚀 Используем дефолтный серверный URL:', WEBHOOK_SERVER_URL);
-      // Сохраняем для будущего использования
+      WEBHOOK_SERVER_URL = "https://asafievbar.duckdns.org";
+      console.log('🚀 Используем AsafievBar API:', WEBHOOK_SERVER_URL);
       localStorage.setItem('webhook_server_url', WEBHOOK_SERVER_URL);
     }
   }
