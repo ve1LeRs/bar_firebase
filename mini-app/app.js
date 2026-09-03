@@ -387,44 +387,57 @@
     return false;
   }
 
+  function setAuthStatus(text, { error = false } = {}) {
+    if (!els.authStatus) return;
+    const msg = String(text || '').trim();
+    if (!msg || !error) {
+      els.authStatus.hidden = true;
+      els.authStatus.textContent = '';
+      return;
+    }
+    els.authStatus.hidden = false;
+    els.authStatus.textContent = msg;
+  }
+
   function setAuthRetryVisible(on) {
     if (els.authRetryBtn) els.authRetryBtn.hidden = !on;
   }
 
   async function authenticate(options = {}) {
-    const { manual = false } = options;
+    const { manual: _manual = false } = options;
     const initData = tg?.initData || '';
 
     if (!initData) {
       state.authError = 'no_init_data';
-      els.authStatus.textContent =
-        'Нет данных Telegram. Откройте Mini App кнопкой меню бота (не через браузер).';
+      setAuthStatus(
+        'Нет данных Telegram. Откройте Mini App кнопкой меню бота (не через браузер).',
+        { error: true }
+      );
       setAuthRetryVisible(false);
       updateProfileUI();
       return false;
     }
 
     setAuthRetryVisible(false);
-    els.authStatus.textContent = manual ? 'Повторный вход…' : 'Подключаем сервер…';
+    setAuthStatus('');
 
-    const awake = await ensureApiAwake((text) => {
-      els.authStatus.textContent = text;
-    });
+    const awake = await ensureApiAwake(() => {});
 
     if (!awake) {
       state.sessionOk = false;
       state.authReady = false;
       state.authError = 'timeout';
-      els.authStatus.textContent =
-        'Сервер долго просыпается. Нажмите «Повторить вход» через несколько секунд.';
+      setAuthStatus(
+        'Сервер долго просыпается. Нажмите «Повторить вход» через несколько секунд.',
+        { error: true }
+      );
       setAuthRetryVisible(true);
       return false;
     }
 
     // A few auth attempts after wake (first request can still be slow)
     for (let attempt = 1; attempt <= 3; attempt += 1) {
-      els.authStatus.textContent =
-        attempt === 1 ? 'Входим через Telegram…' : `Повтор входа (${attempt}/3)…`;
+      setAuthStatus('');
       try {
         const res = await fetchWithTimeout(
           `${state.apiBase}/api/mini-app/auth`,
@@ -469,7 +482,7 @@
           }
         }
 
-        els.authStatus.textContent = 'Вход через Telegram выполнен. Можно заказывать.';
+        setAuthStatus('');
         setAuthRetryVisible(false);
         updateProfileUI();
         startOrdersPolling();
@@ -488,7 +501,7 @@
           err.name === 'AbortError'
             ? 'Сервер ещё прогревается'
             : err.message;
-        els.authStatus.textContent = `Не удалось войти: ${msg}`;
+        setAuthStatus(`Не удалось войти: ${msg}`, { error: true });
         setAuthRetryVisible(true);
         return false;
       }
@@ -2773,7 +2786,7 @@
       initFirebase();
     } catch (err) {
       console.error(err);
-      els.authStatus.textContent = 'Не удалось загрузить SDK. Проверьте сеть.';
+      setAuthStatus('Не удалось загрузить SDK. Проверьте сеть.', { error: true });
       if (!state.cocktails.length) {
         els.menuGrid.innerHTML = '<div class="empty-state">Нет сети для загрузки меню</div>';
       }
