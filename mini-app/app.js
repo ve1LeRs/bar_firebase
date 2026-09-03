@@ -150,10 +150,58 @@
 
     tg.ready();
     tg.expand();
+
+    // Fullscreen (Bot API 8.0+) + max height fallback
+    try {
+      tg.disableVerticalSwipes?.();
+    } catch (_) { /* older clients */ }
+
+    try {
+      if (typeof tg.requestFullscreen === 'function') {
+        tg.requestFullscreen();
+      }
+    } catch (_) { /* not supported / needs user gesture on some clients */ }
+
+    // Retry fullscreen shortly after open (iOS sometimes ignores first call)
+    setTimeout(() => {
+      try {
+        tg.expand();
+        tg.requestFullscreen?.();
+      } catch (_) { /* ignore */ }
+    }, 300);
+
     try {
       tg.setHeaderColor('#14110f');
       tg.setBackgroundColor('#14110f');
     } catch (_) { /* older clients */ }
+
+    const applySafeArea = () => {
+      const sa = tg.safeAreaInset || {};
+      const csa = tg.contentSafeAreaInset || {};
+      document.documentElement.style.setProperty('--tg-safe-top', `${(sa.top || 0) + (csa.top || 0)}px`);
+      document.documentElement.style.setProperty('--tg-safe-bottom', `${(sa.bottom || 0) + (csa.bottom || 0)}px`);
+      document.documentElement.style.setProperty('--tg-safe-left', `${(sa.left || 0) + (csa.left || 0)}px`);
+      document.documentElement.style.setProperty('--tg-safe-right', `${(sa.right || 0) + (csa.right || 0)}px`);
+      document.body.classList.toggle('is-fullscreen', Boolean(tg.isFullscreen));
+    };
+
+    applySafeArea();
+    tg.onEvent?.('fullscreenChanged', applySafeArea);
+    tg.onEvent?.('safeAreaChanged', applySafeArea);
+    tg.onEvent?.('contentSafeAreaChanged', applySafeArea);
+    tg.onEvent?.('viewportChanged', () => {
+      try { tg.expand(); } catch (_) { /* ignore */ }
+      applySafeArea();
+    });
+
+    // Tap anywhere early to request fullscreen if first call was blocked
+    const askFsOnce = () => {
+      try { tg.requestFullscreen?.(); } catch (_) { /* ignore */ }
+      document.body.removeEventListener('touchstart', askFsOnce);
+      document.body.removeEventListener('click', askFsOnce);
+    };
+    document.body.addEventListener('touchstart', askFsOnce, { once: true, passive: true });
+    document.body.addEventListener('click', askFsOnce, { once: true });
 
     document.body.classList.add('tg-themed');
 

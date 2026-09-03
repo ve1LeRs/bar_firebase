@@ -4,6 +4,7 @@ const cors = require('cors');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -165,8 +166,14 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-// Telegram Bot Token
+// Telegram bots:
+// - ALERTS bot: уведомления бармену, inline-кнопки статусов, webhook callback
+// - MINIAPP bot: Telegram Mini App (initData / Menu Button)
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo";
+const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
+const TELEGRAM_MINIAPP_BOT_TOKEN =
+  process.env.TELEGRAM_MINIAPP_BOT_TOKEN ||
+  "8691192852:AAE6x5FCmv9ii5q9mwP-FYXhKPEyHOpw4EQ";
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "1743362083";
 
 // Root endpoint
@@ -1147,7 +1154,7 @@ function getTelegramUserFromRequest(req) {
     req.body?.initData ||
     req.headers['x-telegram-init-data'] ||
     '';
-  const parsed = validateTelegramWebAppData(initData, TELEGRAM_BOT_TOKEN);
+  const parsed = validateTelegramWebAppData(initData, TELEGRAM_MINIAPP_BOT_TOKEN);
   if (!parsed.ok) return { ok: false, reason: parsed.reason };
   const uid = `tg_${parsed.user.id}`;
   return { ok: true, uid, user: parsed.user, initData };
@@ -1317,7 +1324,7 @@ async function deductIngredientsAdmin(cocktailName) {
 app.post('/api/mini-app/auth', async (req, res) => {
   try {
     const { initData } = req.body || {};
-    const parsed = validateTelegramWebAppData(initData, TELEGRAM_BOT_TOKEN);
+    const parsed = validateTelegramWebAppData(initData, TELEGRAM_MINIAPP_BOT_TOKEN);
 
     if (!parsed.ok) {
       console.warn(' Mini App auth rejected:', parsed.reason);
@@ -1628,13 +1635,13 @@ app.post('/api/mini-app/setup-menu-button', async (req, res) => {
     const miniAppUrl = (req.body?.url || '').trim() ||
       `${req.protocol}://${req.get('host')}/mini-app/`;
 
-    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setChatMenuButton`, {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_MINIAPP_BOT_TOKEN}/setChatMenuButton`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         menu_button: {
           type: 'web_app',
-          text: 'AsafievBar',
+          text: 'Меню',
           web_app: { url: miniAppUrl }
         }
       })
@@ -1655,6 +1662,83 @@ app.post('/api/mini-app/setup-menu-button', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Mini App setup-menu-button error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Configure Mini App bot profile (name/description/menu)
+app.post('/api/mini-app/setup-bot-profile', async (req, res) => {
+  try {
+    const token = TELEGRAM_MINIAPP_BOT_TOKEN;
+    const miniAppUrl = (req.body?.url || '').trim() ||
+      'https://ve1lers.github.io/bar_firebase/mini-app/';
+    const name = req.body?.name || 'AsafievBar';
+    const shortDescription = req.body?.shortDescription ||
+      'Коктейли AsafievBar — заказ из Telegram';
+    const description = req.body?.description ||
+      'Официальное Mini App бара AsafievBar. Смотрите меню, заказывайте коктейли и следите за статусом заказа в реальном времени.';
+
+    const calls = [];
+
+    const setName = await fetch(`https://api.telegram.org/bot${token}/setMyName`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    }).then((r) => r.json());
+    calls.push({ method: 'setMyName', ok: setName.ok, description: setName.description });
+
+    const setShort = await fetch(`https://api.telegram.org/bot${token}/setMyShortDescription`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ short_description: shortDescription })
+    }).then((r) => r.json());
+    calls.push({ method: 'setMyShortDescription', ok: setShort.ok, description: setShort.description });
+
+    const setDesc = await fetch(`https://api.telegram.org/bot${token}/setMyDescription`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description })
+    }).then((r) => r.json());
+    calls.push({ method: 'setMyDescription', ok: setDesc.ok, description: setDesc.description });
+
+    const setMenu = await fetch(`https://api.telegram.org/bot${token}/setChatMenuButton`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        menu_button: {
+          type: 'web_app',
+          text: 'Меню',
+          web_app: { url: miniAppUrl }
+        }
+      })
+    }).then((r) => r.json());
+    calls.push({ method: 'setChatMenuButton', ok: setMenu.ok, description: setMenu.description });
+
+    // Profile photo from local logo.png if present
+    let photoResult = { ok: false, description: 'logo.png not found' };
+    const logoPath = path.join(__dirname, 'mini-app', 'logo.png');
+    if (fs.existsSync(logoPath)) {
+      const logoBuf = fs.readFileSync(logoPath);
+      const form = new FormData();
+      form.append('photo', new Blob([logoBuf], { type: 'image/png' }), 'logo.png');
+      const photoRes = await fetch(`https://api.telegram.org/bot${token}/setMyProfilePhoto`, {
+        method: 'POST',
+        body: form
+      });
+      photoResult = await photoRes.json();
+    }
+    calls.push({ method: 'setMyProfilePhoto', ok: photoResult.ok, description: photoResult.description });
+
+    const me = await fetch(`https://api.telegram.org/bot${token}/getMe`).then((r) => r.json());
+
+    res.json({
+      success: calls.every((c) => c.ok || c.method === 'setMyProfilePhoto'),
+      bot: me.result || null,
+      miniAppUrl,
+      calls
+    });
+  } catch (error) {
+    console.error('❌ setup-bot-profile error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
