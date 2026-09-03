@@ -1044,9 +1044,8 @@
       });
       card.querySelector('[data-zero-ing]')?.addEventListener('click', async () => {
         if (Number(item.stock) <= 0) return;
-        await quickUpdateIngredientStock(item, 0);
-        showToast(`${item.name}: кончился`);
         haptic('medium');
+        await quickUpdateIngredientStock(item, 0);
       });
       card.querySelectorAll('[data-stock-delta]').forEach((btn) => {
         btn.addEventListener('click', async () => {
