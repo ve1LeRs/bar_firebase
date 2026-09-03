@@ -525,34 +525,20 @@ app.post('/notify-telegram', async (req, res) => {
       });
     }
     
-    const queuePosition = orderData.queuePosition || 0;
-    const queueInfoText = queuePosition > 0 ? `🎯 *Позиция в очереди:* #${queuePosition}\n` : '';
-    
-    const message = `
-🍸 *Новый заказ!*
+    const message = formatOrderAlertHtml({
+      mode: 'new',
+      status: 'confirmed',
+      cocktailName: orderData.name,
+      customerName: orderData.user,
+      price: orderData.price,
+      queuePosition: orderData.queuePosition || 0,
+      displayTime: orderData.displayTime || new Date().toLocaleString('ru-RU'),
+      orderId
+    });
+    const inlineKeyboard = buildOrderActionKeyboard(orderId, 'pending');
 
-🍸 *Коктейль:* ${orderData.name}
-👤 *Клиент:* ${orderData.user}
-📊 *Статус:* Подтверждён
-${queueInfoText}🕒 *Время:* ${orderData.displayTime || new Date().toLocaleString('ru-RU')}
-🆔 *ID заказа:* ${orderId}
-    `.trim();
-    
-    // Отправляем с упрощёнными кнопками
-    const inlineKeyboard = {
-      inline_keyboard: [
-        [
-          { text: "👨‍🍳 Готовится", callback_data: `preparing_${orderId}` },
-          { text: "🍸 Готов", callback_data: `ready_${orderId}` }
-        ],
-        [
-          { text: "❌ Отменить", callback_data: `cancelled_${orderId}` }
-        ]
-      ]
-    };
-    
     const telegramResult = await sendTelegramAlert(message, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       reply_markup: inlineKeyboard,
       token: TELEGRAM_BOT_TOKEN
     });
@@ -1014,52 +1000,19 @@ async function answerCallbackQuery(callbackQueryId, text, showAlert = false) {
 async function updateTelegramMessage(messageId, orderId, newStatus, orderData, chatIdParam) {
   const chatId = chatIdParam || TELEGRAM_CHAT_ID;
   try {
-    const statusEmojis = {
-      'confirmed': '✅',
-      'preparing': '👨‍🍳',
-      'ready': '🍸',
-      'completed': '🎉',
-      'cancelled': '❌'
-    };
-    
-    const emoji = statusEmojis[newStatus] || '📝';
-    const statusText = getStatusText(newStatus);
-    const queuePosition = orderData.queuePosition;
+    const updatedMessage = formatOrderAlertHtml({
+      mode: 'update',
+      status: newStatus,
+      cocktailName: orderData.name,
+      customerName: orderData.user,
+      price: orderData.price,
+      bonusUsed: orderData.bonusUsed || orderData.discount || 0,
+      queuePosition: orderData.queuePosition,
+      displayTime: orderData.displayTime || new Date().toLocaleString('ru-RU'),
+      orderId
+    });
+    const inlineKeyboard = buildOrderActionKeyboard(orderId, newStatus);
 
-    let queueInfoText = '';
-    if (queuePosition && ['confirmed', 'preparing', 'ready'].includes(newStatus)) {
-      queueInfoText = `🎯 *Позиция в очереди:* #${queuePosition}\n`;
-      const estimatedMinutes = queuePosition * 3;
-      if (estimatedMinutes > 0) {
-        queueInfoText += `⏰ *Примерное время:* ${estimatedMinutes} мин\n`;
-      }
-    } else if (newStatus === 'completed') {
-      queueInfoText = `🎉 *Заказ выполнен!*\n`;
-    }
-    
-    const updatedMessage = `
-${emoji} *Заказ обновлен - ${statusText}*
-
-🍸 *Коктейль:* ${orderData.name}
-👤 *Клиент:* ${orderData.user}
-📊 *Статус:* ${statusText}
-${queueInfoText}🕒 *Время:* ${orderData.displayTime || new Date().toLocaleString('ru-RU')}
-🆔 *ID заказа:* ${orderId}
-    `.trim();
-    
-    // Создаем inline-кнопки (только актуальные статусы)
-    const inlineKeyboard = {
-      inline_keyboard: [
-        [
-          { text: "👨‍🍳 Готовится", callback_data: `preparing_${orderId}` },
-          { text: "🍸 Готов", callback_data: `ready_${orderId}` }
-        ],
-        [
-          { text: "❌ Отменить", callback_data: `cancelled_${orderId}` }
-        ]
-      ]
-    };
-    
     if (!TELEGRAM_BOT_TOKEN || !chatId) {
       console.error('❌ TELEGRAM_BOT_TOKEN или chat_id не заданы');
       return;
@@ -1071,24 +1024,131 @@ ${queueInfoText}🕒 *Время:* ${orderData.displayTime || new Date().toLocal
         chat_id: chatId,
         message_id: messageId,
         text: updatedMessage,
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         reply_markup: inlineKeyboard
       })
     });
-    
+
     if (!response.ok) {
       const errBody = await response.text();
       console.error('❌ Ошибка обновления сообщения в Telegram:', response.status, errBody);
     }
-    
   } catch (error) {
     console.error('❌ Ошибка обновления сообщения:', error);
   }
 }
 
+/** Escape text for Telegram HTML parse_mode */
+function escapeTgHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function getStatusEmoji(status) {
+  switch (status) {
+    case 'pending': return '🆕';
+    case 'confirmed': return '✅';
+    case 'preparing': return '👨‍🍳';
+    case 'ready': return '🍸';
+    case 'completed': return '✨';
+    case 'cancelled': return '❌';
+    default: return '🍸';
+  }
+}
+
+/** Compact bartender alert card (HTML) */
+function formatOrderAlertHtml({
+  mode = 'new', // new | update
+  status = 'pending',
+  cocktailName,
+  customerName,
+  price,
+  bonusUsed = 0,
+  queuePosition,
+  displayTime,
+  orderId
+}) {
+  const statusText = getStatusText(status);
+  const emoji = mode === 'new' ? '🆕' : getStatusEmoji(status);
+  const title = mode === 'new'
+    ? `${emoji} Новый заказ`
+    : `${emoji} ${statusText}`;
+
+  const lines = [];
+  lines.push(`<b>${escapeTgHtml(title)}</b>`);
+  lines.push('');
+  lines.push(`<b>${escapeTgHtml(cocktailName || 'Коктейль')}</b>`);
+
+  const meta = [];
+  if (price != null && price !== '') {
+    let priceLine = `${Number(price) || 0} ₽`;
+    if (Number(bonusUsed) > 0) priceLine += ` · −${Number(bonusUsed)} бонусов`;
+    meta.push(escapeTgHtml(priceLine));
+  }
+  if (queuePosition && ['pending', 'confirmed', 'preparing', 'ready'].includes(status)) {
+    meta.push(`очередь #${escapeTgHtml(queuePosition)}`);
+  }
+  if (meta.length) lines.push(meta.join(' · '));
+
+  lines.push('');
+  if (customerName) lines.push(`👤 ${escapeTgHtml(customerName)}`);
+  if (mode === 'update' || status !== 'pending') {
+    lines.push(`Статус: <b>${escapeTgHtml(statusText)}</b>`);
+  } else {
+    lines.push('Статус: ожидание');
+  }
+
+  if (queuePosition && status === 'preparing') {
+    const mins = Math.max(3, Number(queuePosition) * 3);
+    lines.push(`⏱ ~${mins} мин`);
+  }
+
+  if (displayTime) {
+    lines.push(`<i>${escapeTgHtml(displayTime)}</i>`);
+  }
+
+  // Short id footer for support, not the noisy full line-as-label
+  if (orderId) {
+    const shortId = String(orderId).slice(-6);
+    lines.push(`<code>#${escapeTgHtml(shortId)}</code>`);
+  }
+
+  return lines.join('\n');
+}
+
+/** Action buttons depend on current status */
+function buildOrderActionKeyboard(orderId, status = 'pending') {
+  const id = String(orderId);
+  const rows = [];
+
+  if (['pending', 'confirmed'].includes(status)) {
+    rows.push([
+      { text: '👨‍🍳 Готовится', callback_data: `preparing_${id}` },
+      { text: '🍸 Готов', callback_data: `ready_${id}` }
+    ]);
+    rows.push([{ text: 'Отменить', callback_data: `cancelled_${id}` }]);
+  } else if (status === 'preparing') {
+    rows.push([
+      { text: '🍸 Готов', callback_data: `ready_${id}` },
+      { text: 'Отменить', callback_data: `cancelled_${id}` }
+    ]);
+  } else if (status === 'ready') {
+    rows.push([
+      { text: '✨ Выдан', callback_data: `completed_${id}` },
+      { text: 'Отменить', callback_data: `cancelled_${id}` }
+    ]);
+  }
+  // completed / cancelled — no actions
+
+  return { inline_keyboard: rows };
+}
+
 // Получение текста статуса
 function getStatusText(status) {
   switch(status) {
+    case 'pending': return 'Ожидание';
     case 'confirmed': return 'Подтверждён';
     case 'preparing': return 'Готовится';
     case 'ready': return 'Готов';
@@ -1684,34 +1744,21 @@ app.post('/api/mini-app/create-order', async (req, res) => {
 
     deductIngredientsAdmin(name).catch((e) => console.warn('deduct ingredients:', e.message));
 
-    const queueInfoText = orderData.queuePosition > 0
-      ? `🎯 *Позиция в очереди:* #${orderData.queuePosition}\n`
-      : '';
-    const message = `
-🍸 *Новый заказ (Mini App)!*
-
-🍸 *Коктейль:* ${orderData.name}
-👤 *Клиент:* ${orderData.user}
-💰 *Цена:* ${orderData.price}₽${bonusAmount ? ` (бонусы: −${bonusAmount})` : ''}
-📊 *Статус:* Ожидание
-${queueInfoText}🕒 *Время:* ${orderData.displayTime}
-🆔 *ID заказа:* ${orderRef.id}
-    `.trim();
-
-    const inlineKeyboard = {
-      inline_keyboard: [
-        [
-          { text: '👨‍🍳 Готовится', callback_data: `preparing_${orderRef.id}` },
-          { text: '🍸 Готов', callback_data: `ready_${orderRef.id}` }
-        ],
-        [
-          { text: '❌ Отменить', callback_data: `cancelled_${orderRef.id}` }
-        ]
-      ]
-    };
+    const message = formatOrderAlertHtml({
+      mode: 'new',
+      status: 'pending',
+      cocktailName: orderData.name,
+      customerName: orderData.user,
+      price: orderData.price,
+      bonusUsed: bonusAmount,
+      queuePosition: orderData.queuePosition,
+      displayTime: orderData.displayTime,
+      orderId: orderRef.id
+    });
+    const inlineKeyboard = buildOrderActionKeyboard(orderRef.id, 'pending');
 
     sendTelegramAlert(message, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       reply_markup: inlineKeyboard
     }).catch((notifyError) => {
       console.error('⚠️ Mini App: заказ создан, но Telegram notify failed:', notifyError.message);
