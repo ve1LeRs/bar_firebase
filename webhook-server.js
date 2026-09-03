@@ -21,12 +21,14 @@ app.use(cors({
       'http://localhost:3000',
       'http://127.0.0.1:3000',
       'https://ve1lers.github.io',
+      'https://asafievbar.duckdns.org',
       'null' // For file:// protocol
     ];
     
     const allowedPatterns = [
       /^https:\/\/.*\.railway\.app$/,
-      /^https:\/\/.*\.github\.io$/
+      /^https:\/\/.*\.github\.io$/,
+      /^https:\/\/.*\.duckdns\.org$/
     ];
     
     // Check if origin is in allowed list
@@ -1708,7 +1710,7 @@ app.post('/api/mini-app/setup-bot-profile', async (req, res) => {
   try {
     const token = TELEGRAM_MINIAPP_BOT_TOKEN;
     const miniAppUrl = (req.body?.url || '').trim() ||
-      'https://ve1lers.github.io/bar_firebase/mini-app/?v=adminfix4';
+      'https://asafievbar.duckdns.org/mini-app/?v=domain1';
     const name = req.body?.name || 'AsafievBar';
     const shortDescription = req.body?.shortDescription ||
       'Коктейли AsafievBar — заказ из Telegram';
@@ -2504,9 +2506,10 @@ app.post('/api/mini-app/ensure-admin', async (req, res) => {
 // Запуск сервера
 app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   console.log(`🚀 Webhook сервер запущен на порту ${PORT}`);
-  console.log(`📱 Telegram webhook: ${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://your-railway-app.railway.app'}/telegram-webhook`);
-  console.log(`📲 Mini App: ${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://your-railway-app.railway.app'}/mini-app/`);
-  console.log(`🔍 Health check: ${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://your-railway-app.railway.app'}/health`);
+  const publicBase = process.env.PUBLIC_BASE_URL || process.env.RAILWAY_PUBLIC_DOMAIN || 'https://asafievbar.duckdns.org';
+  console.log(`📱 Telegram webhook: ${publicBase}/telegram-webhook`);
+  console.log(`📲 Mini App: ${publicBase}/mini-app/`);
+  console.log(`🔍 Health check: ${publicBase}/health`);
 
   // Ensure owner is admin in Firestore on boot
   ensureTelegramAdmin(process.env.TELEGRAM_CHAT_ID || '1743362083')
