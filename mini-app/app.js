@@ -557,6 +557,8 @@
       haptic('medium');
       showToast(`Статус: ${STATUS_LABELS[status] || status}`);
       refreshAdminOrders();
+      // Profile open-bill statuses come from bill items — refresh after sync
+      refreshProfile().catch(() => {});
     } catch (err) {
       showToast(err.message || 'Ошибка статуса');
     }
@@ -1439,8 +1441,9 @@
     els.profileBillItems.innerHTML = items
       .map((item) => {
         const status = item.status || 'pending';
+        const cancelled = status === 'cancelled';
         return `
-          <article class="bill-item-row">
+          <article class="bill-item-row${cancelled ? ' is-cancelled' : ''}">
             <div>
               <p class="bill-item-name">${escapeHtml(item.cocktailName || 'Коктейль')}</p>
               <p class="bill-item-meta">${STATUS_LABELS[status] || status}</p>

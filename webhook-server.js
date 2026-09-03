@@ -1038,6 +1038,13 @@ async function updateOrderStatus(orderId, newStatus) {
       return { success: false, error: writeErr?.message || String(writeErr) };
     }
 
+    // Keep open-bill line items in sync (status + total without cancelled)
+    try {
+      await syncBillItemStatusForOrder(orderIdTrimmed, newStatus, orderData);
+    } catch (billSyncErr) {
+      console.warn('⚠️ bill item sync failed:', billSyncErr?.message || billSyncErr);
+    }
+
     if (newStatus === 'completed' && orderData.queuePosition) {
       try {
         await updateQueuePositions(orderIdTrimmed);
@@ -1063,6 +1070,98 @@ async function updateOrderStatus(orderId, newStatus) {
     }
     return { success: false, error: msg };
   }
+}
+
+/** Update matching bill line item(s) when an order status changes */
+async function syncBillItemStatusForOrder(orderId, newStatus, orderData) {
+  const userId = orderData?.userId;
+  if (!userId || !orderId) return { updated: 0 };
+
+  let billsSnap = await db.collection('bills')
+    .where('userId', '==', userId)
+    .where('status', '==', 'open')
+    .limit(5)
+    .get();
+
+  // Fallback: recent bills (e.g. just closed) still need item status fixed
+  if (billsSnap.empty) {
+    try {
+      billsSnap = await db.collection('bills')
+        .where('userId', '==', userId)
+        .orderBy('updatedAt', 'desc')
+        .limit(5)
+        .get();
+    } catch (_) {
+      billsSnap = await db.collection('bills')
+        .where('userId', '==', userId)
+        .limit(10)
+        .get();
+    }
+  }
+
+  let updated = 0;
+  for (const billDoc of billsSnap.docs) {
+    const bill = billDoc.data() || {};
+    const items = Array.isArray(bill.items) ? bill.items : [];
+    let changed = false;
+    const nextItems = items.map((item) => {
+      if (String(item.orderId || '') !== String(orderId)) return item;
+      if (item.status === newStatus) return item;
+      changed = true;
+      return { ...item, status: newStatus };
+    });
+    if (!changed) continue;
+
+    const totalAmount = nextItems
+      .filter((i) => i.status !== 'cancelled')
+      .reduce((sum, i) => sum + (Number(i.price) || 0), 0);
+
+    await billDoc.ref.update({
+      items: nextItems,
+      totalAmount,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    updated += 1;
+  }
+  return { updated };
+}
+
+function mapBillItemsForClient(items) {
+  return (Array.isArray(items) ? items : []).map((item) => ({
+    orderId: item.orderId || '',
+    cocktailName: item.cocktailName || item.name || 'Коктейль',
+    price: Number(item.price) || 0,
+    status: item.status || 'pending',
+    cocktailImage: item.cocktailImage || ''
+  }));
+}
+
+/** Prefer live order.status over stale bill item.status */
+async function hydrateBillItemsWithOrderStatus(items) {
+  const list = mapBillItemsForClient(items);
+  const ids = [...new Set(list.map((i) => String(i.orderId || '').trim()).filter(Boolean))];
+  if (!ids.length) return list;
+
+  const statusById = new Map();
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100);
+    const refs = chunk.map((id) => db.collection('orders').doc(id));
+    const snaps = await db.getAll(...refs);
+    snaps.forEach((snap) => {
+      if (snap.exists) statusById.set(snap.id, snap.data().status || 'pending');
+    });
+  }
+
+  return list.map((item) => {
+    const live = statusById.get(String(item.orderId || ''));
+    return live ? { ...item, status: live } : item;
+  });
+}
+
+function billTotalFromItems(items) {
+  return (Array.isArray(items) ? items : [])
+    .filter((i) => i.status !== 'cancelled')
+    .reduce((sum, i) => sum + (Number(i.price) || 0), 0);
 }
 
 // Ответ на callback query (обязательно вызвать, иначе у пользователя крутится загрузка на кнопке)
@@ -1659,15 +1758,25 @@ app.post('/api/mini-app/auth', async (req, res) => {
         .limit(1)
         .get();
       if (!billsSnap.empty) {
-        const bill = billsSnap.docs[0].data();
-        openBillTotal = Number(bill.totalAmount || bill.total || 0);
-        openBillItems = Array.isArray(bill.items) ? bill.items.map((item) => ({
-          orderId: item.orderId || '',
-          cocktailName: item.cocktailName || item.name || 'Коктейль',
-          price: Number(item.price) || 0,
-          status: item.status || 'pending',
-          cocktailImage: item.cocktailImage || ''
-        })) : [];
+        const billDoc = billsSnap.docs[0];
+        const bill = billDoc.data();
+        openBillItems = await hydrateBillItemsWithOrderStatus(bill.items);
+        openBillTotal = billTotalFromItems(openBillItems);
+        // Repair stale item statuses / total in Firestore (best-effort)
+        const stale = (Array.isArray(bill.items) ? bill.items : []).some((it, idx) => {
+          const live = openBillItems[idx];
+          return live && it.status !== live.status;
+        }) || Number(bill.totalAmount || 0) !== openBillTotal;
+        if (stale) {
+          billDoc.ref.update({
+            items: openBillItems.map((it, idx) => ({
+              ...(Array.isArray(bill.items) ? bill.items[idx] : {}),
+              ...it
+            })),
+            totalAmount: openBillTotal,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          }).catch(() => {});
+        }
       }
     } catch (_) { /* index optional */ }
 
@@ -1715,15 +1824,24 @@ app.post('/api/mini-app/me', async (req, res) => {
     let openBillTotal = 0;
     let openBillItems = [];
     if (!billsSnap.empty) {
-      const bill = billsSnap.docs[0].data();
-      openBillTotal = Number(bill.totalAmount || bill.total || 0);
-      openBillItems = Array.isArray(bill.items) ? bill.items.map((item) => ({
-        orderId: item.orderId || '',
-        cocktailName: item.cocktailName || item.name || 'Коктейль',
-        price: Number(item.price) || 0,
-        status: item.status || 'pending',
-        cocktailImage: item.cocktailImage || ''
-      })) : [];
+      const billDoc = billsSnap.docs[0];
+      const bill = billDoc.data();
+      openBillItems = await hydrateBillItemsWithOrderStatus(bill.items);
+      openBillTotal = billTotalFromItems(openBillItems);
+      const stale = (Array.isArray(bill.items) ? bill.items : []).some((it, idx) => {
+        const live = openBillItems[idx];
+        return live && it.status !== live.status;
+      }) || Number(bill.totalAmount || 0) !== openBillTotal;
+      if (stale) {
+        billDoc.ref.update({
+          items: openBillItems.map((it, idx) => ({
+            ...(Array.isArray(bill.items) ? bill.items[idx] : {}),
+            ...it
+          })),
+          totalAmount: openBillTotal,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }).catch(() => {});
+      }
     }
 
     res.json({
@@ -2256,14 +2374,54 @@ app.post('/api/mini-app/admin/bills', async (req, res) => {
       const billId = String(req.body?.billId || '');
       if (!billId) return res.status(400).json({ success: false, error: 'billId required' });
       const paymentMethod = req.body?.paymentMethod || 'cash';
-      await db.collection('bills').doc(billId).set({
+      const billRef = db.collection('bills').doc(billId);
+      const billDoc = await billRef.get();
+      if (!billDoc.exists) {
+        return res.status(404).json({ success: false, error: 'Счёт не найден' });
+      }
+      const bill = billDoc.data() || {};
+      const items = Array.isArray(bill.items) ? bill.items : [];
+      const nextItems = items.map((item) => {
+        if (item.status === 'cancelled') return item;
+        return { ...item, status: 'completed' };
+      });
+      const totalAmount = billTotalFromItems(nextItems);
+
+      await billRef.set({
         status: 'paid',
+        items: nextItems,
+        totalAmount,
         paidAt: admin.firestore.FieldValue.serverTimestamp(),
         paymentMethod,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         closedBy: session.userId
       }, { merge: true });
-      return res.json({ success: true });
+
+      // Mark linked active orders as completed (skip already cancelled)
+      try {
+        let batch = db.batch();
+        let ops = 0;
+        for (const item of items) {
+          const orderId = String(item.orderId || '').trim();
+          if (!orderId || item.status === 'cancelled') continue;
+          batch.set(db.collection('orders').doc(orderId), {
+            status: 'completed',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedBy: `bill-close:${session.userId}`
+          }, { merge: true });
+          ops += 1;
+          if (ops >= 400) {
+            await batch.commit();
+            batch = db.batch();
+            ops = 0;
+          }
+        }
+        if (ops > 0) await batch.commit();
+      } catch (orderSyncErr) {
+        console.warn('⚠️ close-bill order sync:', orderSyncErr?.message || orderSyncErr);
+      }
+
+      return res.json({ success: true, totalAmount });
     }
 
     let query = db.collection('bills').limit(40);

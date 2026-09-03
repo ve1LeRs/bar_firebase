@@ -574,6 +574,19 @@ button, input {
   font-size: 0.95rem;
 }
 
+.bill-item-row.is-cancelled {
+  opacity: 0.55;
+}
+
+.bill-item-row.is-cancelled .bill-item-name,
+.bill-item-row.is-cancelled .bill-item-price {
+  text-decoration: line-through;
+}
+
+.bill-item-row.is-cancelled .bill-item-meta {
+  color: var(--bad);
+}
+
 .auth-retry {
   margin-top: 10px;
 }
