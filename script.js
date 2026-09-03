@@ -29,7 +29,12 @@ if (window.location.hostname === 'localhost' || window.location.hostname === '12
   // В продакшне пытаемся определить URL сервера автоматически
   const savedUrl = localStorage.getItem('webhook_server_url');
   console.log('💾 Сохраненный URL в localStorage:', savedUrl);
-  if (savedUrl) {
+  const staleSaved = savedUrl && (
+    savedUrl.includes('onrender.com') ||
+    savedUrl.includes(':10443') ||
+    savedUrl.includes('railway.app')
+  );
+  if (savedUrl && !staleSaved) {
     WEBHOOK_SERVER_URL = savedUrl;
     console.log('💾 Используем сохраненный URL:', WEBHOOK_SERVER_URL);
   } else {
@@ -40,7 +45,6 @@ if (window.location.hostname === 'localhost' || window.location.hostname === '12
     if (currentHost.includes('onrender.com')) {
       WEBHOOK_SERVER_URL = `https://${currentHost}`;
       console.log('🚀 Автоматически определен Render URL:', WEBHOOK_SERVER_URL);
-      // Сохраняем для будущего использования
       localStorage.setItem('webhook_server_url', WEBHOOK_SERVER_URL);
     } else if (currentHost.includes('github.io') || currentHost.includes('asafievbar.duckdns.org')) {
       // GitHub Pages / домен бара → VPS API
@@ -7324,7 +7328,7 @@ sendToTelegramBtn?.addEventListener('click', async () => {
     // Используем общий URL сервера, который настраивается через WEBHOOK_SERVER_URL
     const serverUrl = typeof getWebhookServerUrl === 'function'
       ? getWebhookServerUrl()
-      : (localStorage.getItem('webhook_server_url') || 'https://bar-firebase.onrender.com');
+      : (localStorage.getItem('webhook_server_url') || 'https://asafievbar.duckdns.org');
     
     const response = await fetch(`${serverUrl}/send-purchase-list`, {
       method: 'POST',
@@ -7373,17 +7377,14 @@ sendToTelegramBtn?.addEventListener('click', async () => {
 // Проверка и обновление URL сервера (раньше Railway)
 const checkRailwayUrlBtn = document.getElementById('checkRailwayUrlBtn');
 checkRailwayUrlBtn?.addEventListener('click', async () => {
-  const currentUrl = localStorage.getItem('webhook_server_url') || 'https://bar-firebase.onrender.com';
+  const currentUrl = localStorage.getItem('webhook_server_url') || 'https://asafievbar.duckdns.org';
   
   const newUrl = prompt(
     '🔧 Проверьте и обновите URL сервера\n\n' +
     'Текущий URL:\n' + currentUrl + '\n\n' +
-    'Чтобы найти правильный URL Render:\n' +
-    '1. Откройте https://render.com/\n' +
-    '2. Зайдите в ваш сервис\n' +
-    '3. Settings → Custom domains / Service URL\n' +
-    '4. Скопируйте публичный URL\n\n' +
-    'Введите новый URL (или оставьте пустым для сброса):',
+    'Актуальный API AsafievBar:\n' +
+    'https://asafievbar.duckdns.org\n\n' +
+    'Введите новый URL или оставьте пустым для сброса:',
     currentUrl
   );
   
@@ -7405,10 +7406,10 @@ checkRailwayUrlBtn?.addEventListener('click', async () => {
         if (response.ok) {
           showSuccess('✅ Сервер отвечает! URL правильный.');
         } else {
-          showError('⚠️ Сервер недоступен. Проверьте, что приложение запущено на Render и URL правильный.');
+          showError('⚠️ Сервер недоступен. Проверьте URL.');
         }
       } catch (error) {
-        showError('⚠️ Не удалось подключиться к серверу. Проверьте URL и статус сервиса на Render.');
+        showError('⚠️ Не удалось подключиться к серверу. Проверьте URL.');
       }
     } else {
       localStorage.removeItem('webhook_server_url');
