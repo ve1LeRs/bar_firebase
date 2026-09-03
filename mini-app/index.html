@@ -13,10 +13,17 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://telegram.org">
-  <link rel="preload" href="app.css?v=taste1" as="style">
-  <link rel="stylesheet" href="app.css?v=taste1">
+  <link rel="preload" href="app.css?v=stop1" as="style">
+  <link rel="stylesheet" href="app.css?v=stop1">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;600&display=swap" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;600&display=swap"></noscript>
+  <style id="critical-stop">
+    /* Inline so dimming works even if CSS cache lags */
+    .cocktail.stopped {
+      opacity: 0.45 !important;
+      filter: grayscale(0.45) brightness(0.72);
+    }
+  </style>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -364,6 +371,6 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script defer src="app.js?v=taste1"></script>
+  <script defer src="app.js?v=stop1"></script>
 </body>
 </html>

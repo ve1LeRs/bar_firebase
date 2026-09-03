@@ -164,8 +164,8 @@ button, input {
 }
 
 @keyframes rise {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { transform: translateY(8px); }
+  to { transform: translateY(0); }
 }
 
 .hero {
@@ -266,17 +266,23 @@ button, input {
 }
 
 .cocktail.stopped {
-  opacity: 0.42;
-  filter: grayscale(0.35);
+  opacity: 0.45;
+  filter: grayscale(0.45) brightness(0.72);
 }
 
-.cocktail.stopped .cocktail-thumb {
-  filter: brightness(0.72);
+.cocktail.stopped .thumb-wrap {
+  filter: brightness(0.75);
 }
 
 .cocktail.stopped .price,
-.cocktail.stopped h3 {
-  opacity: 0.85;
+.cocktail.stopped h3,
+.cocktail.stopped .cocktail-meta {
+  opacity: 0.9;
+}
+
+.cocktail.stopped .badge.stop {
+  opacity: 1;
+  filter: none;
 }
 
 .cocktail-enter {

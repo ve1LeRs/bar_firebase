@@ -1939,8 +1939,17 @@
       const stopped = state.stoplist.has(String(cocktail.name || '').trim());
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = `cocktail${stopped ? ' stopped' : ''}${animate ? ' cocktail-enter' : ''}`;
-      if (animate) btn.style.animationDelay = `${Math.min(index, 8) * 30}ms`;
+      btn.className = `cocktail${stopped ? ' stopped' : ''}`;
+      // Enter animation only uses transform — remove class after so fill
+      // mode cannot override .cocktail.stopped opacity.
+      if (animate) {
+        btn.classList.add('cocktail-enter');
+        btn.style.animationDelay = `${Math.min(index, 8) * 30}ms`;
+        btn.addEventListener('animationend', () => {
+          btn.classList.remove('cocktail-enter');
+          btn.style.animationDelay = '';
+        }, { once: true });
+      }
 
       const imageUrl = (cocktail.image || '').trim();
       const hasImage = Boolean(imageUrl);
