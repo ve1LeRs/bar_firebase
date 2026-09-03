@@ -43,7 +43,7 @@
     ordersPollTimer: null,
     role: 'user',
     adminOrdersTimer: null,
-    adminTab: 'orders'
+    adminTab: 'cocktails'
   };
 
   // Wake Render ASAP (cold start) — do not await
@@ -383,9 +383,8 @@
     if (els.adminTabBtn) els.adminTabBtn.hidden = !on;
     if (on) {
       populateAdminStopSelect();
-      refreshAdminOrders();
-      refreshAdminStoplist();
       startAdminPolling();
+      switchAdminTab(state.adminTab || 'cocktails');
     }
   }
 
@@ -578,10 +577,13 @@
   }
 
   function switchAdminTab(name) {
-    state.adminTab = name;
+    state.adminTab = name || 'cocktails';
     state.billFilter = state.billFilter || 'open';
+    state.cocktailFilter = state.cocktailFilter || 'all';
+    state.ingFilter = state.ingFilter || 'all';
+
     els.adminSubtabs?.querySelectorAll('[data-admin-tab]').forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.adminTab === name);
+      btn.classList.toggle('active', btn.dataset.adminTab === state.adminTab);
     });
 
     const panes = {
@@ -596,17 +598,20 @@
     };
     Object.entries(panes).forEach(([key, id]) => {
       const el = document.getElementById(id);
-      if (el) el.hidden = key !== name;
+      if (!el) return;
+      el.classList.toggle('is-active', key === state.adminTab);
+      el.hidden = false;
+      el.removeAttribute('hidden');
     });
 
-    if (name === 'orders') refreshAdminOrders();
-    if (name === 'bills') refreshAdminBills();
-    if (name === 'stoplist') refreshAdminStoplist();
-    if (name === 'cocktails') refreshAdminCocktails();
-    if (name === 'promos') refreshAdminPromos();
-    if (name === 'bonuses') refreshAdminBonuses();
-    if (name === 'purchases') refreshAdminPurchases();
-    if (name === 'monitoring') refreshAdminMonitoring();
+    if (state.adminTab === 'orders') refreshAdminOrders();
+    if (state.adminTab === 'bills') refreshAdminBills();
+    if (state.adminTab === 'stoplist') refreshAdminStoplist();
+    if (state.adminTab === 'cocktails') refreshAdminCocktails();
+    if (state.adminTab === 'promos') refreshAdminPromos();
+    if (state.adminTab === 'bonuses') refreshAdminBonuses();
+    if (state.adminTab === 'purchases') refreshAdminPurchases();
+    if (state.adminTab === 'monitoring') refreshAdminMonitoring();
   }
 
   async function refreshAdminBills() {
@@ -638,7 +643,7 @@
           <div class="order-top">
             <div>
               <p class="order-name">${escapeHtml(bill.userName || 'Гость')}</p>
-              <p class="order-time">${bill.itemsCount || 0} поз. · ${bill.status}</p>
+              <p class="order-time">${bill.itemsCount || 0} поз. · ${escapeHtml(bill.status || '')}</p>
             </div>
             <strong class="price">${Number(bill.totalAmount) || 0} ₽</strong>
           </div>
@@ -683,7 +688,7 @@
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Ошибка');
       const list = data.cocktails || [];
-      // Keep local menu in sync
+      state.adminCocktails = list;
       state.cocktails = list.map((c) => ({
         id: c.id, name: c.name, price: c.price, image: c.image || '',
         ingredients: c.ingredients || '', description: c.description || '',
@@ -691,50 +696,61 @@
       }));
       populateAdminStopSelect();
       renderMenu();
-      const box = document.getElementById('adminCocktailsList');
-      if (!box) return;
-      if (!list.length) {
-        box.innerHTML = '<div class="empty-state">Нет коктейлей</div>';
-        return;
-      }
-      box.innerHTML = '';
-      list.forEach((c) => {
-        const card = document.createElement('article');
-        card.className = 'order-card';
-        card.innerHTML = `
-          <div class="order-top">
-            <div>
-              <p class="order-name">${escapeHtml(c.name || '')}</p>
-              <p class="order-time">${escapeHtml(c.category || '')} · ${c.alcohol != null ? c.alcohol + '%' : '—'}</p>
-            </div>
-            <strong class="price">${Number(c.price) || 0} ₽</strong>
-          </div>
-          <div class="admin-actions">
-            <button type="button" data-edit-cocktail="${escapeAttr(c.id)}">Изменить</button>
-            <button type="button" class="danger" data-del-cocktail="${escapeAttr(c.id)}">Удалить</button>
-          </div>
-        `;
-        card.querySelector('[data-edit-cocktail]')?.addEventListener('click', () => fillCocktailForm(c));
-        card.querySelector('[data-del-cocktail]')?.addEventListener('click', async () => {
-          if (!confirm(`Удалить ${c.name}?`)) return;
-          await deleteAdminCocktail(c.id);
-        });
-        box.appendChild(card);
-      });
+      renderAdminCocktailsList();
     } catch (err) {
       const box = document.getElementById('adminCocktailsList');
       if (box) box.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
     }
   }
 
+  function renderAdminCocktailsList() {
+    const box = document.getElementById('adminCocktailsList');
+    if (!box) return;
+    const filter = state.cocktailFilter || 'all';
+    let list = state.adminCocktails || [];
+    if (filter !== 'all') {
+      list = list.filter((c) => getCategory(c) === filter);
+    }
+    if (!list.length) {
+      box.innerHTML = '<div class="empty-state">Нет коктейлей</div>';
+      return;
+    }
+    box.innerHTML = '';
+    list.forEach((c) => {
+      const card = document.createElement('article');
+      card.className = 'order-card';
+      card.innerHTML = `
+        <div class="order-top">
+          <div>
+            <p class="order-name">${escapeHtml(c.name || '')}</p>
+            <p class="order-time">${escapeHtml(c.category || getCategory(c))} · ${c.alcohol != null ? c.alcohol + '%' : '—'}</p>
+          </div>
+          <strong class="price">${Number(c.price) || 0} ₽</strong>
+        </div>
+        <div class="admin-actions">
+          <button type="button" data-edit-cocktail="${escapeAttr(c.id)}">Изменить</button>
+          <button type="button" class="danger" data-del-cocktail="${escapeAttr(c.id)}">Удалить</button>
+        </div>
+      `;
+      card.querySelector('[data-edit-cocktail]')?.addEventListener('click', () => fillCocktailForm(c));
+      card.querySelector('[data-del-cocktail]')?.addEventListener('click', async () => {
+        if (!confirm(`Удалить ${c.name}?`)) return;
+        await deleteAdminCocktail(c.id);
+      });
+      box.appendChild(card);
+    });
+  }
+
   function fillCocktailForm(c) {
-    document.getElementById('adminCocktailId').value = c.id || '';
-    document.getElementById('adminCocktailName').value = c.name || '';
-    document.getElementById('adminCocktailPrice').value = c.price || '';
-    document.getElementById('adminCocktailIngredients').value = c.ingredients || '';
-    document.getElementById('adminCocktailCategory').value = c.category || 'classic';
-    document.getElementById('adminCocktailAlcohol').value = c.alcohol ?? '';
-    showToast('Редактирование: сохраните изменения');
+    document.getElementById('adminCocktailId').value = c?.id || '';
+    document.getElementById('adminCocktailName').value = c?.name || '';
+    document.getElementById('adminCocktailPrice').value = c?.price ?? '';
+    document.getElementById('adminCocktailIngredients').value = c?.ingredients || '';
+    document.getElementById('adminCocktailImage').value = c?.image || '';
+    document.getElementById('adminCocktailCategory').value = c?.category || getCategory(c || {}) || 'classic';
+    document.getElementById('adminCocktailAlcohol').value = c?.alcohol ?? '';
+    document.getElementById('adminCocktailMood').value = c?.mood || c?.description || '';
+    showToast(c?.id ? 'Редактирование: сохраните изменения' : 'Новый коктейль');
   }
 
   async function saveAdminCocktail() {
@@ -743,20 +759,30 @@
       name: document.getElementById('adminCocktailName').value.trim(),
       price: Number(document.getElementById('adminCocktailPrice').value),
       ingredients: document.getElementById('adminCocktailIngredients').value.trim(),
+      image: document.getElementById('adminCocktailImage').value.trim(),
       category: document.getElementById('adminCocktailCategory').value,
-      alcohol: document.getElementById('adminCocktailAlcohol').value
+      alcohol: document.getElementById('adminCocktailAlcohol').value,
+      mood: document.getElementById('adminCocktailMood').value.trim(),
+      description: document.getElementById('adminCocktailMood').value.trim()
     };
+    if (!cocktail.name || !Number.isFinite(cocktail.price)) {
+      showToast('Название и цена обязательны');
+      return;
+    }
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/admin/cocktails`, {
         method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'upsert', cocktail })
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Ошибка сохранения');
+      fillCocktailForm(null);
       document.getElementById('adminCocktailId').value = '';
       document.getElementById('adminCocktailName').value = '';
       document.getElementById('adminCocktailPrice').value = '';
       document.getElementById('adminCocktailIngredients').value = '';
+      document.getElementById('adminCocktailImage').value = '';
       document.getElementById('adminCocktailAlcohol').value = '';
+      document.getElementById('adminCocktailMood').value = '';
       showToast('Коктейль сохранён');
       refreshAdminCocktails();
     } catch (err) {
@@ -837,8 +863,13 @@
       discount: Number(document.getElementById('adminPromoDiscount').value),
       description: document.getElementById('adminPromoDescription').value.trim(),
       maxUses: Number(document.getElementById('adminPromoMaxUses').value) || 0,
-      active: true
+      expiryDate: document.getElementById('adminPromoExpiry')?.value || null,
+      active: document.getElementById('adminPromoActive')?.checked !== false
     };
+    if (!promo.code) {
+      showToast('Введите код промокода');
+      return;
+    }
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/admin/promos`, {
         method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'upsert', promo })
@@ -850,6 +881,8 @@
       document.getElementById('adminPromoDiscount').value = '';
       document.getElementById('adminPromoDescription').value = '';
       document.getElementById('adminPromoMaxUses').value = '';
+      if (document.getElementById('adminPromoExpiry')) document.getElementById('adminPromoExpiry').value = '';
+      if (document.getElementById('adminPromoActive')) document.getElementById('adminPromoActive').checked = true;
       refreshAdminPromos();
     } catch (err) {
       showToast(err.message || 'Ошибка');
@@ -858,6 +891,9 @@
 
   async function refreshAdminBonuses() {
     if (!isAdminUser() || !canOrder()) return;
+    const usersBox = document.getElementById('adminBonusUsersList');
+    const statsBox = document.getElementById('adminBonusStats');
+    if (usersBox) usersBox.innerHTML = '<div class="empty-state">Загрузка…</div>';
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/admin/bonuses`, {
         method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'get' })
@@ -870,8 +906,40 @@
       document.getElementById('adminBonusMax').value = s.maxUsage ?? 50;
       document.getElementById('adminBonusExpire').value = s.expireDays ?? 180;
       document.getElementById('adminBonusActive').checked = s.active !== false;
+
+      if (statsBox) {
+        statsBox.innerHTML = `
+          <div class="stat"><span class="stat-label">С бонусами</span><strong>${data.stats?.usersCount ?? 0}</strong></div>
+          <div class="stat"><span class="stat-label">Всего баллов</span><strong>${data.stats?.totalPoints ?? 0}</strong></div>
+          <div class="stat"><span class="stat-label">Сегодня</span><strong>+${data.stats?.issuedToday ?? 0}</strong></div>
+        `;
+      }
+
+      const users = data.users || [];
+      if (usersBox) {
+        if (!users.length) {
+          usersBox.innerHTML = '<div class="empty-state">Пользователи с бонусами не найдены</div>';
+        } else {
+          usersBox.innerHTML = '';
+          users.forEach((u) => {
+            const card = document.createElement('article');
+            card.className = 'order-card';
+            card.innerHTML = `
+              <div class="order-top">
+                <div>
+                  <p class="order-name">${escapeHtml(u.name || u.id)}</p>
+                  <p class="order-time">${escapeHtml(u.phone || u.id)} · начислено ${Number(u.totalEarned) || 0}</p>
+                </div>
+                <strong class="price">${Number(u.balance) || 0} ◆</strong>
+              </div>
+            `;
+            usersBox.appendChild(card);
+          });
+        }
+      }
     } catch (err) {
       showToast(err.message || 'Ошибка бонусов');
+      if (usersBox) usersBox.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
     }
   }
 
@@ -903,31 +971,110 @@
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Ошибка');
-      const box = document.getElementById('adminPurchasesList');
-      const list = data.items || [];
-      if (!box) return;
-      if (!list.length) {
-        box.innerHTML = '<div class="empty-state">Ингредиентов нет</div>';
-        return;
-      }
-      box.innerHTML = '';
-      list.forEach((item) => {
-        const card = document.createElement('article');
-        card.className = 'order-card';
-        card.innerHTML = `
-          <div class="order-top">
-            <div>
-              <p class="order-name">${escapeHtml(item.name)}</p>
-              <p class="order-time">мин ${item.minStock}${item.unit ? ' ' + item.unit : ''}</p>
-            </div>
-            <span class="status ${item.low ? 'cancelled' : 'ready'}">${item.stock}${item.unit ? ' ' + item.unit : ''}</span>
-          </div>
+      state.adminIngredients = data.items || [];
+      const stats = data.stats || {};
+      const statsEl = document.getElementById('adminPurchaseStats');
+      if (statsEl) {
+        statsEl.innerHTML = `
+          <div class="stat"><span class="stat-label">Всего</span><strong>${stats.total ?? state.adminIngredients.length}</strong></div>
+          <div class="stat"><span class="stat-label">Мало</span><strong>${stats.low ?? 0}</strong></div>
+          <div class="stat"><span class="stat-label">Нет</span><strong>${stats.out ?? 0}</strong></div>
         `;
-        box.appendChild(card);
-      });
+      }
+      renderAdminPurchasesList();
     } catch (err) {
       const box = document.getElementById('adminPurchasesList');
       if (box) box.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  function renderAdminPurchasesList() {
+    const box = document.getElementById('adminPurchasesList');
+    if (!box) return;
+    const filter = state.ingFilter || 'all';
+    let list = state.adminIngredients || [];
+    if (filter === 'low') list = list.filter((i) => i.low && !i.out);
+    if (filter === 'out') list = list.filter((i) => i.out || i.stock <= 0);
+    if (!list.length) {
+      box.innerHTML = '<div class="empty-state">Ингредиентов нет</div>';
+      return;
+    }
+    box.innerHTML = '';
+    list.forEach((item) => {
+      const card = document.createElement('article');
+      card.className = 'order-card';
+      const statusClass = item.out || item.stock <= 0 ? 'cancelled' : item.low ? 'preparing' : 'ready';
+      card.innerHTML = `
+        <div class="order-top">
+          <div>
+            <p class="order-name">${escapeHtml(item.name)}</p>
+            <p class="order-time">мин ${item.minStock}${item.unit ? ' ' + item.unit : ''}</p>
+          </div>
+          <span class="status ${statusClass}">${item.stock}${item.unit ? ' ' + item.unit : ''}</span>
+        </div>
+        <div class="admin-actions">
+          <button type="button" data-edit-ing="${escapeAttr(item.id)}">Изменить</button>
+          <button type="button" class="danger" data-del-ing="${escapeAttr(item.id)}">Удалить</button>
+        </div>
+      `;
+      card.querySelector('[data-edit-ing]')?.addEventListener('click', () => fillIngredientForm(item));
+      card.querySelector('[data-del-ing]')?.addEventListener('click', async () => {
+        if (!confirm(`Удалить ${item.name}?`)) return;
+        await deleteAdminIngredient(item.id);
+      });
+      box.appendChild(card);
+    });
+  }
+
+  function fillIngredientForm(item) {
+    document.getElementById('adminIngId').value = item?.id || '';
+    document.getElementById('adminIngName').value = item?.name || '';
+    document.getElementById('adminIngUnit').value = item?.unit || 'шт';
+    document.getElementById('adminIngStock').value = item?.stock ?? '';
+    document.getElementById('adminIngMin').value = item?.minStock ?? '';
+  }
+
+  async function saveAdminIngredient() {
+    const ingredient = {
+      id: document.getElementById('adminIngId').value || undefined,
+      name: document.getElementById('adminIngName').value.trim(),
+      unit: document.getElementById('adminIngUnit').value,
+      stock: Number(document.getElementById('adminIngStock').value),
+      minStock: Number(document.getElementById('adminIngMin').value)
+    };
+    if (!ingredient.name) {
+      showToast('Укажите название ингредиента');
+      return;
+    }
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/purchases`, {
+        method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'upsert', ingredient })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Ошибка');
+      showToast(ingredient.id ? 'Ингредиент обновлён' : 'Ингредиент добавлен');
+      fillIngredientForm(null);
+      document.getElementById('adminIngId').value = '';
+      document.getElementById('adminIngName').value = '';
+      document.getElementById('adminIngStock').value = '';
+      document.getElementById('adminIngMin').value = '';
+      refreshAdminPurchases();
+    } catch (err) {
+      showToast(err.message || 'Ошибка');
+    }
+  }
+
+  async function deleteAdminIngredient(id) {
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/purchases`, {
+        method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'delete', id })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Ошибка');
+      showToast('Ингредиент удалён');
+      refreshAdminPurchases();
+    } catch (err) {
+      showToast(err.message || 'Ошибка');
     }
   }
 
@@ -1560,8 +1707,7 @@
     if (name === 'menu') tg?.BackButton?.hide?.();
     else tg?.BackButton?.show?.();
     if (name === 'admin') {
-      if (state.adminTab === 'orders') refreshAdminOrders();
-      else refreshAdminStoplist();
+      switchAdminTab(state.adminTab || 'cocktails');
     }
     haptic('light');
   }
@@ -1607,6 +1753,7 @@
     document.getElementById('adminCocktailSaveBtn')?.addEventListener('click', saveAdminCocktail);
     document.getElementById('adminPromoSaveBtn')?.addEventListener('click', saveAdminPromo);
     document.getElementById('adminBonusSaveBtn')?.addEventListener('click', saveAdminBonuses);
+    document.getElementById('adminIngSaveBtn')?.addEventListener('click', saveAdminIngredient);
     document.getElementById('adminPurchaseSendBtn')?.addEventListener('click', sendAdminPurchases);
     document.getElementById('adminMonitoringRefreshBtn')?.addEventListener('click', refreshAdminMonitoring);
     document.getElementById('adminBillFilters')?.addEventListener('click', (e) => {
@@ -1617,6 +1764,24 @@
         f.classList.toggle('active', f === btn);
       });
       refreshAdminBills();
+    });
+    document.getElementById('adminCocktailFilters')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-cocktail-filter]');
+      if (!btn) return;
+      state.cocktailFilter = btn.dataset.cocktailFilter;
+      document.querySelectorAll('#adminCocktailFilters .filter').forEach((f) => {
+        f.classList.toggle('active', f === btn);
+      });
+      renderAdminCocktailsList();
+    });
+    document.getElementById('adminPurchaseFilters')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-ing-filter]');
+      if (!btn) return;
+      state.ingFilter = btn.dataset.ingFilter;
+      document.querySelectorAll('#adminPurchaseFilters .filter').forEach((f) => {
+        f.classList.toggle('active', f === btn);
+      });
+      renderAdminPurchasesList();
     });
     els.adminSubtabs?.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-admin-tab]');
