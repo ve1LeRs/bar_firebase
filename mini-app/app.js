@@ -264,6 +264,7 @@
         if (typeof data.openBillTotal === 'number') {
           state.openBillTotal = data.openBillTotal;
         }
+        if (data.role) state.role = data.role;
 
         if (data.customToken) {
           try {
@@ -322,8 +323,10 @@
 
     els.profileName.textContent = name;
     els.profileMeta.textContent = state.user?.username
-      ? `@${state.user.username}`
-      : 'Telegram Mini App';
+      ? `@${state.user.username}${state.role === 'admin' ? ' · админ' : ''}`
+      : state.role === 'admin'
+        ? 'Администратор'
+        : 'Telegram Mini App';
     els.avatar.textContent = (name || 'A').charAt(0).toUpperCase();
     els.profileBonus.textContent = String(state.bonusBalance);
     els.bonusChip.textContent = `◆ ${state.bonusBalance}`;
