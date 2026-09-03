@@ -142,12 +142,42 @@ curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
    - Статус обновляется автоматически при изменении администратором
    - Получайте уведомления об обновлениях
 
+## Telegram Mini App
+
+Клиентское Mini App для заказа коктейлей прямо из Telegram.
+
+### Что умеет
+- Авторизация через Telegram `initData` → Firebase Custom Token
+- Меню коктейлей с фильтрами и стоп-листом
+- Заказ с бонусами, очередь, уведомление бармену
+- Real-time статусы заказов и профиль с балансом бонусов
+
+### Файлы
+- `mini-app/index.html` — UI
+- `mini-app/app.js` — логика Mini App
+- `mini-app/app.css` — мобильные стили
+- API: `POST /api/mini-app/auth`, `POST /api/mini-app/create-order`, `POST /api/mini-app/setup-menu-button`
+
+### Подключение в BotFather
+1. Задеплойте backend (Render) так, чтобы открывался `https://<your-server>/mini-app/`
+2. В @BotFather → Bot Settings → Menu Button → Configure menu button
+3. Укажите URL: `https://<your-server>/mini-app/`
+4. Либо вызовите API:
+```bash
+curl -X POST "https://<your-server>/api/mini-app/setup-menu-button" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://<your-server>/mini-app/"}'
+```
+
+> Mini App должен открываться по HTTPS. Для GitHub Pages можно указать `https://<user>.github.io/<repo>/mini-app/`, а API оставить на Render.
+
 ## Структура проекта
 
 ```
 ├── index.html              # Главная страница
 ├── script.js               # Основная логика сайта
 ├── style.css               # Стили
+├── mini-app/               # Telegram Mini App
 ├── webhook-server.js       # Webhook сервер для Telegram
 ├── package.json            # Зависимости Node.js
 └── README.md              # Документация
@@ -160,6 +190,10 @@ curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
 - `GET /health` - Проверка состояния сервера
 - `GET /test-firebase` - Тест подключения к Firebase
 - `POST /telegram-webhook` - Обработка webhook от Telegram
+- `GET /mini-app/` - Telegram Mini App
+- `POST /api/mini-app/auth` - Авторизация Mini App (initData → custom token)
+- `POST /api/mini-app/create-order` - Создание заказа из Mini App
+- `POST /api/mini-app/setup-menu-button` - Настройка Menu Button бота
 
 ## Безопасность
 
