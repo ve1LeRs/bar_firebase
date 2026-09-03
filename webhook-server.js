@@ -1251,7 +1251,7 @@ async function createOrUpdateBillAdmin(userId, userName, orderData, orderId) {
   };
 
   if (billsSnapshot.empty) {
-    await db.collection('bills').add({
+    const ref = await db.collection('bills').add({
       userId,
       userName: userName || 'Гость',
       userPhone: '',
@@ -1265,15 +1265,27 @@ async function createOrUpdateBillAdmin(userId, userName, orderData, orderId) {
       paymentId: null,
       source: 'telegram-mini-app'
     });
-  } else {
-    const billDoc = billsSnapshot.docs[0];
-    const billData = billDoc.data();
-    await billDoc.ref.update({
-      items: admin.firestore.FieldValue.arrayUnion(billItem),
-      totalAmount: (billData.totalAmount || 0) + orderData.price,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+    return {
+      id: ref.id,
+      totalAmount: Number(orderData.price) || 0,
+      items: [billItem]
+    };
   }
+
+  const billDoc = billsSnapshot.docs[0];
+  const billData = billDoc.data();
+  const nextTotal = (Number(billData.totalAmount) || 0) + (Number(orderData.price) || 0);
+  const nextItems = [...(Array.isArray(billData.items) ? billData.items : []), billItem];
+  await billDoc.ref.update({
+    items: nextItems,
+    totalAmount: nextTotal,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+  return {
+    id: billDoc.id,
+    totalAmount: nextTotal,
+    items: nextItems
+  };
 }
 
 async function spendBonusPointsAdmin(userId, amount, orderId) {
@@ -1429,6 +1441,7 @@ app.post('/api/mini-app/auth', async (req, res) => {
     const bonusBalance = bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0;
 
     let openBillTotal = 0;
+    let openBillItems = [];
     try {
       const billsSnap = await db.collection('bills')
         .where('userId', '==', uid)
@@ -1436,7 +1449,15 @@ app.post('/api/mini-app/auth', async (req, res) => {
         .limit(1)
         .get();
       if (!billsSnap.empty) {
-        openBillTotal = Number(billsSnap.docs[0].data().totalAmount || 0);
+        const bill = billsSnap.docs[0].data();
+        openBillTotal = Number(bill.totalAmount || bill.total || 0);
+        openBillItems = Array.isArray(bill.items) ? bill.items.map((item) => ({
+          orderId: item.orderId || '',
+          cocktailName: item.cocktailName || item.name || 'Коктейль',
+          price: Number(item.price) || 0,
+          status: item.status || 'pending',
+          cocktailImage: item.cocktailImage || ''
+        })) : [];
       }
     } catch (_) { /* index optional */ }
 
@@ -1447,6 +1468,7 @@ app.post('/api/mini-app/auth', async (req, res) => {
       customToken,
       bonusBalance,
       openBillTotal,
+      openBillItems,
       role: isAdmin ? 'admin' : (existingRole || 'user'),
       user: {
         id: tgUser.id,
@@ -1480,12 +1502,27 @@ app.post('/api/mini-app/me', async (req, res) => {
       db.collection('bills').where('userId', '==', session.userId).where('status', '==', 'open').limit(1).get()
     ]);
 
+    let openBillTotal = 0;
+    let openBillItems = [];
+    if (!billsSnap.empty) {
+      const bill = billsSnap.docs[0].data();
+      openBillTotal = Number(bill.totalAmount || bill.total || 0);
+      openBillItems = Array.isArray(bill.items) ? bill.items.map((item) => ({
+        orderId: item.orderId || '',
+        cocktailName: item.cocktailName || item.name || 'Коктейль',
+        price: Number(item.price) || 0,
+        status: item.status || 'pending',
+        cocktailImage: item.cocktailImage || ''
+      })) : [];
+    }
+
     res.json({
       success: true,
       userId: session.userId,
       bonusBalance: bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0,
       maxBonusUsage: settingsDoc.exists ? Number(settingsDoc.data().maxUsage) || 50 : 50,
-      openBillTotal: billsSnap.empty ? 0 : Number(billsSnap.docs[0].data().totalAmount || 0)
+      openBillTotal,
+      openBillItems
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1606,17 +1643,29 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       }
     }
 
-    // Respond immediately; side-effects continue in background
+    // Bill must be ready before response — profile reads it immediately
+    let billSnapshot = { totalAmount: finalPrice, items: [] };
+    try {
+      billSnapshot = await createOrUpdateBillAdmin(userId, displayName, orderData, orderRef.id);
+    } catch (billErr) {
+      console.warn('bill update failed:', billErr.message);
+    }
+
     res.json({
       success: true,
       orderId: orderRef.id,
-      queuePosition: orderData.queuePosition
+      queuePosition: orderData.queuePosition,
+      openBillTotal: Number(billSnapshot.totalAmount) || finalPrice,
+      openBillItems: (billSnapshot.items || []).map((item) => ({
+        orderId: item.orderId || orderRef.id,
+        cocktailName: item.cocktailName || item.name || name,
+        price: Number(item.price) || 0,
+        status: item.status || 'pending',
+        cocktailImage: item.cocktailImage || ''
+      }))
     });
 
-    Promise.all([
-      createOrUpdateBillAdmin(userId, displayName, orderData, orderRef.id),
-      deductIngredientsAdmin(name)
-    ]).catch((e) => console.warn('post-order side effects:', e.message));
+    deductIngredientsAdmin(name).catch((e) => console.warn('deduct ingredients:', e.message));
 
     const queueInfoText = orderData.queuePosition > 0
       ? `🎯 *Позиция в очереди:* #${orderData.queuePosition}\n`
