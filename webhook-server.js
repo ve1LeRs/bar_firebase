@@ -2349,7 +2349,7 @@ app.post('/api/mini-app/ensure-admin', async (req, res) => {
 });
 
 // Запуск сервера
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   console.log(`🚀 Webhook сервер запущен на порту ${PORT}`);
   console.log(`📱 Telegram webhook: ${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://your-railway-app.railway.app'}/telegram-webhook`);
   console.log(`📲 Mini App: ${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://your-railway-app.railway.app'}/mini-app/`);
