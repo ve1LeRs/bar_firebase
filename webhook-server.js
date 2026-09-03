@@ -1771,7 +1771,17 @@ app.post('/api/mini-app/setup-bot-profile', async (req, res) => {
       success: calls.every((c) => c.ok || c.method === 'setMyProfilePhoto'),
       bot: me.result || null,
       miniAppUrl,
-      calls
+      calls,
+      mainMiniApp: {
+        hasMainWebApp: Boolean(me.result?.has_main_web_app),
+        note: 'Кнопка ОТКРЫТЬ в списке чатов включается только вручную в @BotFather',
+        steps: [
+          'Откройте @BotFather',
+          '/mybots → @asafievbar_bot',
+          'Bot Settings → Configure Mini App → Enable Mini App',
+          `URL: ${String(miniAppUrl).split('?')[0]}`
+        ]
+      }
     });
   } catch (error) {
     console.error('❌ setup-bot-profile error:', error);
