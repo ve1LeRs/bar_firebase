@@ -8,13 +8,9 @@ profile.js
 admin-bills.js
 setup-webhook.js
 
-# HTML и CSS
+# HTML и CSS (основной сайт; Mini App деплоится отдельно в /mini-app)
 index.html
 style.css
-
-# Изображения
-logo.png
-favicon.ico
 
 # Документация
 *.md

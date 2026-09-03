@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const admin = require('firebase-admin');
+const crypto = require('crypto');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -46,6 +48,16 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// Telegram Mini App static files + shared brand assets
+app.use('/mini-app', express.static(path.join(__dirname, 'mini-app'), {
+  extensions: ['html'],
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+  }
+}));
+app.get('/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'logo.png')));
+app.get('/favicon.ico', (req, res) => res.sendFile(path.join(__dirname, 'favicon.ico')));
 
 // Firebase Admin SDK инициализация
 let serviceAccount;
@@ -169,7 +181,10 @@ app.get('/', (req, res) => {
       testFirebase: '/test-firebase',
       queueInfo: '/queue-info',
       ordersLast: '/orders-last',
-      webhook: '/telegram-webhook'
+      webhook: '/telegram-webhook',
+      miniApp: '/mini-app/',
+      miniAppAuth: '/api/mini-app/auth',
+      miniAppCreateOrder: '/api/mini-app/create-order'
     }
   });
 });
@@ -1048,10 +1063,424 @@ function getStatusText(status) {
   }
 }
 
+// ============================================
+// TELEGRAM MINI APP API
+// ============================================
+
+function validateTelegramWebAppData(initData, botToken) {
+  if (!initData || !botToken) return null;
+
+  const params = new URLSearchParams(initData);
+  const hash = params.get('hash');
+  if (!hash) return null;
+
+  params.delete('hash');
+  const dataCheckString = [...params.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n');
+
+  const secretKey = crypto
+    .createHmac('sha256', 'WebAppData')
+    .update(botToken)
+    .digest();
+
+  const calculatedHash = crypto
+    .createHmac('sha256', secretKey)
+    .update(dataCheckString)
+    .digest('hex');
+
+  if (calculatedHash !== hash) return null;
+
+  const authDate = Number(params.get('auth_date') || 0);
+  const ageSec = Math.floor(Date.now() / 1000) - authDate;
+  if (!authDate || ageSec > 86400) return null;
+
+  let user = null;
+  try {
+    user = JSON.parse(params.get('user') || 'null');
+  } catch (_) {
+    return null;
+  }
+
+  if (!user?.id) return null;
+  return { user, authDate, queryId: params.get('query_id') || null };
+}
+
+async function createOrUpdateBillAdmin(userId, userName, orderData, orderId) {
+  const billsSnapshot = await db.collection('bills')
+    .where('userId', '==', userId)
+    .where('status', '==', 'open')
+    .get();
+
+  const billItem = {
+    orderId,
+    cocktailId: orderData.cocktailId || '',
+    cocktailName: orderData.name,
+    cocktailImage: orderData.image || '',
+    price: orderData.price,
+    timestamp: new Date(),
+    status: orderData.status || 'pending',
+    rated: false,
+    source: 'telegram-mini-app'
+  };
+
+  if (billsSnapshot.empty) {
+    await db.collection('bills').add({
+      userId,
+      userName: userName || 'Гость',
+      userPhone: '',
+      items: [billItem],
+      totalAmount: orderData.price,
+      status: 'open',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      paidAt: null,
+      paymentMethod: null,
+      paymentId: null,
+      source: 'telegram-mini-app'
+    });
+  } else {
+    const billDoc = billsSnapshot.docs[0];
+    const billData = billDoc.data();
+    await billDoc.ref.update({
+      items: admin.firestore.FieldValue.arrayUnion(billItem),
+      totalAmount: (billData.totalAmount || 0) + orderData.price,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+  }
+}
+
+async function spendBonusPointsAdmin(userId, amount, orderId) {
+  if (!amount || amount <= 0) return;
+  const bonusRef = db.collection('bonusAccounts').doc(userId);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(bonusRef);
+    const balance = snap.exists ? Number(snap.data().balance) || 0 : 0;
+    if (balance < amount) {
+      throw new Error('Недостаточно бонусов');
+    }
+    tx.set(bonusRef, {
+      balance: balance - amount,
+      totalSpent: (snap.exists ? Number(snap.data().totalSpent) || 0 : 0) + amount,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+
+  await db.collection('bonusTransactions').add({
+    userId,
+    type: 'spend',
+    amount,
+    orderId,
+    source: 'telegram-mini-app',
+    createdAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+}
+
+async function deductIngredientsAdmin(cocktailName) {
+  try {
+    const cocktailsSnap = await db.collection('cocktails')
+      .where('name', '==', cocktailName)
+      .limit(1)
+      .get();
+    if (cocktailsSnap.empty) return;
+
+    const cocktail = cocktailsSnap.docs[0].data();
+    if (!Array.isArray(cocktail.stockRecipe) || cocktail.stockRecipe.length === 0) return;
+
+    const ingredientsSnapshot = await db.collection('ingredients').get();
+    const byName = new Map();
+    ingredientsSnapshot.forEach((doc) => {
+      const d = doc.data();
+      const name = (d.name || '').trim();
+      if (name) byName.set(name, { id: doc.id, stock: Number(d.stock) || 0 });
+    });
+
+    const batch = db.batch();
+    let needsStoplist = false;
+
+    for (const item of cocktail.stockRecipe) {
+      const ingName = (item.ingredientName || '').trim();
+      const needed = Number(item.amount) || 0;
+      if (!ingName || needed <= 0) continue;
+      const entry = byName.get(ingName);
+      if (!entry) continue;
+      const next = Math.max(0, entry.stock - needed);
+      batch.update(db.collection('ingredients').doc(entry.id), {
+        stock: next,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      if (next <= 0) needsStoplist = true;
+    }
+
+    await batch.commit();
+
+    if (needsStoplist) {
+      const existing = await db.collection('stoplist')
+        .where('cocktailName', '==', cocktailName)
+        .limit(1)
+        .get();
+      if (existing.empty) {
+        await db.collection('stoplist').add({
+          cocktailName,
+          reason: 'Недостаточно ингредиентов',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          source: 'telegram-mini-app'
+        });
+      }
+    }
+  } catch (error) {
+    console.error('⚠️ Mini App: не удалось списать ингредиенты:', error.message);
+  }
+}
+
+// Auth: validate Telegram initData → Firebase custom token
+app.post('/api/mini-app/auth', async (req, res) => {
+  try {
+    const { initData } = req.body || {};
+    const parsed = validateTelegramWebAppData(initData, TELEGRAM_BOT_TOKEN);
+
+    if (!parsed) {
+      return res.status(401).json({
+        success: false,
+        error: 'Недействительные данные Telegram WebApp'
+      });
+    }
+
+    const tgUser = parsed.user;
+    const uid = `tg_${tgUser.id}`;
+    const displayName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Гость Telegram';
+
+    try {
+      await admin.auth().updateUser(uid, {
+        displayName,
+        photoURL: tgUser.photo_url || undefined
+      });
+    } catch (error) {
+      if (error.code === 'auth/user-not-found') {
+        await admin.auth().createUser({
+          uid,
+          displayName,
+          photoURL: tgUser.photo_url || undefined
+        });
+      } else {
+        throw error;
+      }
+    }
+
+    const userRef = db.collection('users').doc(uid);
+    const existingUser = await userRef.get();
+    await userRef.set({
+      displayName,
+      telegramId: tgUser.id,
+      telegramUsername: tgUser.username || null,
+      photoURL: tgUser.photo_url || null,
+      role: existingUser.exists ? (existingUser.data().role || 'user') : 'user',
+      source: 'telegram-mini-app',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(existingUser.exists ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
+    }, { merge: true });
+
+    const customToken = await admin.auth().createCustomToken(uid, {
+      telegramId: tgUser.id,
+      provider: 'telegram-mini-app'
+    });
+
+    res.json({
+      success: true,
+      customToken,
+      user: {
+        id: tgUser.id,
+        first_name: tgUser.first_name,
+        last_name: tgUser.last_name || '',
+        username: tgUser.username || '',
+        photo_url: tgUser.photo_url || '',
+        uid
+      }
+    });
+  } catch (error) {
+    console.error('❌ Mini App auth error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Ошибка авторизации Mini App'
+    });
+  }
+});
+
+// Create order from Mini App (auth via Firebase ID token)
+app.post('/api/mini-app/create-order', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (!idToken) {
+      return res.status(401).json({ success: false, error: 'Требуется авторизация' });
+    }
+
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    const userId = decoded.uid;
+
+    const {
+      name,
+      price,
+      originalPrice,
+      bonusUsed = 0,
+      queuePosition = 0,
+      user,
+      image = '',
+      cocktailId = '',
+      source = 'telegram-mini-app'
+    } = req.body || {};
+
+    if (!name || price == null) {
+      return res.status(400).json({ success: false, error: 'Не указан коктейль или цена' });
+    }
+
+    const stopSnap = await db.collection('stoplist')
+      .where('cocktailName', '==', name)
+      .limit(1)
+      .get();
+    if (!stopSnap.empty) {
+      return res.status(409).json({ success: false, error: 'Коктейль в стоп-листе' });
+    }
+
+    const bonusAmount = Math.max(0, Number(bonusUsed) || 0);
+    const finalPrice = Math.max(0, Number(price) || 0);
+    const now = new Date();
+    const displayName = user || decoded.name || 'Гость Telegram';
+
+    const orderData = {
+      name,
+      user: displayName,
+      userId,
+      displayTime: now.toLocaleString('ru-RU'),
+      image: image || '',
+      status: 'pending',
+      price: finalPrice,
+      originalPrice: Number(originalPrice) != null ? Number(originalPrice) : finalPrice + bonusAmount,
+      discount: bonusAmount,
+      bonusUsed: bonusAmount,
+      promoCode: null,
+      queuePosition: Number(queuePosition) || 0,
+      cocktailId: cocktailId || '',
+      source,
+      telegramId: decoded.telegramId || null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    const orderRef = await db.collection('orders').add(orderData);
+
+    if (bonusAmount > 0) {
+      try {
+        await spendBonusPointsAdmin(userId, bonusAmount, orderRef.id);
+      } catch (bonusError) {
+        await orderRef.delete();
+        throw bonusError;
+      }
+    }
+
+    await Promise.all([
+      createOrUpdateBillAdmin(userId, displayName, orderData, orderRef.id),
+      deductIngredientsAdmin(name)
+    ]);
+
+    // Notify bartender via existing Telegram flow
+    try {
+      const queueInfoText = orderData.queuePosition > 0
+        ? `🎯 *Позиция в очереди:* #${orderData.queuePosition}\n`
+        : '';
+      const message = `
+🍸 *Новый заказ (Mini App)!*
+
+🍸 *Коктейль:* ${orderData.name}
+👤 *Клиент:* ${orderData.user}
+💰 *Цена:* ${orderData.price}₽${bonusAmount ? ` (бонусы: −${bonusAmount})` : ''}
+📊 *Статус:* Ожидание
+${queueInfoText}🕒 *Время:* ${orderData.displayTime}
+🆔 *ID заказа:* ${orderRef.id}
+      `.trim();
+
+      const inlineKeyboard = {
+        inline_keyboard: [
+          [
+            { text: '👨‍🍳 Готовится', callback_data: `preparing_${orderRef.id}` },
+            { text: '🍸 Готов', callback_data: `ready_${orderRef.id}` }
+          ],
+          [
+            { text: '❌ Отменить', callback_data: `cancelled_${orderRef.id}` }
+          ]
+        ]
+      };
+
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: TELEGRAM_CHAT_ID,
+          text: message,
+          parse_mode: 'Markdown',
+          reply_markup: inlineKeyboard
+        })
+      });
+    } catch (notifyError) {
+      console.error('⚠️ Mini App: заказ создан, но Telegram notify failed:', notifyError.message);
+    }
+
+    res.json({
+      success: true,
+      orderId: orderRef.id,
+      queuePosition: orderData.queuePosition
+    });
+  } catch (error) {
+    console.error('❌ Mini App create-order error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Ошибка создания заказа'
+    });
+  }
+});
+
+// Helper: configure Telegram Menu Button to open Mini App
+app.post('/api/mini-app/setup-menu-button', async (req, res) => {
+  try {
+    const miniAppUrl = (req.body?.url || '').trim() ||
+      `${req.protocol}://${req.get('host')}/mini-app/`;
+
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setChatMenuButton`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        menu_button: {
+          type: 'web_app',
+          text: 'AsafievBar',
+          web_app: { url: miniAppUrl }
+        }
+      })
+    });
+
+    const result = await response.json();
+    if (!result.ok) {
+      return res.status(500).json({
+        success: false,
+        error: result.description || 'Не удалось настроить Menu Button'
+      });
+    }
+
+    res.json({
+      success: true,
+      url: miniAppUrl,
+      message: 'Menu Button настроен'
+    });
+  } catch (error) {
+    console.error('❌ Mini App setup-menu-button error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Запуск сервера
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Webhook сервер запущен на порту ${PORT}`);
   console.log(`📱 Telegram webhook: ${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://your-railway-app.railway.app'}/telegram-webhook`);
+  console.log(`📲 Mini App: ${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://your-railway-app.railway.app'}/mini-app/`);
   console.log(`🔍 Health check: ${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://your-railway-app.railway.app'}/health`);
 });
 

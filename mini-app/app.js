@@ -1,0 +1,600 @@
+(() => {
+  'use strict';
+
+  const firebaseConfig = {
+    apiKey: 'AIzaSyB4bD8UAu0Aj5IRK5H-uZg6kxNAIbkZc9k',
+    authDomain: 'bar-menu-6145c.firebaseapp.com',
+    projectId: 'bar-menu-6145c',
+    storageBucket: 'bar-menu-6145c.appspot.com',
+    messagingSenderId: '493608422842',
+    appId: '1:493608422842:web:3b4b6bd8a4cb681c436183'
+  };
+
+  const DEFAULT_API = 'https://bar-firebase.onrender.com';
+  const STATUS_LABELS = {
+    pending: 'Ожидание',
+    confirmed: 'Подтверждён',
+    preparing: 'Готовится',
+    ready: 'Готов',
+    completed: 'Выполнен',
+    cancelled: 'Отменён'
+  };
+
+  const tg = window.Telegram?.WebApp;
+  const state = {
+    apiBase: resolveApiBase(),
+    user: null,
+    firebaseUser: null,
+    cocktails: [],
+    stoplist: new Set(),
+    category: 'all',
+    bonusBalance: 0,
+    openBillTotal: null,
+    selected: null,
+    bonusToUse: 0,
+    ordersUnsub: null,
+    maxBonusUsage: 50
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  const els = {
+    greeting: document.getElementById('greeting'),
+    bonusChip: document.getElementById('bonusChip'),
+    menuGrid: document.getElementById('menuGrid'),
+    filters: document.getElementById('filters'),
+    ordersList: document.getElementById('ordersList'),
+    profileName: document.getElementById('profileName'),
+    profileMeta: document.getElementById('profileMeta'),
+    profileBonus: document.getElementById('profileBonus'),
+    profileBill: document.getElementById('profileBill'),
+    authStatus: document.getElementById('authStatus'),
+    avatar: document.getElementById('avatar'),
+    sheet: document.getElementById('orderSheet'),
+    sheetBackdrop: document.getElementById('sheetBackdrop'),
+    sheetMedia: document.getElementById('sheetMedia'),
+    sheetName: document.getElementById('sheetName'),
+    sheetIngredients: document.getElementById('sheetIngredients'),
+    sheetMood: document.getElementById('sheetMood'),
+    sheetPrice: document.getElementById('sheetPrice'),
+    sheetTotal: document.getElementById('sheetTotal'),
+    bonusRow: document.getElementById('bonusRow'),
+    bonusInput: document.getElementById('bonusInput'),
+    confirmOrderBtn: document.getElementById('confirmOrderBtn'),
+    cancelOrderBtn: document.getElementById('cancelOrderBtn'),
+    toast: document.getElementById('toast'),
+    loader: document.getElementById('loader')
+  };
+
+  function resolveApiBase() {
+    const saved = localStorage.getItem('mini_app_api_url');
+    if (saved) return saved.replace(/\/$/, '');
+
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3000';
+    if (host.includes('onrender.com')) return `https://${host}`;
+    return DEFAULT_API;
+  }
+
+  function haptic(type = 'light') {
+    try {
+      tg?.HapticFeedback?.impactOccurred?.(type);
+    } catch (_) { /* ignore */ }
+  }
+
+  function showToast(message) {
+    els.toast.hidden = false;
+    els.toast.textContent = message;
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => {
+      els.toast.hidden = true;
+    }, 2800);
+  }
+
+  function setLoader(on) {
+    els.loader.hidden = !on;
+  }
+
+  function initTelegram() {
+    if (!tg) {
+      document.body.classList.add('tg-themed');
+      els.greeting.textContent = 'Откройте через Telegram-бота';
+      return false;
+    }
+
+    tg.ready();
+    tg.expand();
+    try {
+      tg.setHeaderColor('#14110f');
+      tg.setBackgroundColor('#14110f');
+    } catch (_) { /* older clients */ }
+
+    document.body.classList.add('tg-themed');
+
+    const user = tg.initDataUnsafe?.user;
+    if (user) {
+      const name = [user.first_name, user.last_name].filter(Boolean).join(' ');
+      els.greeting.textContent = name ? `Привет, ${user.first_name}` : 'Коктейли · заказ из Telegram';
+      state.user = user;
+    }
+
+    return Boolean(tg.initData);
+  }
+
+  async function authenticate() {
+    const initData = tg?.initData || '';
+
+    if (!initData) {
+      els.authStatus.textContent =
+        'Режим просмотра: откройте Mini App из бота, чтобы заказывать и видеть свои заказы.';
+      updateProfileUI();
+      return false;
+    }
+
+    try {
+      setLoader(true);
+      const res = await fetch(`${state.apiBase}/api/mini-app/auth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.customToken) {
+        throw new Error(data.error || 'Ошибка авторизации');
+      }
+
+      const cred = await auth.signInWithCustomToken(data.customToken);
+      state.firebaseUser = cred.user;
+      state.user = data.user || state.user;
+      els.authStatus.textContent = 'Вход через Telegram выполнен. Можно заказывать.';
+      updateProfileUI();
+      await Promise.all([loadBonuses(), loadOpenBill()]);
+      subscribeOrders();
+      return true;
+    } catch (err) {
+      console.error(err);
+      els.authStatus.textContent = `Не удалось войти: ${err.message}. Меню доступно для просмотра.`;
+      showToast('Авторизация недоступна');
+      return false;
+    } finally {
+      setLoader(false);
+    }
+  }
+
+  function updateProfileUI() {
+    const name =
+      state.user?.first_name
+        ? [state.user.first_name, state.user.last_name].filter(Boolean).join(' ')
+        : state.firebaseUser?.displayName || 'Гость';
+
+    els.profileName.textContent = name;
+    els.profileMeta.textContent = state.user?.username
+      ? `@${state.user.username}`
+      : 'Telegram Mini App';
+    els.avatar.textContent = (name || 'A').charAt(0).toUpperCase();
+    els.profileBonus.textContent = String(state.bonusBalance);
+    els.bonusChip.textContent = `◆ ${state.bonusBalance}`;
+    els.profileBill.textContent =
+      state.openBillTotal == null ? '—' : `${state.openBillTotal} ₽`;
+  }
+
+  function getCategory(cocktail) {
+    const raw = (cocktail.category || cocktail.type || '').toLowerCase();
+    const name = (cocktail.name || '').toLowerCase();
+    if (raw.includes('shot') || raw.includes('шот') || name.includes('шот')) return 'shots';
+    if (raw.includes('signature') || raw.includes('автор') || raw.includes('фирм')) return 'signature';
+    if (raw.includes('classic') || raw.includes('класс')) return 'classic';
+    if (cocktail.isShot) return 'shots';
+    if (cocktail.isSignature) return 'signature';
+    return 'classic';
+  }
+
+  async function loadMenu() {
+    try {
+      const [cocktailsSnap, stopSnap] = await Promise.all([
+        db.collection('cocktails').get(),
+        db.collection('stoplist').get()
+      ]);
+
+      state.stoplist = new Set();
+      stopSnap.forEach((doc) => {
+        const item = doc.data();
+        if (item.cocktailName) state.stoplist.add(item.cocktailName);
+      });
+
+      state.cocktails = [];
+      cocktailsSnap.forEach((doc) => {
+        state.cocktails.push({ id: doc.id, ...doc.data() });
+      });
+
+      state.cocktails.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'));
+      renderMenu();
+    } catch (err) {
+      console.error(err);
+      els.menuGrid.innerHTML = '<div class="empty-state">Не удалось загрузить меню</div>';
+    }
+  }
+
+  function renderMenu() {
+    const list = state.cocktails.filter((c) => {
+      if (state.category === 'all') return true;
+      return getCategory(c) === state.category;
+    });
+
+    if (!list.length) {
+      els.menuGrid.innerHTML = '<div class="empty-state">В этой категории пока пусто</div>';
+      return;
+    }
+
+    els.menuGrid.innerHTML = '';
+    list.forEach((cocktail, index) => {
+      const stopped = state.stoplist.has(cocktail.name);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `cocktail${stopped ? ' stopped' : ''}`;
+      btn.style.animationDelay = `${Math.min(index, 8) * 40}ms`;
+
+      const hasImage = Boolean(cocktail.image);
+      btn.innerHTML = `
+        ${hasImage
+          ? `<img class="cocktail-thumb" src="${escapeAttr(cocktail.image)}" alt="">`
+          : `<div class="cocktail-thumb placeholder">🍸</div>`}
+        <div class="cocktail-body">
+          <h3>${escapeHtml(cocktail.name || 'Коктейль')}</h3>
+          <p class="cocktail-meta">${escapeHtml(cocktail.ingredients || cocktail.description || 'Авторский рецепт бара')}</p>
+          <div class="cocktail-foot">
+            <span class="price">${Number(cocktail.price) || 0} ₽</span>
+            ${stopped
+              ? '<span class="badge stop">Стоп-лист</span>'
+              : cocktail.alcohol != null
+                ? `<span class="badge">${cocktail.alcohol}%</span>`
+                : ''}
+          </div>
+        </div>
+      `;
+
+      btn.addEventListener('click', () => {
+        haptic('light');
+        openOrderSheet(cocktail);
+      });
+
+      els.menuGrid.appendChild(btn);
+    });
+  }
+
+  function openOrderSheet(cocktail) {
+    if (state.stoplist.has(cocktail.name)) {
+      showToast('Коктейль временно недоступен');
+      return;
+    }
+    if (!state.firebaseUser) {
+      showToast('Откройте Mini App из бота, чтобы заказать');
+      tg?.showAlert?.('Для заказа откройте приложение через кнопку бота AsafievBar.');
+      return;
+    }
+
+    state.selected = cocktail;
+    state.bonusToUse = 0;
+    els.bonusInput.value = '0';
+
+    els.sheetName.textContent = cocktail.name;
+    els.sheetIngredients.textContent = cocktail.ingredients || 'Состав уточнит бармен';
+    els.sheetMood.textContent = cocktail.mood || cocktail.description || '';
+    els.sheetMedia.style.backgroundImage = cocktail.image
+      ? `url("${cocktail.image}")`
+      : '';
+
+    const price = Number(cocktail.price) || 0;
+    els.sheetPrice.textContent = `${price} ₽`;
+
+    const maxBonus = Math.min(
+      state.bonusBalance,
+      Math.floor(price * (state.maxBonusUsage / 100))
+    );
+    if (maxBonus > 0) {
+      els.bonusRow.hidden = false;
+      els.bonusInput.max = String(maxBonus);
+      els.bonusInput.placeholder = `До ${maxBonus}`;
+    } else {
+      els.bonusRow.hidden = true;
+    }
+
+    updateSheetTotal();
+    els.sheetBackdrop.hidden = false;
+    els.sheet.classList.add('open');
+    els.sheet.setAttribute('aria-hidden', 'false');
+    tg?.MainButton?.hide?.();
+  }
+
+  function closeOrderSheet() {
+    els.sheet.classList.remove('open');
+    els.sheet.setAttribute('aria-hidden', 'true');
+    els.sheetBackdrop.hidden = true;
+    state.selected = null;
+  }
+
+  function updateSheetTotal() {
+    if (!state.selected) return;
+    const price = Number(state.selected.price) || 0;
+    const maxBonus = Math.min(
+      state.bonusBalance,
+      Math.floor(price * (state.maxBonusUsage / 100))
+    );
+    let bonus = Number(els.bonusInput.value) || 0;
+    bonus = Math.max(0, Math.min(bonus, maxBonus));
+    state.bonusToUse = bonus;
+    els.sheetTotal.textContent = `${Math.max(0, price - bonus)} ₽`;
+  }
+
+  async function loadBonuses() {
+    if (!state.firebaseUser) return;
+    try {
+      const [bonusDoc, settingsDoc] = await Promise.all([
+        db.collection('bonusAccounts').doc(state.firebaseUser.uid).get(),
+        db.collection('settings').doc('bonusSystem').get()
+      ]);
+      state.bonusBalance = bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0;
+      if (settingsDoc.exists && settingsDoc.data().maxUsage != null) {
+        state.maxBonusUsage = Number(settingsDoc.data().maxUsage) || 50;
+      }
+      updateProfileUI();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function loadOpenBill() {
+    if (!state.firebaseUser) return;
+    try {
+      const snap = await db
+        .collection('bills')
+        .where('userId', '==', state.firebaseUser.uid)
+        .where('status', '==', 'open')
+        .limit(1)
+        .get();
+
+      if (snap.empty) {
+        state.openBillTotal = 0;
+      } else {
+        const bill = snap.docs[0].data();
+        state.openBillTotal = Number(bill.total || bill.totalAmount || 0);
+      }
+      updateProfileUI();
+    } catch (err) {
+      console.error(err);
+      state.openBillTotal = null;
+      updateProfileUI();
+    }
+  }
+
+  async function getNextQueuePosition() {
+    try {
+      const res = await fetch(`${state.apiBase}/queue-info`);
+      const data = await res.json();
+      const total = data?.queueInfo?.totalOrders ?? data?.totalOrders;
+      if (data?.success && typeof total === 'number') {
+        return total + 1;
+      }
+    } catch (_) { /* fallback below */ }
+
+    try {
+      const snap = await db
+        .collection('orders')
+        .where('status', 'in', ['pending', 'confirmed', 'preparing', 'ready'])
+        .get();
+      return snap.size + 1;
+    } catch (_) {
+      return 1;
+    }
+  }
+
+  async function placeOrder() {
+    if (!state.selected || !state.firebaseUser) return;
+
+    const cocktail = state.selected;
+    const price = Number(cocktail.price) || 0;
+    const bonusUsed = state.bonusToUse || 0;
+    const finalPrice = Math.max(0, price - bonusUsed);
+
+    els.confirmOrderBtn.disabled = true;
+    setLoader(true);
+
+    try {
+      const idToken = await state.firebaseUser.getIdToken();
+      const queuePosition = await getNextQueuePosition();
+      const displayName =
+        [state.user?.first_name, state.user?.last_name].filter(Boolean).join(' ') ||
+        state.firebaseUser.displayName ||
+        'Гость Telegram';
+
+      const payload = {
+        cocktailId: cocktail.id,
+        name: cocktail.name,
+        price: finalPrice,
+        originalPrice: price,
+        bonusUsed,
+        queuePosition,
+        user: displayName,
+        image: cocktail.image || '',
+        source: 'telegram-mini-app'
+      };
+
+      const res = await fetch(`${state.apiBase}/api/mini-app/create-order`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Не удалось создать заказ');
+      }
+
+      if (bonusUsed > 0) {
+        state.bonusBalance = Math.max(0, state.bonusBalance - bonusUsed);
+        updateProfileUI();
+      }
+
+      haptic('medium');
+      closeOrderSheet();
+      showToast(`Заказ принят · очередь #${queuePosition}`);
+      switchView('orders');
+      await loadOpenBill();
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || 'Ошибка заказа');
+      haptic('heavy');
+    } finally {
+      els.confirmOrderBtn.disabled = false;
+      setLoader(false);
+    }
+  }
+
+  function subscribeOrders() {
+    if (!state.firebaseUser) return;
+    if (state.ordersUnsub) state.ordersUnsub();
+
+    state.ordersUnsub = db
+      .collection('orders')
+      .where('userId', '==', state.firebaseUser.uid)
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .onSnapshot(
+        (snap) => {
+          if (snap.empty) {
+            els.ordersList.innerHTML = '<div class="empty-state">Пока нет заказов</div>';
+            return;
+          }
+
+          els.ordersList.innerHTML = '';
+          snap.forEach((doc) => {
+            const order = doc.data();
+            const status = order.status || 'pending';
+            const card = document.createElement('article');
+            card.className = 'order-card';
+            card.innerHTML = `
+              <div class="order-top">
+                <div>
+                  <p class="order-name">${escapeHtml(order.name || 'Заказ')}</p>
+                  <p class="order-time">${escapeHtml(order.displayTime || '')}</p>
+                </div>
+                <span class="status ${escapeAttr(status)}">${STATUS_LABELS[status] || status}</span>
+              </div>
+              ${
+                order.queuePosition && ['pending', 'confirmed', 'preparing', 'ready'].includes(status)
+                  ? `<div class="queue">Позиция в очереди: #${order.queuePosition}</div>`
+                  : ''
+              }
+              <div class="queue">${Number(order.price) || 0} ₽</div>
+            `;
+            els.ordersList.appendChild(card);
+          });
+        },
+        async (err) => {
+          console.warn('orders index fallback', err);
+          // Fallback without orderBy if composite index missing
+          const snap = await db
+            .collection('orders')
+            .where('userId', '==', state.firebaseUser.uid)
+            .limit(20)
+            .get();
+          const items = snap.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => {
+              const ta = a.createdAt?.toMillis?.() || 0;
+              const tb = b.createdAt?.toMillis?.() || 0;
+              return tb - ta;
+            });
+
+          if (!items.length) {
+            els.ordersList.innerHTML = '<div class="empty-state">Пока нет заказов</div>';
+            return;
+          }
+
+          els.ordersList.innerHTML = '';
+          items.forEach((order) => {
+            const status = order.status || 'pending';
+            const card = document.createElement('article');
+            card.className = 'order-card';
+            card.innerHTML = `
+              <div class="order-top">
+                <div>
+                  <p class="order-name">${escapeHtml(order.name || 'Заказ')}</p>
+                  <p class="order-time">${escapeHtml(order.displayTime || '')}</p>
+                </div>
+                <span class="status ${escapeAttr(status)}">${STATUS_LABELS[status] || status}</span>
+              </div>
+              <div class="queue">${Number(order.price) || 0} ₽</div>
+            `;
+            els.ordersList.appendChild(card);
+          });
+        }
+      );
+  }
+
+  function switchView(name) {
+    document.querySelectorAll('.view').forEach((v) => {
+      v.classList.toggle('active', v.dataset.view === name);
+    });
+    document.querySelectorAll('.tab').forEach((t) => {
+      t.classList.toggle('active', t.dataset.nav === name);
+    });
+    if (name === 'menu') tg?.BackButton?.hide?.();
+    else tg?.BackButton?.show?.();
+    haptic('light');
+  }
+
+  function escapeHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function escapeAttr(str) {
+    return escapeHtml(str).replace(/'/g, '&#39;');
+  }
+
+  function bindUi() {
+    document.querySelectorAll('.tab').forEach((tab) => {
+      tab.addEventListener('click', () => switchView(tab.dataset.nav));
+    });
+
+    els.filters.addEventListener('click', (e) => {
+      const btn = e.target.closest('.filter');
+      if (!btn) return;
+      state.category = btn.dataset.category;
+      els.filters.querySelectorAll('.filter').forEach((f) => {
+        f.classList.toggle('active', f === btn);
+      });
+      renderMenu();
+      haptic('light');
+    });
+
+    els.bonusChip.addEventListener('click', () => switchView('profile'));
+    els.cancelOrderBtn.addEventListener('click', closeOrderSheet);
+    els.sheetBackdrop.addEventListener('click', closeOrderSheet);
+    els.bonusInput.addEventListener('input', updateSheetTotal);
+    els.confirmOrderBtn.addEventListener('click', placeOrder);
+
+    tg?.BackButton?.onClick?.(() => {
+      if (els.sheet.classList.contains('open')) closeOrderSheet();
+      else switchView('menu');
+    });
+  }
+
+  async function boot() {
+    bindUi();
+    initTelegram();
+    await loadMenu();
+    await authenticate();
+  }
+
+  boot();
+})();

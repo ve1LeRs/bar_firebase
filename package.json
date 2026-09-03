@@ -1,7 +1,7 @@
 {
   "name": "asafiev-bar-webhook",
   "version": "1.0.0",
-  "description": "Webhook сервер для обработки Telegram callback и синхронизации с Firebase",
+  "description": "Webhook сервер и Telegram Mini App для AsafievBar",
   "main": "webhook-server.js",
   "scripts": {
     "start": "node webhook-server.js",
@@ -12,6 +12,7 @@
   "keywords": [
     "telegram",
     "webhook",
+    "mini-app",
     "firebase",
     "bar",
     "orders"
