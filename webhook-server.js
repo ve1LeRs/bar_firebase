@@ -1693,6 +1693,178 @@ async function ensureTelegramAdmin(telegramId) {
   return { uid, telegramId: id, role: 'admin' };
 }
 
+async function resolveMiniAppAdmin(req) {
+  const session = await resolveMiniAppUser(req);
+  if (!session.ok) return session;
+
+  const allowed = new Set(
+    String(process.env.TELEGRAM_ADMIN_IDS || TELEGRAM_CHAT_ID || '1743362083')
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean)
+  );
+  allowed.add('1743362083');
+
+  if (session.telegramId && allowed.has(String(session.telegramId))) {
+    return { ...session, isAdmin: true };
+  }
+
+  try {
+    const userDoc = await db.collection('users').doc(session.userId).get();
+    if (userDoc.exists && userDoc.data().role === 'admin') {
+      return { ...session, isAdmin: true };
+    }
+  } catch (_) { /* ignore */ }
+
+  return { ok: false, reason: 'not_admin' };
+}
+
+// Admin: list active orders
+app.post('/api/mini-app/admin/orders', async (req, res) => {
+  try {
+    const session = await resolveMiniAppAdmin(req);
+    if (!session.ok) {
+      return res.status(403).json({ success: false, error: 'Нет прав админа', reason: session.reason });
+    }
+
+    let orders = [];
+    try {
+      const snap = await db.collection('orders')
+        .where('status', 'in', ['pending', 'confirmed', 'preparing', 'ready'])
+        .limit(40)
+        .get();
+      orders = snap.docs.map((doc) => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          name: d.name,
+          user: d.user,
+          status: d.status,
+          price: d.price,
+          displayTime: d.displayTime,
+          queuePosition: d.queuePosition || 0
+        };
+      });
+      orders.sort((a, b) => (a.queuePosition || 99) - (b.queuePosition || 99));
+    } catch (err) {
+      const snap = await db.collection('orders').limit(40).get();
+      orders = snap.docs
+        .map((doc) => {
+          const d = doc.data();
+          return {
+            id: doc.id,
+            name: d.name,
+            user: d.user,
+            status: d.status,
+            price: d.price,
+            displayTime: d.displayTime,
+            queuePosition: d.queuePosition || 0
+          };
+        })
+        .filter((o) => ['pending', 'confirmed', 'preparing', 'ready'].includes(o.status));
+    }
+
+    res.json({ success: true, orders });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Admin: change order status
+app.post('/api/mini-app/admin/order-status', async (req, res) => {
+  try {
+    const session = await resolveMiniAppAdmin(req);
+    if (!session.ok) {
+      return res.status(403).json({ success: false, error: 'Нет прав админа', reason: session.reason });
+    }
+
+    const { orderId, status } = req.body || {};
+    const valid = ['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled'];
+    if (!orderId || !valid.includes(status)) {
+      return res.status(400).json({ success: false, error: 'Некорректные данные' });
+    }
+
+    const result = await updateOrderStatus(String(orderId), status);
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error || 'Не удалось обновить' });
+    }
+
+    // mark updater
+    try {
+      await db.collection('orders').doc(String(orderId)).set({
+        updatedBy: `mini-app-admin:${session.userId}`
+      }, { merge: true });
+    } catch (_) { /* ignore */ }
+
+    res.json({ success: true, status, orderId });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Admin: stoplist ops
+app.post('/api/mini-app/admin/stoplist', async (req, res) => {
+  try {
+    const session = await resolveMiniAppAdmin(req);
+    if (!session.ok) {
+      return res.status(403).json({ success: false, error: 'Нет прав админа', reason: session.reason });
+    }
+
+    const action = req.body?.action || 'list';
+
+    if (action === 'list') {
+      const snap = await db.collection('stoplist').get();
+      const items = snap.docs.map((doc) => ({
+        id: doc.id,
+        cocktailName: doc.data().cocktailName,
+        reason: doc.data().reason || ''
+      }));
+      return res.json({ success: true, items });
+    }
+
+    if (action === 'add') {
+      const cocktailName = String(req.body?.cocktailName || '').trim();
+      const reason = String(req.body?.reason || 'Добавлено из Mini App').trim();
+      if (!cocktailName) {
+        return res.status(400).json({ success: false, error: 'Не указан коктейль' });
+      }
+      const existing = await db.collection('stoplist').where('cocktailName', '==', cocktailName).limit(1).get();
+      if (!existing.empty) {
+        return res.json({ success: true, id: existing.docs[0].id, already: true });
+      }
+      const ref = await db.collection('stoplist').add({
+        cocktailName,
+        reason,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        source: 'telegram-mini-app',
+        addedBy: session.userId
+      });
+      return res.json({ success: true, id: ref.id });
+    }
+
+    if (action === 'remove') {
+      const id = String(req.body?.id || '').trim();
+      const cocktailName = String(req.body?.cocktailName || '').trim();
+      if (id) {
+        await db.collection('stoplist').doc(id).delete();
+        return res.json({ success: true });
+      }
+      if (cocktailName) {
+        const snap = await db.collection('stoplist').where('cocktailName', '==', cocktailName).get();
+        const batch = db.batch();
+        snap.forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+        return res.json({ success: true, removed: snap.size });
+      }
+      return res.status(400).json({ success: false, error: 'Нужен id или cocktailName' });
+    }
+
+    res.status(400).json({ success: false, error: 'Неизвестное действие' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Grant/ensure admin for owner Telegram id
 app.post('/api/mini-app/ensure-admin', async (req, res) => {
   try {

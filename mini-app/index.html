@@ -62,6 +62,35 @@
       </div>
     </section>
 
+    <section class="view" id="view-admin" data-view="admin">
+      <h2 class="section-title">Админ</h2>
+      <p class="section-sub">Управление заказами и стоп-листом.</p>
+
+      <div class="admin-subtabs" id="adminSubtabs">
+        <button class="filter active" type="button" data-admin-tab="orders">Заказы</button>
+        <button class="filter" type="button" data-admin-tab="stoplist">Стоп-лист</button>
+      </div>
+
+      <div class="admin-pane active" id="adminOrdersPane">
+        <div id="adminOrdersList" class="orders-list">
+          <div class="empty-state">Загрузка заказов…</div>
+        </div>
+      </div>
+
+      <div class="admin-pane" id="adminStoplistPane" hidden>
+        <div class="admin-add">
+          <select id="adminStopSelect" class="admin-select">
+            <option value="">Выберите коктейль</option>
+          </select>
+          <input id="adminStopReason" class="admin-input" type="text" placeholder="Причина (необязательно)" maxlength="80">
+          <button class="cta" id="adminStopAddBtn" type="button">В стоп-лист</button>
+        </div>
+        <div id="adminStoplist" class="orders-list">
+          <div class="empty-state">Стоп-лист пуст</div>
+        </div>
+      </div>
+    </section>
+
     <section class="view" id="view-profile" data-view="profile">
       <h2 class="section-title">Профиль</h2>
       <div class="profile-card">
@@ -98,6 +127,10 @@
     <button class="tab" data-nav="orders" type="button">
       <span class="tab-ico">◇</span>
       <span>Заказы</span>
+    </button>
+    <button class="tab" data-nav="admin" type="button" id="adminTabBtn" hidden>
+      <span class="tab-ico">⚙</span>
+      <span>Админ</span>
     </button>
     <button class="tab" data-nav="profile" type="button">
       <span class="tab-ico">◎</span>

@@ -41,7 +41,9 @@
     uid: null,
     authError: null,
     ordersPollTimer: null,
-    role: 'user'
+    role: 'user',
+    adminOrdersTimer: null,
+    adminTab: 'orders'
   };
 
   // Wake Render ASAP (cold start) — do not await
@@ -84,6 +86,14 @@
     authStatus: document.getElementById('authStatus'),
     authRetryBtn: document.getElementById('authRetryBtn'),
     avatar: document.getElementById('avatar'),
+    adminTabBtn: document.getElementById('adminTabBtn'),
+    adminOrdersList: document.getElementById('adminOrdersList'),
+    adminStoplist: document.getElementById('adminStoplist'),
+    adminStopSelect: document.getElementById('adminStopSelect'),
+    adminStopReason: document.getElementById('adminStopReason'),
+    adminStopAddBtn: document.getElementById('adminStopAddBtn'),
+    adminSubtabs: document.getElementById('adminSubtabs'),
+    viewAdmin: document.getElementById('view-admin'),
     sheet: document.getElementById('orderSheet'),
     sheetBackdrop: document.getElementById('sheetBackdrop'),
     sheetMedia: document.getElementById('sheetMedia'),
@@ -265,6 +275,7 @@
           state.openBillTotal = data.openBillTotal;
         }
         if (data.role) state.role = data.role;
+        applyAdminUi();
 
         if (data.customToken) {
           try {
@@ -306,6 +317,232 @@
 
   function canOrder() {
     return Boolean(state.sessionOk && tg?.initData);
+  }
+
+  function isAdminUser() {
+    return state.role === 'admin';
+  }
+
+  function applyAdminUi() {
+    const on = isAdminUser();
+    document.body.classList.toggle('has-admin', on);
+    if (els.adminTabBtn) els.adminTabBtn.hidden = !on;
+    if (on) {
+      populateAdminStopSelect();
+      refreshAdminOrders();
+      refreshAdminStoplist();
+      startAdminPolling();
+    }
+  }
+
+  function adminHeaders() {
+    return { 'Content-Type': 'application/json' };
+  }
+
+  function adminBody(extra = {}) {
+    return JSON.stringify({ initData: tg?.initData || '', ...extra });
+  }
+
+  async function refreshAdminOrders() {
+    if (!isAdminUser() || !canOrder()) return;
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/orders`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: adminBody()
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Ошибка загрузки');
+      renderAdminOrders(data.orders || []);
+    } catch (err) {
+      console.warn(err);
+      if (els.adminOrdersList) {
+        els.adminOrdersList.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+      }
+    }
+  }
+
+  function renderAdminOrders(orders) {
+    if (!els.adminOrdersList) return;
+    if (!orders.length) {
+      els.adminOrdersList.innerHTML = '<div class="empty-state">Активных заказов нет</div>';
+      return;
+    }
+
+    els.adminOrdersList.innerHTML = '';
+    orders.forEach((order) => {
+      const status = order.status || 'pending';
+      const card = document.createElement('article');
+      card.className = 'order-card';
+      card.innerHTML = `
+        <div class="order-top">
+          <div>
+            <p class="order-name">${escapeHtml(order.name || 'Заказ')}</p>
+            <p class="order-time">${escapeHtml(order.user || '')} · ${escapeHtml(order.displayTime || '')}</p>
+          </div>
+          <span class="status ${escapeAttr(status)}">${STATUS_LABELS[status] || status}</span>
+        </div>
+        <div class="queue">#${order.queuePosition || '—'} · ${Number(order.price) || 0} ₽</div>
+        <div class="admin-actions">
+          <button type="button" data-status="preparing" data-id="${escapeAttr(order.id)}">Готовится</button>
+          <button type="button" class="primary" data-status="ready" data-id="${escapeAttr(order.id)}">Готов</button>
+          <button type="button" data-status="completed" data-id="${escapeAttr(order.id)}">Выдан</button>
+          <button type="button" class="danger" data-status="cancelled" data-id="${escapeAttr(order.id)}">Отмена</button>
+        </div>
+      `;
+      card.querySelectorAll('button[data-status]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          await setAdminOrderStatus(btn.dataset.id, btn.dataset.status);
+          btn.disabled = false;
+        });
+      });
+      els.adminOrdersList.appendChild(card);
+    });
+  }
+
+  async function setAdminOrderStatus(orderId, status) {
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/order-status`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: adminBody({ orderId, status })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Не удалось обновить');
+      haptic('medium');
+      showToast(`Статус: ${STATUS_LABELS[status] || status}`);
+      refreshAdminOrders();
+    } catch (err) {
+      showToast(err.message || 'Ошибка статуса');
+    }
+  }
+
+  function populateAdminStopSelect() {
+    if (!els.adminStopSelect) return;
+    const current = els.adminStopSelect.value;
+    els.adminStopSelect.innerHTML = '<option value="">Выберите коктейль</option>';
+    state.cocktails
+      .slice()
+      .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'))
+      .forEach((c) => {
+        const opt = document.createElement('option');
+        opt.value = c.name;
+        opt.textContent = state.stoplist.has(c.name) ? `${c.name} (уже в стопе)` : c.name;
+        els.adminStopSelect.appendChild(opt);
+      });
+    if (current) els.adminStopSelect.value = current;
+  }
+
+  async function refreshAdminStoplist() {
+    if (!isAdminUser() || !canOrder()) return;
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/stoplist`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: adminBody({ action: 'list' })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Ошибка стоп-листа');
+      const items = data.items || [];
+      state.stoplist = new Set(items.map((i) => i.cocktailName).filter(Boolean));
+      renderAdminStoplist(items);
+      populateAdminStopSelect();
+      renderMenu();
+    } catch (err) {
+      console.warn(err);
+      if (els.adminStoplist) {
+        els.adminStoplist.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+      }
+    }
+  }
+
+  function renderAdminStoplist(items) {
+    if (!els.adminStoplist) return;
+    if (!items.length) {
+      els.adminStoplist.innerHTML = '<div class="empty-state">Стоп-лист пуст</div>';
+      return;
+    }
+    els.adminStoplist.innerHTML = '';
+    items.forEach((item) => {
+      const card = document.createElement('article');
+      card.className = 'order-card';
+      card.innerHTML = `
+        <div class="stoplist-row">
+          <div>
+            <p class="order-name">${escapeHtml(item.cocktailName || '')}</p>
+            <p class="order-time">${escapeHtml(item.reason || 'Без причины')}</p>
+          </div>
+          <button type="button" class="danger" data-remove-id="${escapeAttr(item.id)}">Убрать</button>
+        </div>
+      `;
+      card.querySelector('button')?.addEventListener('click', async () => {
+        await removeFromAdminStoplist(item.id);
+      });
+      els.adminStoplist.appendChild(card);
+    });
+  }
+
+  async function addToAdminStoplist() {
+    const cocktailName = els.adminStopSelect?.value || '';
+    const reason = els.adminStopReason?.value?.trim() || 'Добавлено из Mini App';
+    if (!cocktailName) {
+      showToast('Выберите коктейль');
+      return;
+    }
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/stoplist`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: adminBody({ action: 'add', cocktailName, reason })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Не удалось добавить');
+      if (els.adminStopReason) els.adminStopReason.value = '';
+      showToast('Добавлено в стоп-лист');
+      haptic('medium');
+      refreshAdminStoplist();
+    } catch (err) {
+      showToast(err.message || 'Ошибка');
+    }
+  }
+
+  async function removeFromAdminStoplist(id) {
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/stoplist`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: adminBody({ action: 'remove', id })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Не удалось убрать');
+      showToast('Убрано из стоп-листа');
+      refreshAdminStoplist();
+    } catch (err) {
+      showToast(err.message || 'Ошибка');
+    }
+  }
+
+  function switchAdminTab(name) {
+    state.adminTab = name;
+    els.adminSubtabs?.querySelectorAll('[data-admin-tab]').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.adminTab === name);
+    });
+    const ordersPane = document.getElementById('adminOrdersPane');
+    const stopPane = document.getElementById('adminStoplistPane');
+    if (ordersPane) ordersPane.hidden = name !== 'orders';
+    if (stopPane) stopPane.hidden = name !== 'stoplist';
+    if (name === 'orders') refreshAdminOrders();
+    if (name === 'stoplist') refreshAdminStoplist();
+  }
+
+  function startAdminPolling() {
+    if (state.adminOrdersTimer) clearInterval(state.adminOrdersTimer);
+    state.adminOrdersTimer = setInterval(() => {
+      if (document.querySelector('.view.active')?.dataset.view === 'admin' && state.adminTab === 'orders') {
+        refreshAdminOrders();
+      }
+    }, 5000);
   }
 
   function startKeepAlive() {
@@ -881,6 +1118,10 @@
   }
 
   function switchView(name) {
+    if (name === 'admin' && !isAdminUser()) {
+      showToast('Нет прав админа');
+      return;
+    }
     document.querySelectorAll('.view').forEach((v) => {
       v.classList.toggle('active', v.dataset.view === name);
     });
@@ -889,6 +1130,10 @@
     });
     if (name === 'menu') tg?.BackButton?.hide?.();
     else tg?.BackButton?.show?.();
+    if (name === 'admin') {
+      if (state.adminTab === 'orders') refreshAdminOrders();
+      else refreshAdminStoplist();
+    }
     haptic('light');
   }
 
@@ -928,6 +1173,13 @@
     els.authRetryBtn?.addEventListener('click', () => {
       haptic('light');
       authenticate({ manual: true });
+    });
+    els.adminStopAddBtn?.addEventListener('click', addToAdminStoplist);
+    els.adminSubtabs?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-admin-tab]');
+      if (!btn) return;
+      switchAdminTab(btn.dataset.adminTab);
+      haptic('light');
     });
 
     tg?.BackButton?.onClick?.(() => {
