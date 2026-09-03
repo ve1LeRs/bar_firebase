@@ -81,6 +81,7 @@
     profileBonus: document.getElementById('profileBonus'),
     profileBill: document.getElementById('profileBill'),
     authStatus: document.getElementById('authStatus'),
+    authRetryBtn: document.getElementById('authRetryBtn'),
     avatar: document.getElementById('avatar'),
     sheet: document.getElementById('orderSheet'),
     sheetBackdrop: document.getElementById('sheetBackdrop'),
@@ -155,77 +156,161 @@
     return Boolean(tg.initData);
   }
 
-  async function authenticate() {
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  async function ensureApiAwake(onStatus) {
+    const started = Date.now();
+    const maxWait = 75000;
+    let attempt = 0;
+
+    while (Date.now() - started < maxWait) {
+      attempt += 1;
+      const waited = Math.round((Date.now() - started) / 1000);
+      onStatus?.(
+        attempt === 1
+          ? 'Будим сервер заказов…'
+          : `Сервер просыпается… ${waited}с`
+      );
+      try {
+        const res = await fetchWithTimeout(
+          `${state.apiBase}/health`,
+          { method: 'GET', cache: 'no-store', mode: 'cors' },
+          10000
+        );
+        if (res.ok) return true;
+      } catch (_) {
+        // cold start / network — keep trying
+      }
+      await sleep(Math.min(2500, 800 + attempt * 400));
+    }
+    return false;
+  }
+
+  function setAuthRetryVisible(on) {
+    if (els.authRetryBtn) els.authRetryBtn.hidden = !on;
+  }
+
+  async function authenticate(options = {}) {
+    const { manual = false } = options;
     const initData = tg?.initData || '';
 
     if (!initData) {
       state.authError = 'no_init_data';
       els.authStatus.textContent =
         'Нет данных Telegram. Откройте Mini App кнопкой меню бота (не через браузер).';
+      setAuthRetryVisible(false);
       updateProfileUI();
       return false;
     }
 
-    els.authStatus.textContent = 'Входим через Telegram…';
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    setAuthRetryVisible(false);
+    els.authStatus.textContent = manual ? 'Повторный вход…' : 'Подключаем сервер…';
 
-    try {
-      const res = await fetch(`${state.apiBase}/api/mini-app/auth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initData }),
-        signal: controller.signal
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || `Ошибка авторизации (${data.reason || res.status})`);
-      }
+    const awake = await ensureApiAwake((text) => {
+      els.authStatus.textContent = text;
+    });
 
-      state.user = data.user || state.user;
-      state.uid = data.user?.uid || null;
-      state.sessionOk = Boolean(data.session || data.success);
-      state.authReady = state.sessionOk;
-      state.authError = null;
-
-      if (typeof data.bonusBalance === 'number') {
-        state.bonusBalance = data.bonusBalance;
-      }
-      if (typeof data.openBillTotal === 'number') {
-        state.openBillTotal = data.openBillTotal;
-      }
-
-      // Optional Firebase client auth (may fail if domain not allowlisted)
-      if (data.customToken) {
-        try {
-          initFirebase();
-          const cred = await auth.signInWithCustomToken(data.customToken);
-          state.firebaseUser = cred.user;
-        } catch (firebaseErr) {
-          console.warn('Firebase custom token skipped:', firebaseErr.message);
-          state.firebaseUser = null;
-        }
-      }
-
-      els.authStatus.textContent = 'Вход через Telegram выполнен. Можно заказывать.';
-      updateProfileUI();
-      startOrdersPolling();
-      return true;
-    } catch (err) {
-      console.error(err);
+    if (!awake) {
       state.sessionOk = false;
       state.authReady = false;
-      state.authError = err.name === 'AbortError' ? 'timeout' : 'auth_failed';
-      const msg = err.name === 'AbortError' ? 'Сервер просыпается, откройте ещё раз' : err.message;
-      els.authStatus.textContent = `Не удалось войти: ${msg}`;
+      state.authError = 'timeout';
+      els.authStatus.textContent =
+        'Сервер долго просыпается. Нажмите «Повторить вход» через несколько секунд.';
+      setAuthRetryVisible(true);
       return false;
-    } finally {
-      clearTimeout(timeoutId);
     }
+
+    // A few auth attempts after wake (first request can still be slow)
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      els.authStatus.textContent =
+        attempt === 1 ? 'Входим через Telegram…' : `Повтор входа (${attempt}/3)…`;
+      try {
+        const res = await fetchWithTimeout(
+          `${state.apiBase}/api/mini-app/auth`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData })
+          },
+          20000
+        );
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || `Ошибка авторизации (${data.reason || res.status})`);
+        }
+
+        state.user = data.user || state.user;
+        state.uid = data.user?.uid || null;
+        state.sessionOk = Boolean(data.session || data.success);
+        state.authReady = state.sessionOk;
+        state.authError = null;
+
+        if (typeof data.bonusBalance === 'number') {
+          state.bonusBalance = data.bonusBalance;
+        }
+        if (typeof data.openBillTotal === 'number') {
+          state.openBillTotal = data.openBillTotal;
+        }
+
+        if (data.customToken) {
+          try {
+            initFirebase();
+            const cred = await auth.signInWithCustomToken(data.customToken);
+            state.firebaseUser = cred.user;
+          } catch (firebaseErr) {
+            console.warn('Firebase custom token skipped:', firebaseErr.message);
+            state.firebaseUser = null;
+          }
+        }
+
+        els.authStatus.textContent = 'Вход через Telegram выполнен. Можно заказывать.';
+        setAuthRetryVisible(false);
+        updateProfileUI();
+        startOrdersPolling();
+        startKeepAlive();
+        return true;
+      } catch (err) {
+        console.error('auth attempt failed', attempt, err);
+        if (attempt < 3) {
+          await sleep(1500 * attempt);
+          continue;
+        }
+        state.sessionOk = false;
+        state.authReady = false;
+        state.authError = err.name === 'AbortError' ? 'timeout' : 'auth_failed';
+        const msg =
+          err.name === 'AbortError'
+            ? 'Сервер ещё прогревается'
+            : err.message;
+        els.authStatus.textContent = `Не удалось войти: ${msg}`;
+        setAuthRetryVisible(true);
+        return false;
+      }
+    }
+    return false;
   }
 
   function canOrder() {
     return Boolean(state.sessionOk && tg?.initData);
+  }
+
+  function startKeepAlive() {
+    if (startKeepAlive._timer) return;
+    startKeepAlive._timer = setInterval(() => {
+      fetch(`${state.apiBase}/health`, { cache: 'no-store', mode: 'cors' }).catch(() => {});
+    }, 4 * 60 * 1000);
   }
 
   function updateProfileUI() {
@@ -796,6 +881,10 @@
     els.sheetBackdrop.addEventListener('click', closeOrderSheet);
     els.bonusInput.addEventListener('input', updateSheetTotal);
     els.confirmOrderBtn.addEventListener('click', placeOrder);
+    els.authRetryBtn?.addEventListener('click', () => {
+      haptic('light');
+      authenticate({ manual: true });
+    });
 
     tg?.BackButton?.onClick?.(() => {
       if (els.sheet.classList.contains('open')) closeOrderSheet();
