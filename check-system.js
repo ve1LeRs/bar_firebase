@@ -6,8 +6,8 @@
 
 const https = require('https');
 
-const WEBHOOK_URL = 'https://bar-firebase.onrender.com';
-const TELEGRAM_BOT_TOKEN = '8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo';
+const WEBHOOK_URL = process.env.WEBHOOK_URL || 'https://asafievbar.duckdns.org';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 
 console.log('🔍 Проверка статуса системы AsafievBar');
 console.log('=' .repeat(50));

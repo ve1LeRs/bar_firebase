@@ -32,8 +32,8 @@ const envVars = {
   'FIREBASE_CLIENT_EMAIL': serviceKey.client_email,
   'FIREBASE_CLIENT_ID': serviceKey.client_id,
   'FIREBASE_CLIENT_X509_CERT_URL': serviceKey.client_x509_cert_url,
-  'TELEGRAM_BOT_TOKEN': '8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo',
-  'TELEGRAM_CHAT_ID': '1743362083',
+  'TELEGRAM_BOT_TOKEN': 'SET_IN_RENDER_DASHBOARD',
+  'TELEGRAM_CHAT_ID': 'SET_IN_RENDER_DASHBOARD',
   'PORT': '3000'
 };
 
@@ -69,7 +69,7 @@ console.log('curl https://web-production-72014.up.railway.app/health');
 console.log('\nFirebase test:');
 console.log('curl https://web-production-72014.up.railway.app/test-firebase');
 console.log('\nTelegram webhook info:');
-console.log('curl "https://api.telegram.org/bot8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo/getWebhookInfo"');
+console.log('curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getWebhookInfo"');
 
 console.log('\n✅ После настройки переменных:');
 console.log('- Кнопки в Telegram будут работать');
