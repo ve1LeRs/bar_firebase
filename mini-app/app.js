@@ -1241,6 +1241,7 @@
     els.sheetBackdrop.hidden = false;
     els.sheet.classList.add('open');
     els.sheet.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('sheet-open');
     tg?.MainButton?.hide?.();
   }
 
@@ -1248,6 +1249,7 @@
     els.sheet.classList.remove('open');
     els.sheet.setAttribute('aria-hidden', 'true');
     els.sheetBackdrop.hidden = true;
+    document.body.classList.remove('sheet-open');
     state.selected = null;
   }
 
@@ -1338,18 +1340,11 @@
     setLoader(true);
 
     try {
-      const queuePosition = await getNextQueuePosition();
+      // Queue position is computed on server — don't block on extra roundtrips
       const displayName =
         [state.user?.first_name, state.user?.last_name].filter(Boolean).join(' ') ||
         state.firebaseUser?.displayName ||
         'Гость Telegram';
-
-      const headers = { 'Content-Type': 'application/json' };
-      if (state.firebaseUser) {
-        try {
-          headers.Authorization = `Bearer ${await state.firebaseUser.getIdToken()}`;
-        } catch (_) { /* initData is enough */ }
-      }
 
       const payload = {
         initData: tg.initData,
@@ -1358,17 +1353,20 @@
         price: finalPrice,
         originalPrice: price,
         bonusUsed,
-        queuePosition,
         user: displayName,
         image: cocktail.image || '',
         source: 'telegram-mini-app'
       };
 
-      const res = await fetch(`${state.apiBase}/api/mini-app/create-order`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload)
-      });
+      const res = await fetchWithTimeout(
+        `${state.apiBase}/api/mini-app/create-order`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        },
+        25000
+      );
 
       const data = await res.json();
       if (!res.ok || !data.success) {
@@ -1382,13 +1380,13 @@
 
       haptic('medium');
       closeOrderSheet();
-      showToast(`Заказ принят · очередь #${data.queuePosition || queuePosition}`);
+      showToast(`Заказ принят · очередь #${data.queuePosition || '—'}`);
       switchView('orders');
       refreshOrders();
       refreshProfile();
     } catch (err) {
       console.error(err);
-      showToast(err.message || 'Ошибка заказа');
+      showToast(err.name === 'AbortError' ? 'Сервер долго отвечает, попробуйте ещё раз' : (err.message || 'Ошибка заказа'));
       haptic('heavy');
     } finally {
       els.confirmOrderBtn.disabled = false;
