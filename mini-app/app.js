@@ -199,9 +199,15 @@
     tg.onEvent?.('safeAreaChanged', applySafeArea);
     tg.onEvent?.('contentSafeAreaChanged', applySafeArea);
     tg.onEvent?.('viewportChanged', () => {
-      try { tg.expand(); } catch (_) { /* ignore */ }
+      // Don't fight the keyboard — expand() on keyboard resize breaks the order sheet
+      if (!document.body.classList.contains('keyboard-open') && document.activeElement?.id !== 'bonusInput') {
+        try { tg.expand(); } catch (_) { /* ignore */ }
+      }
       applySafeArea();
+      syncKeyboardLayout();
     });
+
+    bindKeyboardAwareLayout();
 
     // Tap anywhere early to request fullscreen if first call was blocked
     const askFsOnce = () => {
@@ -222,6 +228,63 @@
     }
 
     return Boolean(tg.initData);
+  }
+
+  function syncKeyboardLayout() {
+    const vv = window.visualViewport;
+    const layoutHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    let inset = 0;
+    let vvHeight = layoutHeight;
+    if (vv) {
+      vvHeight = vv.height;
+      inset = Math.max(0, Math.round(layoutHeight - vv.height - vv.offsetTop));
+    }
+    document.documentElement.style.setProperty('--keyboard-inset', `${inset}px`);
+    document.documentElement.style.setProperty('--vv-height', `${Math.round(vvHeight)}px`);
+    const keyboardOpen = inset > 60;
+    document.body.classList.toggle('keyboard-open', keyboardOpen);
+
+    if (els.sheet?.classList.contains('open')) {
+      if (keyboardOpen || document.activeElement === els.bonusInput) {
+        els.sheet.classList.add('sheet-compact');
+      } else if (document.activeElement !== els.bonusInput) {
+        els.sheet.classList.remove('sheet-compact');
+      }
+    }
+  }
+
+  function bindKeyboardAwareLayout() {
+    const onViewport = () => syncKeyboardLayout();
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', onViewport);
+      window.visualViewport.addEventListener('scroll', onViewport);
+    }
+    window.addEventListener('resize', onViewport);
+    syncKeyboardLayout();
+  }
+
+  function focusBonusField() {
+    els.sheet?.classList.add('sheet-compact');
+    syncKeyboardLayout();
+    // Scroll bonus row into the visible sheet area above action buttons
+    requestAnimationFrame(() => {
+      try {
+        els.bonusRow?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      } catch (_) {
+        els.bonusRow?.scrollIntoView();
+      }
+    });
+  }
+
+  function blurBonusField() {
+    // Delay so we don't flicker if focus moves briefly
+    setTimeout(() => {
+      if (document.activeElement === els.bonusInput) return;
+      if (!document.body.classList.contains('keyboard-open')) {
+        els.sheet?.classList.remove('sheet-compact');
+      }
+      syncKeyboardLayout();
+    }, 180);
   }
 
   function sleep(ms) {
@@ -1617,11 +1680,13 @@
   }
 
   function closeOrderSheet() {
-    els.sheet.classList.remove('open');
+    try { els.bonusInput?.blur(); } catch (_) { /* ignore */ }
+    els.sheet.classList.remove('open', 'sheet-compact');
     els.sheet.setAttribute('aria-hidden', 'true');
     els.sheetBackdrop.hidden = true;
     document.body.classList.remove('sheet-open');
     state.selected = null;
+    syncKeyboardLayout();
   }
 
   function updateSheetTotal() {
@@ -2012,6 +2077,8 @@
     els.cancelOrderBtn.addEventListener('click', closeOrderSheet);
     els.sheetBackdrop.addEventListener('click', closeOrderSheet);
     els.bonusInput.addEventListener('input', updateSheetTotal);
+    els.bonusInput.addEventListener('focus', focusBonusField);
+    els.bonusInput.addEventListener('blur', blurBonusField);
     els.confirmOrderBtn.addEventListener('click', placeOrder);
     els.authRetryBtn?.addEventListener('click', () => {
       haptic('light');

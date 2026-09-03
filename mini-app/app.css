@@ -21,6 +21,8 @@
   --safe-bottom: max(20px, env(safe-area-inset-bottom, 0px), var(--tg-safe-bottom));
   --safe-top: max(env(safe-area-inset-top, 0px), var(--tg-safe-top));
   --tabbar-h: calc(64px + var(--safe-bottom));
+  --keyboard-inset: 0px;
+  --vv-height: 100dvh;
 }
 
 /* Prefer Telegram theme when available, keep brand accents */
@@ -836,9 +838,9 @@ body.has-admin .tabbar {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: var(--keyboard-inset, 0px);
   z-index: 40;
-  max-height: min(92dvh, 860px);
+  max-height: min(92dvh, 860px, calc(var(--vv-height, 100dvh) - 8px));
   overflow: hidden;
   padding: 0;
   border-radius: 24px 24px 0 0;
@@ -846,13 +848,46 @@ body.has-admin .tabbar {
   border-top: 1px solid var(--line);
   box-shadow: var(--shadow);
   transform: translateY(110%);
-  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), max-height 0.2s ease, bottom 0.2s ease;
   display: flex;
   flex-direction: column;
 }
 
 .sheet.open {
   transform: translateY(0);
+}
+
+/* Keyboard open: keep sheet above keyboard, collapse bulky media */
+body.keyboard-open .sheet.open {
+  max-height: calc(var(--vv-height, 100dvh) - 4px);
+}
+
+.sheet.sheet-compact .sheet-media {
+  display: none;
+}
+
+.sheet.sheet-compact .sheet-mood {
+  display: none;
+}
+
+.sheet.sheet-compact .sheet-ingredients {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sheet.sheet-compact h3 {
+  font-size: 1.2rem;
+}
+
+.sheet.sheet-compact .price-block {
+  margin-top: 10px;
+}
+
+body.keyboard-open .sheet-actions {
+  padding-bottom: 12px;
 }
 
 body.sheet-open .tabbar {
