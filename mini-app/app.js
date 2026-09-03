@@ -66,6 +66,8 @@
     promptedRatingOrders: new Set(),
     pendingRatingOrders: new Map(),
     billExpandPrefs: new Map(),
+    ratingQuietUntil: 0,
+    placingOrder: false,
     currentView: 'menu',
     ratingOrder: null,
     ratingValue: 0
@@ -2006,26 +2008,49 @@
 
   function openRatingSheet(order) {
     if (state.currentView === 'admin') return;
+    if (state.placingOrder) return;
+    if (Date.now() < (state.ratingQuietUntil || 0)) {
+      if (order?.id) state.pendingRatingOrders.set(order.id, order);
+      return;
+    }
     if (!order?.id || order.rated) return;
+    if (els.ratingSheet?.classList.contains('open')) return;
+
     state.ratingOrder = order;
     state.ratingValue = 0;
-    if (order.id) state.promptedRatingOrders.add(order.id);
+    state.promptedRatingOrders.add(order.id);
+    state.pendingRatingOrders.delete(order.id);
     if (els.ratingTitle) els.ratingTitle.textContent = `Оцените: ${order.name || 'коктейль'}`;
     if (els.ratingSubtitle) els.ratingSubtitle.textContent = 'Поставьте оценку от 1 до 5';
     els.ratingStars?.querySelectorAll('button').forEach((b) => b.classList.remove('is-on'));
-    if (els.ratingBackdrop) els.ratingBackdrop.hidden = false;
+
+    // Defer backdrop so the same tap that closed the order sheet
+    // cannot immediately dismiss the rating sheet.
+    if (els.ratingBackdrop) {
+      els.ratingBackdrop.hidden = false;
+      els.ratingBackdrop.style.pointerEvents = 'none';
+      clearTimeout(openRatingSheet._backdropT);
+      openRatingSheet._backdropT = setTimeout(() => {
+        if (els.ratingSheet?.classList.contains('open') && els.ratingBackdrop) {
+          els.ratingBackdrop.style.pointerEvents = '';
+        }
+      }, 450);
+    }
     els.ratingSheet?.classList.add('open');
     els.ratingSheet?.setAttribute('aria-hidden', 'false');
   }
 
-  function closeRatingSheet() {
+  function closeRatingSheet({ flush = true } = {}) {
+    clearTimeout(openRatingSheet._backdropT);
     state.ratingOrder = null;
     state.ratingValue = 0;
     els.ratingSheet?.classList.remove('open');
     els.ratingSheet?.setAttribute('aria-hidden', 'true');
-    if (els.ratingBackdrop) els.ratingBackdrop.hidden = true;
-    // After skip/submit, show next queued rating if any
-    setTimeout(() => flushPendingRating(), 280);
+    if (els.ratingBackdrop) {
+      els.ratingBackdrop.hidden = true;
+      els.ratingBackdrop.style.pointerEvents = '';
+    }
+    if (flush) setTimeout(() => flushPendingRating(), 320);
   }
 
   async function submitRating({ skip = false } = {}) {
@@ -2094,11 +2119,9 @@
         }
         const becameReady = status === 'ready' && kitchen.has(prev);
         if (becameReady && !order.rated && !state.promptedRatingOrders.has(id)) {
-          if (busy) {
+          if (isRatingUiBusy()) {
             state.pendingRatingOrders.set(id, order);
           } else {
-            state.promptedRatingOrders.add(id);
-            state.pendingRatingOrders.delete(id);
             openRatingSheet(order);
           }
         }
@@ -2118,7 +2141,9 @@
 
   function isRatingUiBusy() {
     return (
+      state.placingOrder ||
       state.currentView === 'admin' ||
+      Date.now() < (state.ratingQuietUntil || 0) ||
       els.ratingSheet?.classList.contains('open') ||
       els.sheet?.classList.contains('open')
     );
@@ -2131,7 +2156,6 @@
       state.pendingRatingOrders.delete(id);
       if (!order || order.rated || state.promptedRatingOrders.has(id)) continue;
       if ((order.status || 'ready') !== 'ready') continue;
-      state.promptedRatingOrders.add(id);
       openRatingSheet(order);
       break;
     }
@@ -2237,7 +2261,7 @@
     document.body.classList.remove('sheet-open');
     state.selected = null;
     syncKeyboardLayout();
-    flushPendingRating();
+    // Do not flush rating here — same tap would open+dismiss the sheet
   }
 
   function updateSheetTotal() {
@@ -2309,12 +2333,16 @@
 
   async function placeOrder() {
     if (!state.selected || !canOrder()) return;
+    if (state.placingOrder) return;
 
     const cocktail = state.selected;
     const price = Number(cocktail.price) || 0;
     const bonusUsed = state.bonusToUse || 0;
     const finalPrice = Math.max(0, price - bonusUsed);
 
+    state.placingOrder = true;
+    state.ratingQuietUntil = Date.now() + 2500;
+    closeRatingSheet({ flush: false });
     els.confirmOrderBtn.disabled = true;
     wakeApi();
 
@@ -2393,7 +2421,7 @@
       } else {
         refreshProfile();
       }
-      refreshOrders();
+      await refreshOrders();
     } catch (err) {
       console.error(err);
       // Rollback optimistic bonus / bill
@@ -2407,7 +2435,10 @@
       showToast(err.name === 'AbortError' ? 'Сервер долго отвечает, попробуйте ещё раз' : (err.message || 'Ошибка заказа'));
       haptic('heavy');
     } finally {
+      state.placingOrder = false;
       els.confirmOrderBtn.disabled = false;
+      // Show queued rating only after the order flow fully settles
+      setTimeout(() => flushPendingRating(), 600);
     }
   }
 
@@ -2634,7 +2665,7 @@
     }
     state.currentView = name;
     // Never interrupt admin with guest rating UI
-    if (name === 'admin') closeRatingSheet();
+    if (name === 'admin') closeRatingSheet({ flush: false });
     document.querySelectorAll('.view').forEach((v) => {
       v.classList.toggle('active', v.dataset.view === name);
     });
@@ -2652,7 +2683,7 @@
     if (name === 'orders') {
       refreshOrders();
     }
-    if (name !== 'admin') flushPendingRating();
+    if (name !== 'admin' && !state.placingOrder) flushPendingRating();
     haptic('light');
   }
 
