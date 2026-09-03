@@ -269,6 +269,10 @@ button, input {
   opacity: 0.55;
 }
 
+.cocktail-enter {
+  animation: rise 0.28s ease both;
+}
+
 .thumb-wrap {
   width: 88px;
   height: 88px;
@@ -1174,7 +1178,7 @@ body.sheet-open .tabbar {
 }
 
 .menu-grid[data-from-cache='1'] .cocktail {
-  opacity: 0.92;
+  opacity: 1;
 }
 
 .loader-ring {

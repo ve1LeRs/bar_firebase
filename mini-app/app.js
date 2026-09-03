@@ -11,8 +11,8 @@
   };
 
   const DEFAULT_API = 'https://asafievbar.duckdns.org';
-  const MENU_CACHE_KEY = 'asafiev_mini_menu_v1';
-  const MENU_CACHE_TTL_MS = 5 * 60 * 1000;
+  const MENU_CACHE_KEY = 'asafiev_mini_menu_v2';
+  const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
   const STATUS_LABELS = {
     pending: 'Ожидание',
     confirmed: 'Подтверждён',
@@ -87,10 +87,11 @@
   }
 
   function wakeApi() {
-    const url = `${resolveApiBase()}/health`;
+    const base = resolveApiBase();
     try {
-      fetch(url, { method: 'GET', cache: 'no-store', mode: 'cors' }).catch(() => {});
-      if (navigator.sendBeacon) navigator.sendBeacon(url);
+      fetch(`${base}/health`, { method: 'GET', cache: 'no-store', mode: 'cors' }).catch(() => {});
+      fetch(`${base}/api/mini-app/menu-bootstrap`, { method: 'GET', cache: 'default', mode: 'cors' }).catch(() => {});
+      if (navigator.sendBeacon) navigator.sendBeacon(`${base}/health`);
     } catch (_) { /* ignore */ }
   }
 
@@ -877,7 +878,7 @@
         isShot: Boolean(c.isShot), isSignature: Boolean(c.isSignature)
       }));
       populateAdminStopSelect();
-      renderMenu();
+      scheduleRenderMenu({ animate: false });
       renderAdminCocktailsList();
     } catch (err) {
       const box = document.getElementById('adminCocktailsList');
@@ -1650,13 +1651,331 @@
 
   async function refreshRatingsSummary() {
     try {
-      const res = await fetch(`${state.apiBase}/api/mini-app/ratings-summary`, { cache: 'no-store' });
+      const res = await fetch(`${state.apiBase}/api/mini-app/ratings-summary`, { cache: 'default' });
       const data = await res.json();
       if (data?.success && data.averages) {
-        state.ratings = data.averages;
-        renderMenu();
+        const next = data.averages;
+        if (JSON.stringify(state.ratings) !== JSON.stringify(next)) {
+          state.ratings = next;
+          writeMenuCache(state.cocktails, [...state.stoplist], state.ratings);
+          scheduleRenderMenu({ animate: false });
+        }
       }
     } catch (_) { /* ignore */ }
+  }
+
+  let menuRenderScheduled = false;
+  let menuAnimateNext = false;
+  let lastMenuSignature = '';
+
+  function menuSignature() {
+    const stop = [...state.stoplist].sort().join('|');
+    const rates = Object.keys(state.ratings || {}).sort()
+      .map((k) => `${k}:${state.ratings[k]}`).join('|');
+    const cats = state.category;
+    const cocktails = (state.cocktails || []).map((c) =>
+      `${c.id}:${c.name}:${c.price}:${(c.tasteTags || []).join(',')}`
+    ).join(';');
+    return `${cats}#${stop}#${rates}#${cocktails}`;
+  }
+
+  function scheduleRenderMenu({ animate = false } = {}) {
+    if (animate) menuAnimateNext = true;
+    if (menuRenderScheduled) return;
+    menuRenderScheduled = true;
+    requestAnimationFrame(() => {
+      menuRenderScheduled = false;
+      const sig = menuSignature();
+      if (sig === lastMenuSignature && els.menuGrid.children.length) {
+        menuAnimateNext = false;
+        return;
+      }
+      lastMenuSignature = sig;
+      renderMenu({ animate: menuAnimateNext });
+      menuAnimateNext = false;
+    });
+  }
+
+  function readMenuCache() {
+    try {
+      const raw = localStorage.getItem(MENU_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.cocktails)) return null;
+      return parsed;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeMenuCache(cocktails, stoplistNames, ratings) {
+    try {
+      localStorage.setItem(MENU_CACHE_KEY, JSON.stringify({
+        ts: Date.now(),
+        cocktails: cocktails || state.cocktails || [],
+        stoplist: stoplistNames || [...state.stoplist],
+        ratings: ratings || state.ratings || {}
+      }));
+    } catch (_) { /* quota */ }
+  }
+
+  function setsEqual(a, b) {
+    if (a.size !== b.size) return false;
+    for (const v of a) if (!b.has(v)) return false;
+    return true;
+  }
+
+  function applyStoplistNames(stoplistNames, { render = true } = {}) {
+    const names = (stoplistNames || [])
+      .map((n) => String(n || '').trim())
+      .filter(Boolean);
+    const next = new Set(names);
+    if (setsEqual(state.stoplist, next)) return false;
+    state.stoplist = next;
+    writeMenuCache(state.cocktails, names, state.ratings);
+    if (render) scheduleRenderMenu({ animate: false });
+    populateAdminStopSelect();
+    return true;
+  }
+
+  function applyMenuData(cocktails, stoplistNames, {
+    fromCache = false,
+    ratings = null,
+    animate = false,
+    render = true
+  } = {}) {
+    state.cocktails = cocktails || [];
+    const names = (stoplistNames || [])
+      .map((n) => String(n || '').trim())
+      .filter(Boolean);
+    state.stoplist = new Set(names);
+    if (ratings && typeof ratings === 'object') {
+      state.ratings = ratings;
+    }
+    if (fromCache) {
+      els.menuGrid.dataset.fromCache = '1';
+    } else {
+      delete els.menuGrid.dataset.fromCache;
+    }
+    if (render) scheduleRenderMenu({ animate });
+  }
+
+  let stoplistUnsub = null;
+  let stoplistWatchReady = false;
+  function watchStoplist() {
+    try {
+      initFirebase();
+      if (stoplistUnsub || !db) return;
+      stoplistUnsub = db.collection('stoplist').onSnapshot(
+        (snap) => {
+          // Ignore first snapshot noise right after bootstrap paint
+          if (!stoplistWatchReady) {
+            stoplistWatchReady = true;
+            const names = [];
+            snap.forEach((doc) => {
+              const n = String(doc.data()?.cocktailName || '').trim();
+              if (n) names.push(n);
+            });
+            applyStoplistNames(names, { render: true });
+            return;
+          }
+          const names = [];
+          snap.forEach((doc) => {
+            const n = String(doc.data()?.cocktailName || '').trim();
+            if (n) names.push(n);
+          });
+          applyStoplistNames(names, { render: true });
+        },
+        (err) => {
+          console.warn('stoplist watch failed', err);
+        }
+      );
+    } catch (err) {
+      console.warn('stoplist watch init', err);
+    }
+  }
+
+  async function refreshStoplistFromApi() {
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/stoplist`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.names)) {
+        applyStoplistNames(data.names);
+        return true;
+      }
+    } catch (err) {
+      console.warn('stoplist api', err);
+    }
+    return false;
+  }
+
+  async function loadMenu() {
+    const cached = readMenuCache();
+    if (cached?.cocktails?.length) {
+      applyMenuData(cached.cocktails, cached.stoplist || [], {
+        fromCache: true,
+        ratings: cached.ratings || {},
+        animate: true,
+        render: true
+      });
+    }
+
+    try {
+      // Single bootstrap request: cocktails + stoplist + ratings
+      const res = await fetch(`${state.apiBase}/api/mini-app/menu-bootstrap`, {
+        cache: 'default',
+        headers: { Accept: 'application/json' }
+      });
+      const data = await res.json();
+      if (!data?.success || !Array.isArray(data.cocktails)) {
+        throw new Error(data?.error || 'bootstrap failed');
+      }
+
+      writeMenuCache(data.cocktails, data.stoplist || [], data.ratings || {});
+      applyMenuData(data.cocktails, data.stoplist || [], {
+        fromCache: false,
+        ratings: data.ratings || {},
+        animate: !cached?.cocktails?.length,
+        render: true
+      });
+
+      // Live stoplist updates after first full paint
+      initFirebase();
+      watchStoplist();
+    } catch (err) {
+      console.warn('menu bootstrap failed, fallback Firestore', err);
+      try {
+        initFirebase();
+        const [cocktailsSnap, stopSnap, ratingsOk] = await Promise.all([
+          db.collection('cocktails').get({ source: 'server' }),
+          db.collection('stoplist').get({ source: 'server' }).catch(() => null),
+          refreshRatingsSummary().then(() => true).catch(() => false)
+        ]);
+        const cocktails = [];
+        cocktailsSnap.forEach((doc) => {
+          const data = doc.data();
+          cocktails.push({
+            id: doc.id,
+            name: String(data.name || '').trim(),
+            price: data.price || 0,
+            image: data.image || '',
+            ingredients: data.ingredients || '',
+            description: data.description || '',
+            mood: data.mood || '',
+            alcohol: data.alcohol,
+            category: data.category || data.type || '',
+            isShot: Boolean(data.isShot),
+            isSignature: Boolean(data.isSignature),
+            tasteTags: Array.isArray(data.tasteTags) ? data.tasteTags : []
+          });
+        });
+        cocktails.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'));
+        let stoplistNames = [...state.stoplist];
+        if (stopSnap) {
+          stoplistNames = [];
+          stopSnap.forEach((doc) => {
+            const n = String(doc.data()?.cocktailName || '').trim();
+            if (n) stoplistNames.push(n);
+          });
+        } else {
+          await refreshStoplistFromApi();
+          stoplistNames = [...state.stoplist];
+        }
+        writeMenuCache(cocktails, stoplistNames, state.ratings);
+        applyMenuData(cocktails, stoplistNames, {
+          fromCache: false,
+          ratings: state.ratings,
+          animate: !cached?.cocktails?.length,
+          render: true
+        });
+        watchStoplist();
+        void ratingsOk;
+      } catch (fallbackErr) {
+        console.error(fallbackErr);
+        if (!state.cocktails.length) {
+          els.menuGrid.innerHTML = '<div class="empty-state">Не удалось загрузить меню</div>';
+        }
+      }
+    }
+  }
+
+  function renderMenu({ animate = false } = {}) {
+    const list = state.cocktails
+      .filter((c) => {
+        if (state.category === 'all') return true;
+        return getCategory(c) === state.category;
+      })
+      .sort((a, b) => {
+        const aStop = state.stoplist.has(String(a.name || '').trim()) ? 1 : 0;
+        const bStop = state.stoplist.has(String(b.name || '').trim()) ? 1 : 0;
+        if (aStop !== bStop) return aStop - bStop;
+        return (a.name || '').localeCompare(b.name || '', 'ru');
+      });
+
+    if (!list.length) {
+      els.menuGrid.innerHTML = '<div class="empty-state">В этой категории пока пусто</div>';
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    list.forEach((cocktail, index) => {
+      const stopped = state.stoplist.has(String(cocktail.name || '').trim());
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `cocktail${stopped ? ' stopped' : ''}${animate ? ' cocktail-enter' : ''}`;
+      if (animate) btn.style.animationDelay = `${Math.min(index, 8) * 30}ms`;
+
+      const imageUrl = (cocktail.image || '').trim();
+      const hasImage = Boolean(imageUrl);
+      const rating = state.ratings[cocktail.name];
+      btn.innerHTML = `
+        <div class="thumb-wrap">
+          ${hasImage
+            ? `<img class="cocktail-thumb" src="${escapeAttr(imageUrl)}" alt="" loading="${index < 6 ? 'eager' : 'lazy'}" decoding="async">`
+            : ''}
+          <div class="thumb-placeholder" ${hasImage ? 'hidden' : ''}>
+            <span class="thumb-placeholder-ico" aria-hidden="true">📷</span>
+            <span class="thumb-placeholder-text">Коктейль уже делает селфи, скоро выложит сюда</span>
+          </div>
+        </div>
+        <div class="cocktail-body">
+          <h3>${escapeHtml(cocktail.name || 'Коктейль')}</h3>
+          <p class="cocktail-meta">${escapeHtml(cocktail.ingredients || cocktail.description || 'Авторский рецепт бара')}</p>
+          ${Array.isArray(cocktail.tasteTags) && cocktail.tasteTags.length
+            ? `<div class="taste-tags">${cocktail.tasteTags.map((t) => TASTE_EMOJI[t] || '').join('')}</div>`
+            : ''}
+          <div class="cocktail-foot">
+            <span class="price">${Number(cocktail.price) || 0} ₽</span>
+            <span>
+              ${rating != null ? `<span class="cocktail-rating">★ ${rating}</span> ` : ''}
+              ${stopped
+                ? '<span class="badge stop">Стоп-лист</span>'
+                : cocktail.alcohol != null
+                  ? `<span class="badge">${cocktail.alcohol}%</span>`
+                  : ''}
+            </span>
+          </div>
+        </div>
+      `;
+
+      const img = btn.querySelector('.cocktail-thumb');
+      const placeholder = btn.querySelector('.thumb-placeholder');
+      if (img && placeholder) {
+        img.addEventListener('error', () => {
+          img.remove();
+          placeholder.hidden = false;
+        });
+      }
+
+      btn.addEventListener('click', () => {
+        haptic('light');
+        openOrderSheet(cocktail);
+      });
+
+      frag.appendChild(btn);
+    });
+
+    els.menuGrid.replaceChildren(frag);
   }
 
   function openRatingSheet(order) {
@@ -1753,228 +2072,6 @@
     if (cocktail.isShot) return 'shots';
     if (cocktail.isSignature) return 'signature';
     return 'classic';
-  }
-
-  function readMenuCache() {
-    try {
-      const raw = localStorage.getItem(MENU_CACHE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || !Array.isArray(parsed.cocktails)) return null;
-      if (Date.now() - (parsed.ts || 0) > MENU_CACHE_TTL_MS) return parsed; // stale ok for instant paint
-      return parsed;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  function applyStoplistNames(stoplistNames) {
-    const names = (stoplistNames || [])
-      .map((n) => String(n || '').trim())
-      .filter(Boolean);
-    state.stoplist = new Set(names);
-    writeMenuCache(state.cocktails, names);
-    renderMenu();
-    populateAdminStopSelect();
-  }
-
-  function writeMenuCache(cocktails, stoplistNames) {
-    try {
-      localStorage.setItem(MENU_CACHE_KEY, JSON.stringify({
-        ts: Date.now(),
-        cocktails,
-        stoplist: stoplistNames
-      }));
-    } catch (_) { /* quota */ }
-  }
-
-  function applyMenuData(cocktails, stoplistNames, { fromCache = false } = {}) {
-    state.cocktails = cocktails || [];
-    const names = (stoplistNames || [])
-      .map((n) => String(n || '').trim())
-      .filter(Boolean);
-    state.stoplist = new Set(names);
-    renderMenu();
-    if (fromCache) {
-      els.menuGrid.dataset.fromCache = '1';
-    } else {
-      delete els.menuGrid.dataset.fromCache;
-    }
-  }
-
-  let stoplistUnsub = null;
-  function watchStoplist() {
-    try {
-      initFirebase();
-      if (stoplistUnsub || !db) return;
-      stoplistUnsub = db.collection('stoplist').onSnapshot(
-        (snap) => {
-          const names = [];
-          snap.forEach((doc) => {
-            const n = String(doc.data()?.cocktailName || '').trim();
-            if (n) names.push(n);
-          });
-          applyStoplistNames(names);
-        },
-        (err) => {
-          console.warn('stoplist watch failed', err);
-          refreshStoplistFromApi().catch(() => {});
-        }
-      );
-    } catch (err) {
-      console.warn('stoplist watch init', err);
-    }
-  }
-
-  async function refreshStoplistFromApi() {
-    try {
-      const res = await fetch(`${state.apiBase}/api/mini-app/stoplist`, { cache: 'no-store' });
-      const data = await res.json();
-      if (data?.success && Array.isArray(data.names)) {
-        applyStoplistNames(data.names);
-        return true;
-      }
-    } catch (err) {
-      console.warn('stoplist api', err);
-    }
-    return false;
-  }
-
-  async function loadMenu() {
-    const cached = readMenuCache();
-    if (cached?.cocktails?.length) {
-      applyMenuData(cached.cocktails, cached.stoplist || [], { fromCache: true });
-    }
-
-    try {
-      initFirebase();
-      watchStoplist();
-
-      // Load cocktails and stoplist independently — one failure must not wipe the other
-      const cocktailsPromise = db.collection('cocktails').get({ source: 'default' });
-      const stopPromise = db.collection('stoplist').get({ source: 'default' })
-        .catch(async () => {
-          await refreshStoplistFromApi();
-          return null;
-        });
-
-      const cocktailsSnap = await cocktailsPromise;
-      const cocktails = [];
-      cocktailsSnap.forEach((doc) => {
-        const data = doc.data();
-        cocktails.push({
-          id: doc.id,
-          name: String(data.name || '').trim(),
-          price: data.price || 0,
-          image: data.image || '',
-          ingredients: data.ingredients || '',
-          description: data.description || '',
-          mood: data.mood || '',
-          alcohol: data.alcohol,
-          category: data.category || data.type || '',
-          isShot: Boolean(data.isShot),
-          isSignature: Boolean(data.isSignature),
-          tasteTags: Array.isArray(data.tasteTags) ? data.tasteTags : []
-        });
-      });
-      cocktails.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'));
-
-      const stopSnap = await stopPromise;
-      let stoplistNames = [...state.stoplist];
-      if (stopSnap) {
-        stoplistNames = [];
-        stopSnap.forEach((doc) => {
-          const n = String(doc.data()?.cocktailName || '').trim();
-          if (n) stoplistNames.push(n);
-        });
-      }
-
-      writeMenuCache(cocktails, stoplistNames);
-      applyMenuData(cocktails, stoplistNames);
-      refreshRatingsSummary().catch(() => {});
-    } catch (err) {
-      console.error(err);
-      await refreshStoplistFromApi();
-      if (!state.cocktails.length) {
-        els.menuGrid.innerHTML = '<div class="empty-state">Не удалось загрузить меню</div>';
-      }
-    }
-  }
-
-  function renderMenu() {
-    const list = state.cocktails
-      .filter((c) => {
-        if (state.category === 'all') return true;
-        return getCategory(c) === state.category;
-      })
-      .sort((a, b) => {
-        const aStop = state.stoplist.has(String(a.name || '').trim()) ? 1 : 0;
-        const bStop = state.stoplist.has(String(b.name || '').trim()) ? 1 : 0;
-        if (aStop !== bStop) return aStop - bStop;
-        return (a.name || '').localeCompare(b.name || '', 'ru');
-      });
-
-    if (!list.length) {
-      els.menuGrid.innerHTML = '<div class="empty-state">В этой категории пока пусто</div>';
-      return;
-    }
-
-    els.menuGrid.innerHTML = '';
-    list.forEach((cocktail, index) => {
-      const stopped = state.stoplist.has(String(cocktail.name || '').trim());
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = `cocktail${stopped ? ' stopped' : ''}`;
-      btn.style.animationDelay = `${Math.min(index, 8) * 40}ms`;
-
-      const imageUrl = (cocktail.image || '').trim();
-      const hasImage = Boolean(imageUrl);
-      btn.innerHTML = `
-        <div class="thumb-wrap">
-          ${hasImage
-            ? `<img class="cocktail-thumb" src="${escapeAttr(imageUrl)}" alt="" loading="lazy" decoding="async">`
-            : ''}
-          <div class="thumb-placeholder" ${hasImage ? 'hidden' : ''}>
-            <span class="thumb-placeholder-ico" aria-hidden="true">📷</span>
-            <span class="thumb-placeholder-text">Коктейль уже делает селфи, скоро выложит сюда</span>
-          </div>
-        </div>
-        <div class="cocktail-body">
-          <h3>${escapeHtml(cocktail.name || 'Коктейль')}</h3>
-          <p class="cocktail-meta">${escapeHtml(cocktail.ingredients || cocktail.description || 'Авторский рецепт бара')}</p>
-          ${Array.isArray(cocktail.tasteTags) && cocktail.tasteTags.length
-            ? `<div class="taste-tags">${cocktail.tasteTags.map((t) => TASTE_EMOJI[t] || '').join('')}</div>`
-            : ''}
-          <div class="cocktail-foot">
-            <span class="price">${Number(cocktail.price) || 0} ₽</span>
-            <span>
-              ${state.ratings[cocktail.name] != null ? `<span class="cocktail-rating">★ ${state.ratings[cocktail.name]}</span> ` : ''}
-              ${stopped
-                ? '<span class="badge stop">Стоп-лист</span>'
-                : cocktail.alcohol != null
-                  ? `<span class="badge">${cocktail.alcohol}%</span>`
-                  : ''}
-            </span>
-          </div>
-        </div>
-      `;
-
-      const img = btn.querySelector('.cocktail-thumb');
-      const placeholder = btn.querySelector('.thumb-placeholder');
-      if (img && placeholder) {
-        img.addEventListener('error', () => {
-          img.remove();
-          placeholder.hidden = false;
-        });
-      }
-
-      btn.addEventListener('click', () => {
-        haptic('light');
-        openOrderSheet(cocktail);
-      });
-
-      els.menuGrid.appendChild(btn);
-    });
   }
 
   function openOrderSheet(cocktail) {
@@ -2383,6 +2480,9 @@
     if (name === 'profile') {
       refreshProfile();
     }
+    if (name === 'orders') {
+      refreshOrders();
+    }
     haptic('light');
   }
 
@@ -2424,7 +2524,8 @@
       els.filters.querySelectorAll('.filter').forEach((f) => {
         f.classList.toggle('active', f === btn);
       });
-      renderMenu();
+      lastMenuSignature = '';
+      scheduleRenderMenu({ animate: false });
       haptic('light');
     });
 
@@ -2541,7 +2642,12 @@
     // Instant paint from cache before network
     const cached = readMenuCache();
     if (cached?.cocktails?.length) {
-      applyMenuData(cached.cocktails, cached.stoplist || [], { fromCache: true });
+      applyMenuData(cached.cocktails, cached.stoplist || [], {
+        fromCache: true,
+        ratings: cached.ratings || {},
+        animate: true,
+        render: true
+      });
     }
 
     try {

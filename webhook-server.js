@@ -1482,6 +1482,7 @@ function invalidateStoplistCache() {
   stoplistCache.at = 0;
   stoplistCache.names = new Set();
   stoplistCache.loading = null;
+  try { menuBootstrapCache.at = 0; menuBootstrapCache.payload = null; } catch (_) { /* defined later */ }
 }
 
 async function refreshStoplistCache(force = false) {
@@ -2520,6 +2521,74 @@ app.get('/api/mini-app/stoplist', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const names = [...(await refreshStoplistCache(false))];
     res.json({ success: true, names, count: names.length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// One-shot menu bootstrap: cocktails + stoplist + ratings (reduces Mini App flicker)
+const menuBootstrapCache = { at: 0, payload: null };
+app.get('/api/mini-app/menu-bootstrap', async (req, res) => {
+  try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=15');
+    const now = Date.now();
+    if (menuBootstrapCache.payload && now - menuBootstrapCache.at < 15000) {
+      return res.json(menuBootstrapCache.payload);
+    }
+
+    const [cocktailsSnap, stopNames, ratingsSnap] = await Promise.all([
+      db.collection('cocktails').get(),
+      refreshStoplistCache(false),
+      db.collection('ratings').limit(500).get().catch(() => null)
+    ]);
+
+    const cocktails = cocktailsSnap.docs.map((doc) => {
+      const data = doc.data() || {};
+      return {
+        id: doc.id,
+        name: String(data.name || '').trim(),
+        price: data.price || 0,
+        image: data.image || '',
+        ingredients: data.ingredients || '',
+        description: data.description || '',
+        mood: data.mood || '',
+        alcohol: data.alcohol,
+        category: data.category || data.type || '',
+        isShot: Boolean(data.isShot),
+        isSignature: Boolean(data.isSignature),
+        tasteTags: Array.isArray(data.tasteTags) ? data.tasteTags : []
+      };
+    }).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'));
+
+    const averages = {};
+    if (ratingsSnap) {
+      const acc = new Map();
+      ratingsSnap.forEach((doc) => {
+        const d = doc.data() || {};
+        const name = String(d.cocktailName || '').trim();
+        const rating = Number(d.rating) || 0;
+        if (!name || rating <= 0) return;
+        const cur = acc.get(name) || { sum: 0, count: 0 };
+        cur.sum += rating;
+        cur.count += 1;
+        acc.set(name, cur);
+      });
+      acc.forEach((v, name) => {
+        averages[name] = Number((v.sum / v.count).toFixed(1));
+      });
+    }
+
+    const payload = {
+      success: true,
+      cocktails,
+      stoplist: [...stopNames],
+      ratings: averages,
+      ts: now
+    };
+    menuBootstrapCache.at = now;
+    menuBootstrapCache.payload = payload;
+    res.json(payload);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
