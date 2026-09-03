@@ -750,8 +750,21 @@ body.has-admin .tabbar {
 }
 
 .tab-ico {
-  font-size: 1rem;
-  line-height: 1;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  line-height: 0;
+}
+
+.tab-ico svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+.tab.active .tab-ico {
+  filter: drop-shadow(0 0 8px rgba(91, 140, 255, 0.35));
 }
 
 .sheet-backdrop {
