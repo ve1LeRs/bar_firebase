@@ -136,12 +136,30 @@
   }
 
   function showToast(message) {
-    els.toast.hidden = false;
-    els.toast.textContent = message;
+    const el = els.toast;
+    if (!el) return;
+    const text = String(message || '').trim();
+    if (!text) return;
+
     clearTimeout(showToast._t);
+    clearTimeout(showToast._hide);
+
+    el.hidden = false;
+    el.textContent = text;
+    el.classList.remove('is-on', 'is-leaving');
+    // Restart enter transition even if toast was already visible
+    void el.offsetWidth;
+    el.classList.add('is-on');
+
     showToast._t = setTimeout(() => {
-      els.toast.hidden = true;
-    }, 2800);
+      el.classList.remove('is-on');
+      el.classList.add('is-leaving');
+      showToast._hide = setTimeout(() => {
+        el.classList.remove('is-leaving');
+        el.hidden = true;
+        el.textContent = '';
+      }, 240);
+    }, 2400);
   }
 
   function setLoader(on) {
