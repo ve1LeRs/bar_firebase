@@ -634,9 +634,17 @@ button, input {
   position: fixed;
   inset: 0;
   z-index: 60;
-  display: grid;
+  display: none;
   place-items: center;
   background: rgba(10, 8, 7, 0.45);
+}
+
+.loader.is-on {
+  display: grid;
+}
+
+.loader[hidden] {
+  display: none !important;
 }
 
 .loader-ring {
