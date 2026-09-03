@@ -40,7 +40,8 @@
     sessionOk: false,
     uid: null,
     authError: null,
-    ordersPollTimer: null
+    ordersPollTimer: null,
+    role: 'user'
   };
 
   // Wake Render ASAP (cold start) — do not await
@@ -425,10 +426,17 @@
   }
 
   function renderMenu() {
-    const list = state.cocktails.filter((c) => {
-      if (state.category === 'all') return true;
-      return getCategory(c) === state.category;
-    });
+    const list = state.cocktails
+      .filter((c) => {
+        if (state.category === 'all') return true;
+        return getCategory(c) === state.category;
+      })
+      .sort((a, b) => {
+        const aStop = state.stoplist.has(a.name) ? 1 : 0;
+        const bStop = state.stoplist.has(b.name) ? 1 : 0;
+        if (aStop !== bStop) return aStop - bStop;
+        return (a.name || '').localeCompare(b.name || '', 'ru');
+      });
 
     if (!list.length) {
       els.menuGrid.innerHTML = '<div class="empty-state">В этой категории пока пусто</div>';
@@ -443,11 +451,18 @@
       btn.className = `cocktail${stopped ? ' stopped' : ''}`;
       btn.style.animationDelay = `${Math.min(index, 8) * 40}ms`;
 
-      const hasImage = Boolean(cocktail.image);
+      const imageUrl = (cocktail.image || '').trim();
+      const hasImage = Boolean(imageUrl);
       btn.innerHTML = `
-        ${hasImage
-          ? `<img class="cocktail-thumb" src="${escapeAttr(cocktail.image)}" alt="" loading="lazy" decoding="async">`
-          : `<div class="cocktail-thumb placeholder">🍸</div>`}
+        <div class="thumb-wrap">
+          ${hasImage
+            ? `<img class="cocktail-thumb" src="${escapeAttr(imageUrl)}" alt="" loading="lazy" decoding="async">`
+            : ''}
+          <div class="thumb-placeholder" ${hasImage ? 'hidden' : ''}>
+            <span class="thumb-placeholder-ico" aria-hidden="true">📷</span>
+            <span class="thumb-placeholder-text">Коктейль уже делает селфи, скоро выложит сюда</span>
+          </div>
+        </div>
         <div class="cocktail-body">
           <h3>${escapeHtml(cocktail.name || 'Коктейль')}</h3>
           <p class="cocktail-meta">${escapeHtml(cocktail.ingredients || cocktail.description || 'Авторский рецепт бара')}</p>
@@ -461,6 +476,15 @@
           </div>
         </div>
       `;
+
+      const img = btn.querySelector('.cocktail-thumb');
+      const placeholder = btn.querySelector('.thumb-placeholder');
+      if (img && placeholder) {
+        img.addEventListener('error', () => {
+          img.remove();
+          placeholder.hidden = false;
+        });
+      }
 
       btn.addEventListener('click', () => {
         haptic('light');
@@ -503,11 +527,28 @@
 
     if (cocktail.image) {
       els.sheetMedia.classList.remove('is-empty');
-      els.sheetMedia.innerHTML = `<img src="${escapeAttr(cocktail.image)}" alt="${escapeAttr(cocktail.name)}" decoding="async">`;
+      els.sheetMedia.innerHTML = `
+        <img src="${escapeAttr(cocktail.image)}" alt="${escapeAttr(cocktail.name)}" decoding="async">
+        <div class="thumb-placeholder sheet-placeholder" hidden>
+          <span class="thumb-placeholder-ico" aria-hidden="true">📷</span>
+          <span class="thumb-placeholder-text">Коктейль уже делает селфи, скоро выложит сюда</span>
+        </div>
+      `;
+      const sheetImg = els.sheetMedia.querySelector('img');
+      const sheetPh = els.sheetMedia.querySelector('.sheet-placeholder');
+      sheetImg?.addEventListener('error', () => {
+        sheetImg.remove();
+        if (sheetPh) sheetPh.hidden = false;
+        els.sheetMedia.classList.add('is-empty');
+      });
     } else {
       els.sheetMedia.classList.add('is-empty');
-      els.sheetMedia.innerHTML = '';
-      els.sheetMedia.style.backgroundImage = '';
+      els.sheetMedia.innerHTML = `
+        <div class="thumb-placeholder sheet-placeholder">
+          <span class="thumb-placeholder-ico" aria-hidden="true">📷</span>
+          <span class="thumb-placeholder-text">Коктейль уже делает селфи, скоро выложит сюда</span>
+        </div>
+      `;
     }
 
     const price = Number(cocktail.price) || 0;
