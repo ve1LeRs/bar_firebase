@@ -63,7 +63,7 @@
     adminOrdersTimer: null,
     adminTab: 'cocktails',
     knownOrderStatuses: new Map(),
-    promptedRatingOrders: new Set(),
+    promptedRatingOrders: loadPromptedRatings(),
     pendingRatingOrders: new Map(),
     billExpandPrefs: new Map(),
     ratingQuietUntil: 0,
@@ -78,6 +78,35 @@
 
   let auth;
   let db;
+
+  function loadPromptedRatings() {
+    try {
+      const raw = sessionStorage.getItem('asafiev_rating_prompted_v1');
+      const arr = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(arr) ? arr.map(String) : []);
+    } catch (_) {
+      return new Set();
+    }
+  }
+
+  function persistPromptedRatings() {
+    try {
+      sessionStorage.setItem(
+        'asafiev_rating_prompted_v1',
+        JSON.stringify([...state.promptedRatingOrders].slice(-80))
+      );
+    } catch (_) { /* ignore */ }
+  }
+
+  function markRatingPrompted(id) {
+    if (!id) return;
+    state.promptedRatingOrders.add(String(id));
+    persistPromptedRatings();
+  }
+
+  function wasRatingPrompted(id) {
+    return state.promptedRatingOrders.has(String(id || ''));
+  }
 
   function initFirebase() {
     if (auth && db) return;
@@ -2007,25 +2036,19 @@
   }
 
   function openRatingSheet(order) {
-    if (state.currentView === 'admin') return;
-    if (state.placingOrder) return;
-    if (Date.now() < (state.ratingQuietUntil || 0)) {
-      if (order?.id) state.pendingRatingOrders.set(order.id, order);
-      return;
-    }
-    if (!order?.id || order.rated) return;
-    if (els.ratingSheet?.classList.contains('open')) return;
+    if (!canShowRatingNow()) return false;
+    if (!order?.id || order.rated) return false;
+    if (wasRatingPrompted(order.id)) return false;
+    if (els.ratingSheet?.classList.contains('open')) return false;
 
+    markRatingPrompted(order.id);
+    state.pendingRatingOrders.delete(String(order.id));
     state.ratingOrder = order;
     state.ratingValue = 0;
-    state.promptedRatingOrders.add(order.id);
-    state.pendingRatingOrders.delete(order.id);
     if (els.ratingTitle) els.ratingTitle.textContent = `Оцените: ${order.name || 'коктейль'}`;
     if (els.ratingSubtitle) els.ratingSubtitle.textContent = 'Поставьте оценку от 1 до 5';
     els.ratingStars?.querySelectorAll('button').forEach((b) => b.classList.remove('is-on'));
 
-    // Defer backdrop so the same tap that closed the order sheet
-    // cannot immediately dismiss the rating sheet.
     if (els.ratingBackdrop) {
       els.ratingBackdrop.hidden = false;
       els.ratingBackdrop.style.pointerEvents = 'none';
@@ -2038,10 +2061,16 @@
     }
     els.ratingSheet?.classList.add('open');
     els.ratingSheet?.setAttribute('aria-hidden', 'false');
+    return true;
   }
 
-  function closeRatingSheet({ flush = true } = {}) {
+  function closeRatingSheet({ dismiss = false } = {}) {
     clearTimeout(openRatingSheet._backdropT);
+    clearTimeout(flushPendingRating._t);
+    if (dismiss && state.ratingOrder?.id) {
+      markRatingPrompted(state.ratingOrder.id);
+      state.pendingRatingOrders.delete(String(state.ratingOrder.id));
+    }
     state.ratingOrder = null;
     state.ratingValue = 0;
     els.ratingSheet?.classList.remove('open');
@@ -2050,18 +2079,20 @@
       els.ratingBackdrop.hidden = true;
       els.ratingBackdrop.style.pointerEvents = '';
     }
-    if (flush) setTimeout(() => flushPendingRating(), 320);
   }
 
   async function submitRating({ skip = false } = {}) {
     if (!state.ratingOrder?.id || !canOrder()) return;
+    const orderId = state.ratingOrder.id;
+    markRatingPrompted(orderId);
+    state.pendingRatingOrders.delete(String(orderId));
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/rate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           initData: tg.initData,
-          orderId: state.ratingOrder.id,
+          orderId,
           rating: state.ratingValue,
           skip
         })
@@ -2101,64 +2132,107 @@
     }
   }
 
+  function canShowRatingNow() {
+    return (
+      state.currentView === 'orders' &&
+      !state.placingOrder &&
+      state.currentView !== 'admin' &&
+      Date.now() >= (state.ratingQuietUntil || 0) &&
+      !els.sheet?.classList.contains('open') &&
+      !els.ratingSheet?.classList.contains('open')
+    );
+  }
+
+  function queueRatingCandidate(order) {
+    if (!order?.id || order.rated || wasRatingPrompted(order.id)) return;
+    if ((order.status || '') !== 'ready') return;
+    state.pendingRatingOrders.set(String(order.id), {
+      ...order,
+      status: 'ready',
+      readyAt: Date.now()
+    });
+  }
+
   function noteOrderStatusChanges(orders) {
     const list = Array.isArray(orders) ? orders : [];
     const kitchen = new Set(['pending', 'confirmed', 'preparing']);
-    const busy = isRatingUiBusy();
+    let justBecameReady = null;
 
     list.forEach((order) => {
-      const id = order.id;
+      const id = String(order.id || '');
       const status = order.status || 'pending';
       if (!id) return;
       const prev = state.knownOrderStatuses.get(id);
-      if (prev && prev !== status) {
-        // Status toasts only on guest screens — don't interrupt admin work
-        if (state.currentView !== 'admin') {
+
+      // First time we see an order: seed only — never prompt for already-ready history
+      if (!prev) {
+        state.knownOrderStatuses.set(id, status);
+        return;
+      }
+
+      if (prev !== status) {
+        if (state.currentView !== 'admin' && !state.placingOrder) {
           showToast(`${order.name || 'Заказ'}: ${STATUS_LABELS[status] || status}`);
           haptic('light');
         }
         const becameReady = status === 'ready' && kitchen.has(prev);
-        if (becameReady && !order.rated && !state.promptedRatingOrders.has(id)) {
-          if (isRatingUiBusy()) {
-            state.pendingRatingOrders.set(id, order);
-          } else {
-            openRatingSheet(order);
-          }
+        if (becameReady && !order.rated && !wasRatingPrompted(id)) {
+          justBecameReady = { ...order, id, status: 'ready' };
+        }
+        if (status !== 'ready' || order.rated) {
+          state.pendingRatingOrders.delete(id);
         }
       }
-      // Keep pending rating payload fresh while still ready
-      if (status === 'ready' && state.pendingRatingOrders.has(id) && !order.rated) {
-        state.pendingRatingOrders.set(id, order);
-      }
-      if (status !== 'ready' || order.rated) {
-        state.pendingRatingOrders.delete(id);
-      }
+
       state.knownOrderStatuses.set(id, status);
     });
 
-    flushPendingRating();
-  }
+    // Drop stale candidates (older than 15 min or no longer ready)
+    const now = Date.now();
+    for (const [id, cand] of state.pendingRatingOrders) {
+      const live = list.find((o) => String(o.id) === id);
+      if (!live || live.rated || live.status !== 'ready' || now - (cand.readyAt || 0) > 15 * 60 * 1000) {
+        state.pendingRatingOrders.delete(id);
+      }
+    }
 
-  function isRatingUiBusy() {
-    return (
-      state.placingOrder ||
-      state.currentView === 'admin' ||
-      Date.now() < (state.ratingQuietUntil || 0) ||
-      els.ratingSheet?.classList.contains('open') ||
-      els.sheet?.classList.contains('open')
-    );
+    if (!justBecameReady) return;
+
+    if (canShowRatingNow()) {
+      openRatingSheet(justBecameReady);
+    } else {
+      queueRatingCandidate(justBecameReady);
+    }
   }
 
   function flushPendingRating() {
-    if (isRatingUiBusy()) return;
+    clearTimeout(flushPendingRating._t);
+    if (!canShowRatingNow()) return;
     if (!state.pendingRatingOrders?.size) return;
+
+    const now = Date.now();
+    let best = null;
     for (const [id, order] of state.pendingRatingOrders) {
-      state.pendingRatingOrders.delete(id);
-      if (!order || order.rated || state.promptedRatingOrders.has(id)) continue;
-      if ((order.status || 'ready') !== 'ready') continue;
-      openRatingSheet(order);
-      break;
+      if (!order || order.rated || wasRatingPrompted(id)) {
+        state.pendingRatingOrders.delete(id);
+        continue;
+      }
+      if ((order.status || '') !== 'ready') {
+        state.pendingRatingOrders.delete(id);
+        continue;
+      }
+      if (now - (order.readyAt || 0) > 15 * 60 * 1000) {
+        state.pendingRatingOrders.delete(id);
+        continue;
+      }
+      if (!best || (order.readyAt || 0) > (best.readyAt || 0)) best = order;
     }
+    if (best) openRatingSheet(best);
+  }
+
+  function scheduleRatingFlush(delayMs = 500) {
+    clearTimeout(flushPendingRating._t);
+    flushPendingRating._t = setTimeout(() => flushPendingRating(), delayMs);
   }
 
   function getCategory(cocktail) {
@@ -2341,8 +2415,8 @@
     const finalPrice = Math.max(0, price - bonusUsed);
 
     state.placingOrder = true;
-    state.ratingQuietUntil = Date.now() + 2500;
-    closeRatingSheet({ flush: false });
+    state.ratingQuietUntil = Date.now() + 4000;
+    closeRatingSheet();
     els.confirmOrderBtn.disabled = true;
     wakeApi();
 
@@ -2437,8 +2511,8 @@
     } finally {
       state.placingOrder = false;
       els.confirmOrderBtn.disabled = false;
-      // Show queued rating only after the order flow fully settles
-      setTimeout(() => flushPendingRating(), 600);
+      // Never auto-pop rating after placing — only when user is on Orders
+      // and a real ready transition happened (or visits Orders later).
     }
   }
 
@@ -2665,7 +2739,7 @@
     }
     state.currentView = name;
     // Never interrupt admin with guest rating UI
-    if (name === 'admin') closeRatingSheet({ flush: false });
+    if (name === 'admin') closeRatingSheet({ dismiss: false });
     document.querySelectorAll('.view').forEach((v) => {
       v.classList.toggle('active', v.dataset.view === name);
     });
@@ -2682,8 +2756,9 @@
     }
     if (name === 'orders') {
       refreshOrders();
+      // Only surface a queued "ready" rating when guest opens Orders
+      if (!state.placingOrder) scheduleRatingFlush(700);
     }
-    if (name !== 'admin' && !state.placingOrder) flushPendingRating();
     haptic('light');
   }
 
@@ -2746,7 +2821,7 @@
       }
       submitRating();
     });
-    els.ratingBackdrop?.addEventListener('click', closeRatingSheet);
+    els.ratingBackdrop?.addEventListener('click', () => closeRatingSheet({ dismiss: true }));
     els.ratingStars?.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-star]');
       if (!btn) return;

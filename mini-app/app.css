@@ -754,12 +754,18 @@ textarea {
 .stat-label {
   display: block;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.01em;
   margin-bottom: 6px;
 }
 
 .stat strong {
-  font-size: 1.25rem;
+  font-family: var(--font-body);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
   color: var(--accent);
 }
 
