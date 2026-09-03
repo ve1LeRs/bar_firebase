@@ -13,8 +13,8 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://telegram.org">
-  <link rel="preload" href="app.css?v=bills3" as="style">
-  <link rel="stylesheet" href="app.css?v=bills3">
+  <link rel="preload" href="app.css?v=r0904" as="style">
+  <link rel="stylesheet" href="app.css?v=r0904">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;600&display=swap" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;600&display=swap"></noscript>
   <style id="critical-stop">
@@ -23,6 +23,8 @@
       opacity: 0.45 !important;
       filter: grayscale(0.45) brightness(0.72);
     }
+    /* Kill legacy auth plaque if an old cached shell injects it */
+    #authStatus, .info-panel#authStatus { display: none !important; }
   </style>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
@@ -137,9 +139,9 @@
           <input id="adminCocktailAlcohol" class="admin-input" type="number" placeholder="Крепость %" min="0" max="100">
           <input id="adminCocktailMood" class="admin-input" type="text" placeholder="Настроение / описание">
           <div class="taste-checks" id="adminTasteChecks">
-            <label class="order-time"><input type="checkbox" id="adminTasteSour" value="sour"> кислое</label>
-            <label class="order-time"><input type="checkbox" id="adminTasteSweet" value="sweet"> сладкое</label>
-            <label class="order-time"><input type="checkbox" id="adminTasteBitter" value="bitter"> горькое</label>
+            <label class="order-time"><input type="checkbox" id="adminTasteSour" value="sour"> кислый</label>
+            <label class="order-time"><input type="checkbox" id="adminTasteSweet" value="sweet"> сладкий</label>
+            <label class="order-time"><input type="checkbox" id="adminTasteBitter" value="bitter"> горький</label>
           </div>
           <label class="order-time" for="adminCocktailRecipe">Рецепт для склада (строка: Ингредиент = количество)</label>
           <textarea id="adminCocktailRecipe" class="admin-input admin-textarea" rows="3" placeholder="Водка = 50&#10;Лайм = 20"></textarea>
@@ -276,7 +278,7 @@
         </div>
       </div>
 
-      <div class="info-panel" id="authStatus" hidden></div>
+      <!-- auth status only via toast on errors; no persistent plaque -->
       <button class="ghost auth-retry" id="authRetryBtn" type="button" hidden>Повторить вход</button>
     </section>
   </main>
@@ -371,6 +373,6 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script defer src="app.js?v=bills3"></script>
+  <script defer src="app.js?v=r0904"></script>
 </body>
 </html>

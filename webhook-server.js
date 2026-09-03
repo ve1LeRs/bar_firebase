@@ -58,12 +58,23 @@ app.use('/mini-app', express.static(path.join(__dirname, 'mini-app'), {
   etag: false,
   lastModified: false,
   setHeaders: (res, filePath) => {
+    // Always revalidate — Telegram WebView caches aggressively
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     if (String(filePath).endsWith('.html')) {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-      res.setHeader('Pragma', 'no-cache');
-    } else {
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Clear-Site-Data', '"cache"');
     }
+  }
+}));
+// Fresh alias path to bust stubborn Telegram WebView caches
+app.use('/m', express.static(path.join(__dirname, 'mini-app'), {
+  extensions: ['html'],
+  etag: false,
+  lastModified: false,
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
   }
 }));
 app.get('/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'logo.png')));
@@ -722,7 +733,8 @@ app.post('/send-purchase-list', async (req, res) => {
 
 function getMiniAppPublicUrl() {
   const base = (process.env.PUBLIC_BASE_URL || 'https://asafievbar.duckdns.org').replace(/\/$/, '');
-  return `${base}/mini-app/?v=bills3`;
+  // /m/ is a fresh alias — Telegram WebView often keeps a stale /mini-app/ shell
+  return `${base}/m/?v=r0904`;
 }
 
 const MINIAPP_BOT_DESCRIPTION =

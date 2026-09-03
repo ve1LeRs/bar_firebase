@@ -21,7 +21,7 @@
     completed: 'Выполнен',
     cancelled: 'Отменён'
   };
-  const TASTE_LABELS = { sour: 'кислое', sweet: 'сладкое', bitter: 'горькое' };
+  const TASTE_LABELS = { sour: 'кислый', sweet: 'сладкий', bitter: 'горький' };
   const PAY_METHOD_RU = {
     cash: 'наличные',
     card: 'карта',
@@ -116,7 +116,6 @@
     profilePromoInput: document.getElementById('profilePromoInput'),
     profilePromoBtn: document.getElementById('profilePromoBtn'),
     profilePromoHint: document.getElementById('profilePromoHint'),
-    authStatus: document.getElementById('authStatus'),
     authRetryBtn: document.getElementById('authRetryBtn'),
     avatar: document.getElementById('avatar'),
     adminTabBtn: document.getElementById('adminTabBtn'),
@@ -387,15 +386,9 @@
   }
 
   function setAuthStatus(text, { error = false } = {}) {
-    if (!els.authStatus) return;
+    // Persistent auth plaque removed — surface problems as toast only
     const msg = String(text || '').trim();
-    if (!msg || !error) {
-      els.authStatus.hidden = true;
-      els.authStatus.textContent = '';
-      return;
-    }
-    els.authStatus.hidden = false;
-    els.authStatus.textContent = msg;
+    if (error && msg) showToast(msg);
   }
 
   function setAuthRetryVisible(on) {
