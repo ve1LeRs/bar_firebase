@@ -32,6 +32,7 @@
     category: 'all',
     bonusBalance: 0,
     openBillTotal: null,
+    openBillItems: [],
     selected: null,
     bonusToUse: 0,
     ordersUnsub: null,
@@ -83,6 +84,8 @@
     profileMeta: document.getElementById('profileMeta'),
     profileBonus: document.getElementById('profileBonus'),
     profileBill: document.getElementById('profileBill'),
+    profileBillItems: document.getElementById('profileBillItems'),
+    profileBillEmpty: document.getElementById('profileBillEmpty'),
     authStatus: document.getElementById('authStatus'),
     authRetryBtn: document.getElementById('authRetryBtn'),
     avatar: document.getElementById('avatar'),
@@ -327,6 +330,9 @@
         }
         if (typeof data.openBillTotal === 'number') {
           state.openBillTotal = data.openBillTotal;
+        }
+        if (Array.isArray(data.openBillItems)) {
+          state.openBillItems = data.openBillItems;
         }
         if (data.role) state.role = data.role;
         applyAdminUi();
@@ -1321,6 +1327,42 @@
     els.bonusChip.textContent = `◆ ${state.bonusBalance}`;
     els.profileBill.textContent =
       state.openBillTotal == null ? '—' : `${state.openBillTotal} ₽`;
+    renderProfileBillItems();
+  }
+
+  function renderProfileBillItems() {
+    if (!els.profileBillItems) return;
+    const items = Array.isArray(state.openBillItems) ? state.openBillItems : [];
+    if (!items.length) {
+      els.profileBillItems.innerHTML =
+        '<div class="empty-state" id="profileBillEmpty">Пока нет позиций в счёте</div>';
+      return;
+    }
+
+    els.profileBillItems.innerHTML = items
+      .map((item) => {
+        const status = item.status || 'pending';
+        return `
+          <article class="bill-item-row">
+            <div>
+              <p class="bill-item-name">${escapeHtml(item.cocktailName || 'Коктейль')}</p>
+              <p class="bill-item-meta">${STATUS_LABELS[status] || status}</p>
+            </div>
+            <strong class="bill-item-price">${Number(item.price) || 0} ₽</strong>
+          </article>
+        `;
+      })
+      .join('');
+  }
+
+  function applyOpenBill(data) {
+    if (typeof data?.openBillTotal === 'number') {
+      state.openBillTotal = data.openBillTotal;
+    }
+    if (Array.isArray(data?.openBillItems)) {
+      state.openBillItems = data.openBillItems;
+    }
+    updateProfileUI();
   }
 
   function getCategory(cocktail) {
@@ -1682,8 +1724,18 @@
     // Optimistic UX: close sheet immediately, confirm in background
     if (bonusUsed > 0) {
       state.bonusBalance = Math.max(0, state.bonusBalance - bonusUsed);
-      updateProfileUI();
     }
+    state.openBillTotal = (Number(state.openBillTotal) || 0) + finalPrice;
+    state.openBillItems = [
+      ...(Array.isArray(state.openBillItems) ? state.openBillItems : []),
+      {
+        cocktailName: cocktail.name,
+        price: finalPrice,
+        status: 'pending',
+        orderId: 'optimistic'
+      }
+    ];
+    updateProfileUI();
     haptic('medium');
     closeOrderSheet();
     showToast('Отправляем заказ…');
@@ -1722,15 +1774,21 @@
       }
 
       showToast(`Заказ принят · очередь #${data.queuePosition || '—'}`);
+      if (typeof data.openBillTotal === 'number' || Array.isArray(data.openBillItems)) {
+        applyOpenBill(data);
+      } else {
+        refreshProfile();
+      }
       refreshOrders();
-      refreshProfile();
     } catch (err) {
       console.error(err);
-      // Rollback optimistic bonus spend
+      // Rollback optimistic bonus / bill
       if (bonusUsed > 0) {
         state.bonusBalance += bonusUsed;
-        updateProfileUI();
       }
+      state.openBillTotal = Math.max(0, (Number(state.openBillTotal) || 0) - finalPrice);
+      state.openBillItems = (state.openBillItems || []).filter((item) => item.orderId !== 'optimistic');
+      updateProfileUI();
       document.querySelector('[data-optimistic]')?.remove();
       showToast(err.name === 'AbortError' ? 'Сервер долго отвечает, попробуйте ещё раз' : (err.message || 'Ошибка заказа'));
       haptic('heavy');
@@ -1795,9 +1853,8 @@
       const data = await res.json();
       if (!data.success) return;
       state.bonusBalance = Number(data.bonusBalance) || 0;
-      state.openBillTotal = Number(data.openBillTotal) || 0;
       if (data.maxBonusUsage) state.maxBonusUsage = Number(data.maxBonusUsage) || 50;
-      updateProfileUI();
+      applyOpenBill(data);
     } catch (err) {
       console.warn('profile refresh failed', err);
     }
@@ -1805,8 +1862,12 @@
 
   function startOrdersPolling() {
     refreshOrders();
+    refreshProfile();
     if (state.ordersPollTimer) clearInterval(state.ordersPollTimer);
-    state.ordersPollTimer = setInterval(refreshOrders, 5000);
+    state.ordersPollTimer = setInterval(() => {
+      refreshOrders();
+      refreshProfile();
+    }, 5000);
   }
 
   function subscribeOrders() {
@@ -1906,6 +1967,9 @@
     else tg?.BackButton?.show?.();
     if (name === 'admin') {
       switchAdminTab(state.adminTab || 'cocktails');
+    }
+    if (name === 'profile') {
+      refreshProfile();
     }
     haptic('light');
   }

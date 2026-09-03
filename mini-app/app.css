@@ -521,6 +521,52 @@ button, input {
   font-size: 0.85rem;
 }
 
+.bill-panel {
+  margin: 4px 0 14px;
+}
+
+.bill-panel-title {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.bill-items {
+  display: grid;
+  gap: 8px;
+}
+
+.bill-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+}
+
+.bill-item-name {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.bill-item-meta {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.bill-item-price {
+  flex-shrink: 0;
+  color: var(--accent);
+  font-size: 0.95rem;
+}
+
 .auth-retry {
   margin-top: 10px;
 }
