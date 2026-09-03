@@ -699,7 +699,7 @@
       if (els.adminBillsStats) {
         els.adminBillsStats.innerHTML = `
           <div class="stat"><span class="stat-label">Открытых</span><strong>${data.stats?.openCount ?? 0}</strong></div>
-          <div class="stat"><span class="stat-label">Сумма paid</span><strong>${data.stats?.paidSum ?? 0} ₽</strong></div>
+          <div class="stat"><span class="stat-label">Оплачено</span><strong>${data.stats?.paidSum ?? 0} ₽</strong></div>
         `;
       }
       const list = data.bills || [];
@@ -709,21 +709,25 @@
         return;
       }
       els.adminBillsList.innerHTML = '';
+      const billStatusRu = { open: 'открыт', paid: 'оплачен', closed: 'закрыт' };
+      const payMethodRu = { cash: 'наличные', card: 'карта' };
       list.forEach((bill) => {
         const card = document.createElement('article');
         card.className = 'order-card';
+        const statusLabel = billStatusRu[bill.status] || bill.status || '';
+        const payLabel = payMethodRu[bill.paymentMethod] || bill.paymentMethod || '—';
         card.innerHTML = `
           <div class="order-top">
             <div>
               <p class="order-name">${escapeHtml(bill.userName || 'Гость')}</p>
-              <p class="order-time">${bill.itemsCount || 0} поз. · ${escapeHtml(bill.status || '')}</p>
+              <p class="order-time">${bill.itemsCount || 0} поз. · ${escapeHtml(statusLabel)}</p>
             </div>
             <strong class="price">${Number(bill.totalAmount) || 0} ₽</strong>
           </div>
           ${bill.status === 'open' ? `<div class="admin-actions">
             <button type="button" class="primary" data-close-bill="${escapeAttr(bill.id)}">Закрыть (наличные)</button>
             <button type="button" data-close-bill="${escapeAttr(bill.id)}" data-method="card">Закрыть (карта)</button>
-          </div>` : `<div class="queue">Оплата: ${escapeHtml(bill.paymentMethod || '—')}</div>`}
+          </div>` : `<div class="queue">Оплата: ${escapeHtml(payLabel)}</div>`}
         `;
         card.querySelectorAll('[data-close-bill]').forEach((btn) => {
           btn.addEventListener('click', async () => {
