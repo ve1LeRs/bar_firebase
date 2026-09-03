@@ -11,6 +11,8 @@
   };
 
   const DEFAULT_API = 'https://bar-firebase.onrender.com';
+  const MENU_CACHE_KEY = 'asafiev_mini_menu_v1';
+  const MENU_CACHE_TTL_MS = 5 * 60 * 1000;
   const STATUS_LABELS = {
     pending: 'Ожидание',
     confirmed: 'Подтверждён',
@@ -33,12 +35,36 @@
     selected: null,
     bonusToUse: 0,
     ordersUnsub: null,
-    maxBonusUsage: 50
+    maxBonusUsage: 50,
+    authReady: false
   };
 
-  firebase.initializeApp(firebaseConfig);
-  const auth = firebase.auth();
-  const db = firebase.firestore();
+  // Wake Render ASAP (cold start) — do not await
+  wakeApi();
+
+  let auth;
+  let db;
+
+  function initFirebase() {
+    if (auth && db) return;
+    if (typeof firebase === 'undefined') {
+      throw new Error('Firebase SDK ещё загружается');
+    }
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    auth = firebase.auth();
+    db = firebase.firestore();
+    try {
+      db.settings({ ignoreUndefinedProperties: true });
+    } catch (_) { /* already configured */ }
+  }
+
+  function wakeApi() {
+    const url = `${resolveApiBase()}/health`;
+    try {
+      fetch(url, { method: 'GET', cache: 'no-store', mode: 'cors' }).catch(() => {});
+      if (navigator.sendBeacon) navigator.sendBeacon(url);
+    } catch (_) { /* ignore */ }
+  }
 
   const els = {
     greeting: document.getElementById('greeting'),
@@ -135,11 +161,12 @@
       return false;
     }
 
+    els.authStatus.textContent = 'Входим через Telegram…';
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
 
     try {
-      setLoader(true);
+      // Soft status only — no fullscreen loader blocking the menu
       const res = await fetch(`${state.apiBase}/api/mini-app/auth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -151,23 +178,24 @@
         throw new Error(data.error || 'Ошибка авторизации');
       }
 
+      initFirebase();
       const cred = await auth.signInWithCustomToken(data.customToken);
       state.firebaseUser = cred.user;
       state.user = data.user || state.user;
+      state.authReady = true;
       els.authStatus.textContent = 'Вход через Telegram выполнен. Можно заказывать.';
       updateProfileUI();
-      await Promise.all([loadBonuses(), loadOpenBill()]);
+      // Profile extras in background
+      Promise.all([loadBonuses(), loadOpenBill()]).catch(() => {});
       subscribeOrders();
       return true;
     } catch (err) {
       console.error(err);
-      const msg = err.name === 'AbortError' ? 'Таймаут авторизации' : err.message;
+      const msg = err.name === 'AbortError' ? 'Сервер просыпается, попробуйте ещё раз' : err.message;
       els.authStatus.textContent = `Не удалось войти: ${msg}. Меню доступно для просмотра.`;
-      showToast('Авторизация недоступна');
       return false;
     } finally {
       clearTimeout(timeoutId);
-      setLoader(false);
     }
   }
 
@@ -199,29 +227,86 @@
     return 'classic';
   }
 
-  async function loadMenu() {
+  function readMenuCache() {
     try {
+      const raw = localStorage.getItem(MENU_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.cocktails)) return null;
+      if (Date.now() - (parsed.ts || 0) > MENU_CACHE_TTL_MS) return parsed; // stale ok for instant paint
+      return parsed;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeMenuCache(cocktails, stoplistNames) {
+    try {
+      localStorage.setItem(MENU_CACHE_KEY, JSON.stringify({
+        ts: Date.now(),
+        cocktails,
+        stoplist: stoplistNames
+      }));
+    } catch (_) { /* quota */ }
+  }
+
+  function applyMenuData(cocktails, stoplistNames, { fromCache = false } = {}) {
+    state.cocktails = cocktails || [];
+    state.stoplist = new Set(stoplistNames || []);
+    renderMenu();
+    if (fromCache) {
+      els.menuGrid.dataset.fromCache = '1';
+    } else {
+      delete els.menuGrid.dataset.fromCache;
+    }
+  }
+
+  async function loadMenu() {
+    const cached = readMenuCache();
+    if (cached?.cocktails?.length) {
+      applyMenuData(cached.cocktails, cached.stoplist || [], { fromCache: true });
+    }
+
+    try {
+      initFirebase();
       const [cocktailsSnap, stopSnap] = await Promise.all([
-        db.collection('cocktails').get(),
-        db.collection('stoplist').get()
+        db.collection('cocktails').get({ source: 'default' }),
+        db.collection('stoplist').get({ source: 'default' })
       ]);
 
-      state.stoplist = new Set();
+      const stoplistNames = [];
       stopSnap.forEach((doc) => {
         const item = doc.data();
-        if (item.cocktailName) state.stoplist.add(item.cocktailName);
+        if (item.cocktailName) stoplistNames.push(item.cocktailName);
       });
 
-      state.cocktails = [];
+      const cocktails = [];
       cocktailsSnap.forEach((doc) => {
-        state.cocktails.push({ id: doc.id, ...doc.data() });
+        const data = doc.data();
+        // Keep payload small for cache/render
+        cocktails.push({
+          id: doc.id,
+          name: data.name || '',
+          price: data.price || 0,
+          image: data.image || '',
+          ingredients: data.ingredients || '',
+          description: data.description || '',
+          mood: data.mood || '',
+          alcohol: data.alcohol,
+          category: data.category || data.type || '',
+          isShot: Boolean(data.isShot),
+          isSignature: Boolean(data.isSignature)
+        });
       });
 
-      state.cocktails.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'));
-      renderMenu();
+      cocktails.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'));
+      writeMenuCache(cocktails, stoplistNames);
+      applyMenuData(cocktails, stoplistNames);
     } catch (err) {
       console.error(err);
-      els.menuGrid.innerHTML = '<div class="empty-state">Не удалось загрузить меню</div>';
+      if (!state.cocktails.length) {
+        els.menuGrid.innerHTML = '<div class="empty-state">Не удалось загрузить меню</div>';
+      }
     }
   }
 
@@ -247,7 +332,7 @@
       const hasImage = Boolean(cocktail.image);
       btn.innerHTML = `
         ${hasImage
-          ? `<img class="cocktail-thumb" src="${escapeAttr(cocktail.image)}" alt="">`
+          ? `<img class="cocktail-thumb" src="${escapeAttr(cocktail.image)}" alt="" loading="lazy" decoding="async">`
           : `<div class="cocktail-thumb placeholder">🍸</div>`}
         <div class="cocktail-body">
           <h3>${escapeHtml(cocktail.name || 'Коктейль')}</h3>
@@ -597,11 +682,47 @@
     });
   }
 
+  async function waitForFirebase(timeoutMs = 8000) {
+    if (typeof firebase !== 'undefined') return;
+    const start = Date.now();
+    await new Promise((resolve, reject) => {
+      const timer = setInterval(() => {
+        if (typeof firebase !== 'undefined') {
+          clearInterval(timer);
+          resolve();
+        } else if (Date.now() - start > timeoutMs) {
+          clearInterval(timer);
+          reject(new Error('Firebase SDK не загрузился'));
+        }
+      }, 30);
+    });
+  }
+
   async function boot() {
     bindUi();
     initTelegram();
-    await loadMenu();
-    await authenticate();
+    updateProfileUI();
+
+    // Instant paint from cache before network
+    const cached = readMenuCache();
+    if (cached?.cocktails?.length) {
+      applyMenuData(cached.cocktails, cached.stoplist || [], { fromCache: true });
+    }
+
+    try {
+      await waitForFirebase();
+      initFirebase();
+    } catch (err) {
+      console.error(err);
+      els.authStatus.textContent = 'Не удалось загрузить SDK. Проверьте сеть.';
+      if (!state.cocktails.length) {
+        els.menuGrid.innerHTML = '<div class="empty-state">Нет сети для загрузки меню</div>';
+      }
+      return;
+    }
+
+    // Menu and auth in parallel — UI stays interactive
+    await Promise.all([loadMenu(), authenticate()]);
   }
 
   boot();

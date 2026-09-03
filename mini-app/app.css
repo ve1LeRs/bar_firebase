@@ -647,6 +647,10 @@ button, input {
   display: none !important;
 }
 
+.menu-grid[data-from-cache='1'] .cocktail {
+  opacity: 0.92;
+}
+
 .loader-ring {
   width: 42px;
   height: 42px;

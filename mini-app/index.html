@@ -6,21 +6,23 @@
   <title>AsafievBar</title>
   <meta name="theme-color" content="#14110f">
   <link rel="icon" href="favicon.ico" type="image/x-icon">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://bar-firebase.onrender.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="dns-prefetch" href="https://telegram.org">
+  <link rel="preload" href="app.css" as="style">
   <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;600&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;600&display=swap"></noscript>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 </head>
 <body>
   <div class="ambient" aria-hidden="true"></div>
 
   <header class="topbar">
     <div class="brand-block">
-      <img class="brand-mark" src="logo.png" alt="">
+      <img class="brand-mark" src="logo.png" alt="" width="40" height="40" decoding="async">
       <div>
         <p class="brand-name">AsafievBar</p>
         <p class="brand-line" id="greeting">Коктейли · заказ из Telegram</p>
@@ -102,7 +104,6 @@
     </button>
   </nav>
 
-  <!-- Order sheet -->
   <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
   <aside class="sheet" id="orderSheet" aria-hidden="true">
     <div class="sheet-handle"></div>
@@ -135,6 +136,9 @@
     <div class="loader-ring"></div>
   </div>
 
-  <script src="app.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script defer src="app.js"></script>
 </body>
 </html>
