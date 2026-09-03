@@ -1029,6 +1029,7 @@
           <button type="button" data-stock-delta="1" data-ing-id="${escapeAttr(item.id)}" aria-label="Плюс">+</button>
         </div>
         <div class="admin-actions">
+          <button type="button" class="warn" data-zero-ing="${escapeAttr(item.id)}" ${Number(item.stock) <= 0 ? 'disabled' : ''}>Кончился</button>
           <button type="button" class="primary" data-edit-ing="${escapeAttr(item.id)}">Изменить</button>
           <button type="button" class="danger" data-del-ing="${escapeAttr(item.id)}">Удалить</button>
         </div>
@@ -1040,6 +1041,12 @@
       card.querySelector('[data-del-ing]')?.addEventListener('click', async () => {
         if (!confirm(`Удалить «${item.name}»?`)) return;
         await deleteAdminIngredient(item.id);
+      });
+      card.querySelector('[data-zero-ing]')?.addEventListener('click', async () => {
+        if (Number(item.stock) <= 0) return;
+        await quickUpdateIngredientStock(item, 0);
+        showToast(`${item.name}: кончился`);
+        haptic('medium');
       });
       card.querySelectorAll('[data-stock-delta]').forEach((btn) => {
         btn.addEventListener('click', async () => {

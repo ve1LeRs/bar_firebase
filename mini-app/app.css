@@ -769,6 +769,17 @@ body.has-admin .tabbar {
   border-color: rgba(216, 122, 106, 0.35);
 }
 
+.admin-actions button.warn {
+  color: var(--warn);
+  border-color: rgba(224, 179, 92, 0.4);
+  background: rgba(224, 179, 92, 0.1);
+}
+
+.admin-actions button:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 .stoplist-row {
   display: flex;
   justify-content: space-between;
