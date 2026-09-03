@@ -375,9 +375,15 @@
     els.sheetName.textContent = cocktail.name;
     els.sheetIngredients.textContent = cocktail.ingredients || 'Состав уточнит бармен';
     els.sheetMood.textContent = cocktail.mood || cocktail.description || '';
-    els.sheetMedia.style.backgroundImage = cocktail.image
-      ? `url("${cocktail.image}")`
-      : '';
+
+    if (cocktail.image) {
+      els.sheetMedia.classList.remove('is-empty');
+      els.sheetMedia.innerHTML = `<img src="${escapeAttr(cocktail.image)}" alt="${escapeAttr(cocktail.name)}" decoding="async">`;
+    } else {
+      els.sheetMedia.classList.add('is-empty');
+      els.sheetMedia.innerHTML = '';
+      els.sheetMedia.style.backgroundImage = '';
+    }
 
     const price = Number(cocktail.price) || 0;
     els.sheetPrice.textContent = `${price} ₽`;

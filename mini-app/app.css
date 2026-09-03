@@ -536,13 +536,27 @@ button, input {
 
 .sheet-media {
   width: 100%;
-  height: 160px;
+  aspect-ratio: 4 / 3;
+  max-height: min(42vh, 320px);
   border-radius: 16px;
   margin-bottom: 12px;
+  overflow: hidden;
   background:
-    linear-gradient(145deg, rgba(212, 163, 92, 0.3), rgba(40, 28, 18, 0.95));
-  background-size: cover;
-  background-position: center;
+    linear-gradient(145deg, rgba(212, 163, 92, 0.18), rgba(40, 28, 18, 0.95));
+  display: grid;
+  place-items: center;
+}
+
+.sheet-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  display: block;
+}
+
+.sheet-media.is-empty {
+  min-height: 120px;
 }
 
 .sheet h3 {
