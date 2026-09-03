@@ -7,9 +7,9 @@ const firebaseConfig = {
   messagingSenderId: "493608422842",
   appId: "1:493608422842:web:3b4b6bd8a4cb681c436183"
 };
-// 🤖 TELEGRAM
-const TELEGRAM_BOT_TOKEN = "8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo";
-const TELEGRAM_CHAT_ID = "1743362083";
+// 🤖 TELEGRAM — токен только на сервере (не светить в GitHub Pages)
+const TELEGRAM_BOT_TOKEN = "";
+const TELEGRAM_CHAT_ID = "";
 
 // 🌐 WEBHOOK SERVER
 // Определяем URL webhook сервера
@@ -2838,18 +2838,21 @@ confirmOrderBtn?.addEventListener('click', async () => {
       ]
     };
 
-    // Отправка бармену, счёт и списание ингредиентов — параллельно, заказ доходит быстрее
-    const sendTelegram = fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    // Отправка бармену через сервер (токен не светим в браузере)
+    const sendTelegram = fetch(`${WEBHOOK_SERVER_URL}/notify-telegram`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: message,
-        parse_mode: 'Markdown',
-        reply_markup: inlineKeyboard
+        orderId: docRef.id,
+        orderData: {
+          name: currentOrder.name,
+          user: currentOrder.user,
+          displayTime: currentOrder.displayTime,
+          queuePosition: currentOrder.queuePosition || 0
+        }
       })
-    }).then(response => {
-      if (!response.ok) throw new Error(`Telegram API error: ${response.status}`);
+    }).then(async (response) => {
+      if (!response.ok) throw new Error(`notify-telegram error: ${response.status}`);
     });
 
     await Promise.all([

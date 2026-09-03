@@ -178,12 +178,44 @@ const db = admin.firestore();
 // Telegram bots:
 // - ALERTS bot: уведомления бармену, inline-кнопки статусов, webhook callback
 // - MINIAPP bot: Telegram Mini App (initData / Menu Button)
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8326139522:AAG2fwHYd1vRPx0cUXt4ATaFYTNxmzInWJo";
+// Tokens MUST come from env — never hardcode (public GitHub Pages leaked old tokens).
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
-const TELEGRAM_MINIAPP_BOT_TOKEN =
-  process.env.TELEGRAM_MINIAPP_BOT_TOKEN ||
-  "8691192852:AAE6x5FCmv9ii5q9mwP-FYXhKPEyHOpw4EQ";
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "1743362083";
+const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
+
+/** Outbound Telegram helper — logs + blocks junk keep-alive dots */
+async function sendTelegramAlert(text, options = {}) {
+  const token = options.token || TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
+  const chatId = options.chatId || TELEGRAM_CHAT_ID;
+  const trimmed = String(text ?? '').trim();
+  if (!token || !chatId) {
+    console.error('❌ Telegram send skipped: missing token/chatId');
+    return { ok: false, error: 'missing_token_or_chat' };
+  }
+  // Block classic Render/cron keep-alive junk (lone "." / empty)
+  if (!trimmed || trimmed === '.' || trimmed === '…' || trimmed === '...') {
+    console.warn('🛑 Blocked junk Telegram message:', JSON.stringify(trimmed));
+    return { ok: false, error: 'blocked_junk' };
+  }
+  const payload = {
+    chat_id: chatId,
+    text: trimmed,
+    ...(options.parse_mode ? { parse_mode: options.parse_mode } : {}),
+    ...(options.reply_markup ? { reply_markup: options.reply_markup } : {})
+  };
+  console.log('📤 Telegram send:', trimmed.slice(0, 80).replace(/\n/g, ' '));
+  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json().catch(() => ({ ok: false }));
+  if (!result.ok) {
+    console.error('❌ Telegram API error:', result);
+  }
+  return result;
+}
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -519,18 +551,11 @@ ${queueInfoText}🕒 *Время:* ${orderData.displayTime || new Date().toLocal
       ]
     };
     
-    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: message,
-        parse_mode: 'Markdown',
-        reply_markup: inlineKeyboard
-      })
+    const telegramResult = await sendTelegramAlert(message, {
+      parse_mode: 'Markdown',
+      reply_markup: inlineKeyboard,
+      token: TELEGRAM_BOT_TOKEN
     });
-    
-    const telegramResult = await response.json();
     
     if (telegramResult.ok) {
       console.log('✅ Уведомление отправлено в Telegram');
@@ -539,10 +564,9 @@ ${queueInfoText}🕒 *Время:* ${orderData.displayTime || new Date().toLocal
         message: 'Уведомление отправлено'
       });
     } else {
-      console.error('❌ Ошибка Telegram API:', telegramResult);
       res.status(500).json({
         success: false,
-        error: telegramResult.description || 'Ошибка Telegram API'
+        error: telegramResult.description || telegramResult.error || 'Ошибка Telegram API'
       });
     }
     
@@ -680,17 +704,10 @@ app.post('/send-purchase-list', async (req, res) => {
     }
     
     // Отправляем сообщение в Telegram
-    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: message,
-        parse_mode: 'Markdown'
-      })
+    const telegramResult = await sendTelegramAlert(message, {
+      parse_mode: 'Markdown',
+      token: TELEGRAM_BOT_TOKEN
     });
-    
-    const telegramResult = await response.json();
     
     if (telegramResult.ok) {
       console.log('✅ Список закупок успешно отправлен в Telegram');
@@ -1693,15 +1710,9 @@ ${queueInfoText}🕒 *Время:* ${orderData.displayTime}
       ]
     };
 
-    fetch(`https://api.telegram.org/bot${TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: message,
-        parse_mode: 'Markdown',
-        reply_markup: inlineKeyboard
-      })
+    sendTelegramAlert(message, {
+      parse_mode: 'Markdown',
+      reply_markup: inlineKeyboard
     }).catch((notifyError) => {
       console.error('⚠️ Mini App: заказ создан, но Telegram notify failed:', notifyError.message);
     });
@@ -2329,11 +2340,7 @@ app.post('/api/mini-app/admin/purchases', async (req, res) => {
       const text = low.length
         ? `🛒 *Список закупок AsafievBar*\n\n` + low.map((i) => `• ${i.name}: ${i.stock}${i.unit ? ' ' + i.unit : ''} (мин ${i.minStock})`).join('\n')
         : '🛒 Список закупок пуст — всё в норме.';
-      await fetch(`https://api.telegram.org/bot${TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text, parse_mode: 'Markdown' })
-      });
+      await sendTelegramAlert(text, { parse_mode: 'Markdown' });
       return res.json({ success: true, sent: low.length });
     }
 
