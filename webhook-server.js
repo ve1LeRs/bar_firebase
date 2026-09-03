@@ -53,8 +53,15 @@ app.use(express.json());
 // Telegram Mini App static files + shared brand assets
 app.use('/mini-app', express.static(path.join(__dirname, 'mini-app'), {
   extensions: ['html'],
-  setHeaders: (res) => {
-    res.setHeader('Cache-Control', 'no-cache');
+  etag: false,
+  lastModified: false,
+  setHeaders: (res, filePath) => {
+    if (String(filePath).endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+    } else {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
   }
 }));
 app.get('/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'logo.png')));
@@ -1700,7 +1707,7 @@ app.post('/api/mini-app/setup-bot-profile', async (req, res) => {
   try {
     const token = TELEGRAM_MINIAPP_BOT_TOKEN;
     const miniAppUrl = (req.body?.url || '').trim() ||
-      'https://ve1lers.github.io/bar_firebase/mini-app/';
+      'https://ve1lers.github.io/bar_firebase/mini-app/?v=adminfix4';
     const name = req.body?.name || 'AsafievBar';
     const shortDescription = req.body?.shortDescription ||
       'Коктейли AsafievBar — заказ из Telegram';
