@@ -21,6 +21,15 @@
     completed: 'Выполнен',
     cancelled: 'Отменён'
   };
+  const TASTE_EMOJI = { sour: '🍋', sweet: '🍬', bitter: '☕' };
+  const PAY_METHOD_RU = {
+    cash: 'наличные',
+    card: 'карта',
+    transfer: 'перевод',
+    'Наличные': 'наличные',
+    'Карта': 'карта',
+    'Перевод': 'перевод'
+  };
 
   const tg = window.Telegram?.WebApp;
   const state = {
@@ -29,12 +38,20 @@
     firebaseUser: null,
     cocktails: [],
     stoplist: new Set(),
+    ratings: {},
     category: 'all',
     bonusBalance: 0,
+    totalEarned: 0,
+    totalSpent: 0,
     openBillTotal: null,
     openBillItems: [],
+    openBillPromo: null,
+    billHistory: [],
     selected: null,
     bonusToUse: 0,
+    bonusPercentage: 5,
+    bonusMinOrder: 300,
+    bonusActive: true,
     ordersUnsub: null,
     maxBonusUsage: 50,
     authReady: false,
@@ -44,7 +61,10 @@
     ordersPollTimer: null,
     role: 'user',
     adminOrdersTimer: null,
-    adminTab: 'cocktails'
+    adminTab: 'cocktails',
+    knownOrderStatuses: new Map(),
+    ratingOrder: null,
+    ratingValue: 0
   };
 
   // Wake Render ASAP (cold start) — do not await
@@ -84,8 +104,14 @@
     profileMeta: document.getElementById('profileMeta'),
     profileBonus: document.getElementById('profileBonus'),
     profileBill: document.getElementById('profileBill'),
+    profileEarned: document.getElementById('profileEarned'),
+    profileSpent: document.getElementById('profileSpent'),
     profileBillItems: document.getElementById('profileBillItems'),
     profileBillEmpty: document.getElementById('profileBillEmpty'),
+    profileBillHistory: document.getElementById('profileBillHistory'),
+    profilePromoInput: document.getElementById('profilePromoInput'),
+    profilePromoBtn: document.getElementById('profilePromoBtn'),
+    profilePromoHint: document.getElementById('profilePromoHint'),
     authStatus: document.getElementById('authStatus'),
     authRetryBtn: document.getElementById('authRetryBtn'),
     avatar: document.getElementById('avatar'),
@@ -113,8 +139,17 @@
     sheetTotal: document.getElementById('sheetTotal'),
     bonusRow: document.getElementById('bonusRow'),
     bonusInput: document.getElementById('bonusInput'),
+    bonusEarnRow: document.getElementById('bonusEarnRow'),
+    sheetBonusEarn: document.getElementById('sheetBonusEarn'),
     confirmOrderBtn: document.getElementById('confirmOrderBtn'),
     cancelOrderBtn: document.getElementById('cancelOrderBtn'),
+    ratingSheet: document.getElementById('ratingSheet'),
+    ratingBackdrop: document.getElementById('ratingBackdrop'),
+    ratingTitle: document.getElementById('ratingTitle'),
+    ratingSubtitle: document.getElementById('ratingSubtitle'),
+    ratingStars: document.getElementById('ratingStars'),
+    ratingSubmitBtn: document.getElementById('ratingSubmitBtn'),
+    ratingSkipBtn: document.getElementById('ratingSkipBtn'),
     toast: document.getElementById('toast'),
     loader: document.getElementById('loader')
   };
@@ -729,29 +764,46 @@
       }
       els.adminBillsList.innerHTML = '';
       const billStatusRu = { open: 'открыт', paid: 'оплачен', closed: 'закрыт' };
-      const payMethodRu = { cash: 'наличные', card: 'карта' };
       list.forEach((bill) => {
         const card = document.createElement('article');
         card.className = 'order-card';
         const statusLabel = billStatusRu[bill.status] || bill.status || '';
-        const payLabel = payMethodRu[bill.paymentMethod] || bill.paymentMethod || '—';
+        const payLabel = PAY_METHOD_RU[bill.paymentMethod] || bill.paymentMethod || '—';
+        const itemsPreview = (bill.items || [])
+          .slice(0, 3)
+          .map((it) => `${it.cocktailName} (${STATUS_LABELS[it.status] || it.status})`)
+          .join(' · ');
         card.innerHTML = `
           <div class="order-top">
             <div>
               <p class="order-name">${escapeHtml(bill.userName || 'Гость')}</p>
-              <p class="order-time">${bill.itemsCount || 0} поз. · ${escapeHtml(statusLabel)}</p>
+              <p class="order-time">${bill.itemsCount || 0} поз. · ${escapeHtml(statusLabel)}${bill.promoCode ? ` · ${escapeHtml(bill.promoCode)}` : ''}</p>
+              ${itemsPreview ? `<p class="order-time">${escapeHtml(itemsPreview)}</p>` : ''}
             </div>
             <strong class="price">${Number(bill.totalAmount) || 0} ₽</strong>
           </div>
           ${bill.status === 'open' ? `<div class="admin-actions">
-            <button type="button" class="primary" data-close-bill="${escapeAttr(bill.id)}">Закрыть (наличные)</button>
-            <button type="button" data-close-bill="${escapeAttr(bill.id)}" data-method="card">Закрыть (карта)</button>
-          </div>` : `<div class="queue">Оплата: ${escapeHtml(payLabel)}</div>`}
+            <button type="button" class="primary" data-close-bill="${escapeAttr(bill.id)}" data-method="cash">Наличные</button>
+            <button type="button" data-close-bill="${escapeAttr(bill.id)}" data-method="card">Карта</button>
+            <button type="button" data-close-bill="${escapeAttr(bill.id)}" data-method="transfer">Перевод</button>
+            <button type="button" class="danger" data-delete-bill="${escapeAttr(bill.id)}">Удалить</button>
+          </div>` : `<div class="admin-actions">
+            <div class="queue">Оплата: ${escapeHtml(payLabel)}</div>
+            <button type="button" data-reopen-bill="${escapeAttr(bill.id)}">Переоткрыть</button>
+            <button type="button" class="danger" data-delete-bill="${escapeAttr(bill.id)}">Удалить</button>
+          </div>`}
         `;
         card.querySelectorAll('[data-close-bill]').forEach((btn) => {
           btn.addEventListener('click', async () => {
             await closeAdminBill(btn.dataset.closeBill, btn.dataset.method || 'cash');
           });
+        });
+        card.querySelector('[data-reopen-bill]')?.addEventListener('click', async () => {
+          await reopenAdminBill(bill.id);
+        });
+        card.querySelector('[data-delete-bill]')?.addEventListener('click', async () => {
+          if (!confirm('Удалить счёт?')) return;
+          await deleteAdminBill(bill.id);
         });
         els.adminBillsList.appendChild(card);
       });
@@ -768,7 +820,39 @@
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Не удалось закрыть');
-      showToast('Счёт закрыт');
+      const bonusMsg = data.bonusAwarded ? ` · +${data.bonusAwarded} бонусов` : '';
+      showToast(`Счёт закрыт${bonusMsg}`);
+      refreshAdminBills();
+      refreshProfile().catch(() => {});
+    } catch (err) {
+      showToast(err.message || 'Ошибка');
+    }
+  }
+
+  async function reopenAdminBill(billId) {
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/bills`, {
+        method: 'POST', headers: adminHeaders(),
+        body: adminBody({ action: 'reopen', billId })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Не удалось переоткрыть');
+      showToast('Счёт снова открыт');
+      refreshAdminBills();
+    } catch (err) {
+      showToast(err.message || 'Ошибка');
+    }
+  }
+
+  async function deleteAdminBill(billId) {
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/bills`, {
+        method: 'POST', headers: adminHeaders(),
+        body: adminBody({ action: 'delete', billId })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Не удалось удалить');
+      showToast('Счёт удалён');
       refreshAdminBills();
     } catch (err) {
       showToast(err.message || 'Ошибка');
@@ -788,7 +872,9 @@
       state.cocktails = list.map((c) => ({
         id: c.id, name: c.name, price: c.price, image: c.image || '',
         ingredients: c.ingredients || '', description: c.description || '',
-        mood: c.mood || '', alcohol: c.alcohol, category: c.category || ''
+        mood: c.mood || '', alcohol: c.alcohol, category: c.category || '',
+        tasteTags: Array.isArray(c.tasteTags) ? c.tasteTags : [],
+        isShot: Boolean(c.isShot), isSignature: Boolean(c.isSignature)
       }));
       populateAdminStopSelect();
       renderMenu();
@@ -837,6 +923,39 @@
     });
   }
 
+  function parseStockRecipeText(text) {
+    return String(text || '')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const m = line.match(/^(.+?)\s*[=:]\s*([\d.,]+)\s*$/);
+        if (m) {
+          return {
+            ingredientName: m[1].trim(),
+            amount: Number(String(m[2]).replace(',', '.')) || 0
+          };
+        }
+        return { ingredientName: line, amount: 1 };
+      })
+      .filter((r) => r.ingredientName && r.amount > 0);
+  }
+
+  function formatStockRecipeText(recipe) {
+    if (!Array.isArray(recipe) || !recipe.length) return '';
+    return recipe
+      .map((r) => `${r.ingredientName} = ${r.amount}`)
+      .join('\n');
+  }
+
+  function readTasteTagsFromForm() {
+    const tags = [];
+    if (document.getElementById('adminTasteSour')?.checked) tags.push('sour');
+    if (document.getElementById('adminTasteSweet')?.checked) tags.push('sweet');
+    if (document.getElementById('adminTasteBitter')?.checked) tags.push('bitter');
+    return tags;
+  }
+
   function fillCocktailForm(c) {
     document.getElementById('adminCocktailId').value = c?.id || '';
     document.getElementById('adminCocktailName').value = c?.name || '';
@@ -846,7 +965,16 @@
     document.getElementById('adminCocktailCategory').value = c?.category || getCategory(c || {}) || 'classic';
     document.getElementById('adminCocktailAlcohol').value = c?.alcohol ?? '';
     document.getElementById('adminCocktailMood').value = c?.mood || c?.description || '';
-    showToast(c?.id ? 'Редактирование: сохраните изменения' : 'Новый коктейль');
+    const tags = Array.isArray(c?.tasteTags) ? c.tasteTags : [];
+    const sour = document.getElementById('adminTasteSour');
+    const sweet = document.getElementById('adminTasteSweet');
+    const bitter = document.getElementById('adminTasteBitter');
+    if (sour) sour.checked = tags.includes('sour');
+    if (sweet) sweet.checked = tags.includes('sweet');
+    if (bitter) bitter.checked = tags.includes('bitter');
+    const recipeEl = document.getElementById('adminCocktailRecipe');
+    if (recipeEl) recipeEl.value = formatStockRecipeText(c?.stockRecipe);
+    if (c) showToast(c?.id ? 'Редактирование: сохраните изменения' : 'Новый коктейль');
   }
 
   async function saveAdminCocktail() {
@@ -859,7 +987,9 @@
       category: document.getElementById('adminCocktailCategory').value,
       alcohol: document.getElementById('adminCocktailAlcohol').value,
       mood: document.getElementById('adminCocktailMood').value.trim(),
-      description: document.getElementById('adminCocktailMood').value.trim()
+      description: document.getElementById('adminCocktailMood').value.trim(),
+      tasteTags: readTasteTagsFromForm(),
+      stockRecipe: parseStockRecipeText(document.getElementById('adminCocktailRecipe')?.value || '')
     };
     if (!cocktail.name || !Number.isFinite(cocktail.price)) {
       showToast('Название и цена обязательны');
@@ -879,6 +1009,8 @@
       document.getElementById('adminCocktailImage').value = '';
       document.getElementById('adminCocktailAlcohol').value = '';
       document.getElementById('adminCocktailMood').value = '';
+      const recipeEl = document.getElementById('adminCocktailRecipe');
+      if (recipeEl) recipeEl.value = '';
       showToast('Коктейль сохранён');
       refreshAdminCocktails();
     } catch (err) {
@@ -1423,10 +1555,50 @@
         : 'Telegram Mini App';
     els.avatar.textContent = (name || 'A').charAt(0).toUpperCase();
     els.profileBonus.textContent = String(state.bonusBalance);
+    if (els.profileEarned) els.profileEarned.textContent = String(state.totalEarned || 0);
+    if (els.profileSpent) els.profileSpent.textContent = String(state.totalSpent || 0);
     els.bonusChip.textContent = formatBonusChip(state.bonusBalance);
     els.profileBill.textContent =
       state.openBillTotal == null ? '—' : `${state.openBillTotal} ₽`;
     renderProfileBillItems();
+    renderProfileBillHistory();
+    if (els.profilePromoHint) {
+      if (state.openBillPromo?.code) {
+        els.profilePromoHint.hidden = false;
+        els.profilePromoHint.textContent =
+          `Промокод ${state.openBillPromo.code} (−${state.openBillPromo.discount || 0}%)`;
+      } else {
+        els.profilePromoHint.hidden = true;
+        els.profilePromoHint.textContent = '';
+      }
+    }
+  }
+
+  function renderProfileBillHistory() {
+    if (!els.profileBillHistory) return;
+    const list = Array.isArray(state.billHistory) ? state.billHistory : [];
+    if (!list.length) {
+      els.profileBillHistory.innerHTML = '<div class="empty-state">Пока нет оплаченных счетов</div>';
+      return;
+    }
+    els.profileBillHistory.innerHTML = list.map((bill) => {
+      const when = bill.paidAtMs
+        ? new Date(bill.paidAtMs).toLocaleString('ru-RU')
+        : '';
+      const names = (bill.itemNames || []).join(', ');
+      const pay = PAY_METHOD_RU[bill.paymentMethod] || bill.paymentMethod || '';
+      return `
+        <article class="order-card">
+          <div class="order-top">
+            <div>
+              <p class="order-name">${escapeHtml(names || `${bill.itemsCount || 0} поз.`)}</p>
+              <p class="order-time">${escapeHtml(when)}${pay ? ` · ${escapeHtml(pay)}` : ''}${bill.promoCode ? ` · ${escapeHtml(bill.promoCode)}` : ''}</p>
+            </div>
+            <strong class="price">${Number(bill.totalAmount) || 0} ₽</strong>
+          </div>
+        </article>
+      `;
+    }).join('');
   }
 
   function renderProfileBillItems() {
@@ -1462,7 +1634,114 @@
     if (Array.isArray(data?.openBillItems)) {
       state.openBillItems = data.openBillItems;
     }
+    if (data?.openBillPromo !== undefined) {
+      state.openBillPromo = data.openBillPromo;
+    }
+    if (Array.isArray(data?.billHistory)) {
+      state.billHistory = data.billHistory;
+    }
+    if (typeof data?.totalEarned === 'number') state.totalEarned = data.totalEarned;
+    if (typeof data?.totalSpent === 'number') state.totalSpent = data.totalSpent;
+    if (typeof data?.bonusPercentage === 'number') state.bonusPercentage = data.bonusPercentage;
+    if (typeof data?.bonusMinOrder === 'number') state.bonusMinOrder = data.bonusMinOrder;
+    if (typeof data?.bonusActive === 'boolean') state.bonusActive = data.bonusActive;
     updateProfileUI();
+  }
+
+  async function refreshRatingsSummary() {
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/ratings-summary`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.success && data.averages) {
+        state.ratings = data.averages;
+        renderMenu();
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  function openRatingSheet(order) {
+    state.ratingOrder = order;
+    state.ratingValue = 0;
+    if (els.ratingTitle) els.ratingTitle.textContent = `Оцените: ${order.name || 'коктейль'}`;
+    if (els.ratingSubtitle) els.ratingSubtitle.textContent = 'Поставьте оценку от 1 до 5';
+    els.ratingStars?.querySelectorAll('button').forEach((b) => b.classList.remove('is-on'));
+    if (els.ratingBackdrop) els.ratingBackdrop.hidden = false;
+    els.ratingSheet?.classList.add('open');
+    els.ratingSheet?.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeRatingSheet() {
+    state.ratingOrder = null;
+    state.ratingValue = 0;
+    els.ratingSheet?.classList.remove('open');
+    els.ratingSheet?.setAttribute('aria-hidden', 'true');
+    if (els.ratingBackdrop) els.ratingBackdrop.hidden = true;
+  }
+
+  async function submitRating({ skip = false } = {}) {
+    if (!state.ratingOrder?.id || !canOrder()) return;
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/rate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          initData: tg.initData,
+          orderId: state.ratingOrder.id,
+          rating: state.ratingValue,
+          skip
+        })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Не удалось сохранить оценку');
+      closeRatingSheet();
+      showToast(skip ? 'Оценка пропущена' : `Спасибо! ★ ${state.ratingValue || data.rating}`);
+      refreshOrders();
+      refreshRatingsSummary().catch(() => {});
+    } catch (err) {
+      showToast(err.message || 'Ошибка оценки');
+    }
+  }
+
+  async function applyProfilePromo() {
+    if (!canOrder()) return;
+    const code = els.profilePromoInput?.value?.trim();
+    if (!code) {
+      showToast('Введите промокод');
+      return;
+    }
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/apply-promo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData: tg.initData, promoCode: code })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Промокод не применён');
+      applyOpenBill(data);
+      if (els.profilePromoInput) els.profilePromoInput.value = '';
+      showToast(`Промокод −${data.promo?.discount || 0}%`);
+      haptic('medium');
+    } catch (err) {
+      showToast(err.message || 'Ошибка промокода');
+    }
+  }
+
+  function noteOrderStatusChanges(orders) {
+    const list = Array.isArray(orders) ? orders : [];
+    list.forEach((order) => {
+      const id = order.id;
+      const status = order.status || 'pending';
+      if (!id) return;
+      const prev = state.knownOrderStatuses.get(id);
+      if (prev && prev !== status) {
+        showToast(`${order.name || 'Заказ'}: ${STATUS_LABELS[status] || status}`);
+        haptic('light');
+        if (status === 'ready' && !order.rated) {
+          openRatingSheet(order);
+        }
+      }
+      state.knownOrderStatuses.set(id, status);
+    });
   }
 
   function getCategory(cocktail) {
@@ -1594,7 +1873,8 @@
           alcohol: data.alcohol,
           category: data.category || data.type || '',
           isShot: Boolean(data.isShot),
-          isSignature: Boolean(data.isSignature)
+          isSignature: Boolean(data.isSignature),
+          tasteTags: Array.isArray(data.tasteTags) ? data.tasteTags : []
         });
       });
       cocktails.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'));
@@ -1611,6 +1891,7 @@
 
       writeMenuCache(cocktails, stoplistNames);
       applyMenuData(cocktails, stoplistNames);
+      refreshRatingsSummary().catch(() => {});
     } catch (err) {
       console.error(err);
       await refreshStoplistFromApi();
@@ -1661,13 +1942,19 @@
         <div class="cocktail-body">
           <h3>${escapeHtml(cocktail.name || 'Коктейль')}</h3>
           <p class="cocktail-meta">${escapeHtml(cocktail.ingredients || cocktail.description || 'Авторский рецепт бара')}</p>
+          ${Array.isArray(cocktail.tasteTags) && cocktail.tasteTags.length
+            ? `<div class="taste-tags">${cocktail.tasteTags.map((t) => TASTE_EMOJI[t] || '').join('')}</div>`
+            : ''}
           <div class="cocktail-foot">
             <span class="price">${Number(cocktail.price) || 0} ₽</span>
-            ${stopped
-              ? '<span class="badge stop">Стоп-лист</span>'
-              : cocktail.alcohol != null
-                ? `<span class="badge">${cocktail.alcohol}%</span>`
-                : ''}
+            <span>
+              ${state.ratings[cocktail.name] != null ? `<span class="cocktail-rating">★ ${state.ratings[cocktail.name]}</span> ` : ''}
+              ${stopped
+                ? '<span class="badge stop">Стоп-лист</span>'
+                : cocktail.alcohol != null
+                  ? `<span class="badge">${cocktail.alcohol}%</span>`
+                  : ''}
+            </span>
           </div>
         </div>
       `;
@@ -1791,7 +2078,20 @@
     let bonus = Number(els.bonusInput.value) || 0;
     bonus = Math.max(0, Math.min(bonus, maxBonus));
     state.bonusToUse = bonus;
-    els.sheetTotal.textContent = `${Math.max(0, price - bonus)} ₽`;
+    const payable = Math.max(0, price - bonus);
+    els.sheetTotal.textContent = `${payable} ₽`;
+
+    const earn = (state.bonusActive && payable >= state.bonusMinOrder)
+      ? Math.floor(payable * (state.bonusPercentage / 100))
+      : 0;
+    if (els.bonusEarnRow && els.sheetBonusEarn) {
+      if (earn > 0) {
+        els.bonusEarnRow.hidden = false;
+        els.sheetBonusEarn.textContent = `+${earn}`;
+      } else {
+        els.bonusEarnRow.hidden = true;
+      }
+    }
   }
 
   async function loadBonuses() {
@@ -1999,7 +2299,11 @@
         body: JSON.stringify({ initData: tg.initData })
       });
       const data = await res.json();
-      if (data.success) renderOrders(data.orders || []);
+      if (data.success) {
+        const orders = data.orders || [];
+        noteOrderStatusChanges(orders);
+        renderOrders(orders);
+      }
     } catch (err) {
       console.warn('orders refresh failed', err);
     }
@@ -2186,6 +2490,24 @@
     els.bonusInput.addEventListener('focus', focusBonusField);
     els.bonusInput.addEventListener('blur', blurBonusField);
     els.confirmOrderBtn.addEventListener('click', placeOrder);
+    els.profilePromoBtn?.addEventListener('click', applyProfilePromo);
+    els.ratingSkipBtn?.addEventListener('click', () => submitRating({ skip: true }));
+    els.ratingSubmitBtn?.addEventListener('click', () => {
+      if (!state.ratingValue) {
+        showToast('Выберите оценку');
+        return;
+      }
+      submitRating();
+    });
+    els.ratingBackdrop?.addEventListener('click', closeRatingSheet);
+    els.ratingStars?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-star]');
+      if (!btn) return;
+      state.ratingValue = Number(btn.dataset.star) || 0;
+      els.ratingStars.querySelectorAll('button').forEach((b) => {
+        b.classList.toggle('is-on', Number(b.dataset.star) <= state.ratingValue);
+      });
+    });
     els.authRetryBtn?.addEventListener('click', () => {
       haptic('light');
       authenticate({ manual: true });

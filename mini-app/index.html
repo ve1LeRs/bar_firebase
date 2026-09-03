@@ -13,8 +13,8 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://telegram.org">
-  <link rel="preload" href="app.css?v=bill1" as="style">
-  <link rel="stylesheet" href="app.css?v=bill1">
+  <link rel="preload" href="app.css?v=parity1" as="style">
+  <link rel="stylesheet" href="app.css?v=parity1">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;600&display=swap" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;600&display=swap"></noscript>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -129,6 +129,13 @@
           </select>
           <input id="adminCocktailAlcohol" class="admin-input" type="number" placeholder="Крепость %" min="0" max="100">
           <input id="adminCocktailMood" class="admin-input" type="text" placeholder="Настроение / описание">
+          <div class="taste-checks" id="adminTasteChecks">
+            <label class="order-time"><input type="checkbox" id="adminTasteSour" value="sour"> 🍋 Кислый</label>
+            <label class="order-time"><input type="checkbox" id="adminTasteSweet" value="sweet"> 🍬 Сладкий</label>
+            <label class="order-time"><input type="checkbox" id="adminTasteBitter" value="bitter"> ☕ Горький</label>
+          </div>
+          <label class="order-time" for="adminCocktailRecipe">Рецепт для склада (строка: Ингредиент = количество)</label>
+          <textarea id="adminCocktailRecipe" class="admin-input admin-textarea" rows="3" placeholder="Водка = 50&#10;Лайм = 20"></textarea>
           <input id="adminCocktailId" type="hidden" value="">
           <button class="cta" id="adminCocktailSaveBtn" type="button">Сохранить коктейль</button>
         </div>
@@ -232,11 +239,33 @@
           <strong id="profileBill">—</strong>
         </div>
       </div>
+      <div class="stat-row">
+        <div class="stat">
+          <span class="stat-label">Заработано</span>
+          <strong id="profileEarned">0</strong>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Потрачено</span>
+          <strong id="profileSpent">0</strong>
+        </div>
+      </div>
 
       <div class="bill-panel">
         <h3 class="bill-panel-title">В открытом счёте</h3>
         <div id="profileBillItems" class="bill-items">
           <div class="empty-state" id="profileBillEmpty">Пока нет позиций в счёте</div>
+        </div>
+        <div class="promo-row" id="profilePromoRow">
+          <input id="profilePromoInput" class="admin-input" type="text" placeholder="Промокод" maxlength="20" autocomplete="off">
+          <button class="ghost" id="profilePromoBtn" type="button">Применить</button>
+        </div>
+        <p class="order-time" id="profilePromoHint" hidden></p>
+      </div>
+
+      <div class="bill-panel">
+        <h3 class="bill-panel-title">История счетов</h3>
+        <div id="profileBillHistory" class="orders-list">
+          <div class="empty-state">Пока нет оплаченных счетов</div>
         </div>
       </div>
 
@@ -292,6 +321,10 @@
           <label for="bonusInput">Списать бонусы</label>
           <input type="number" id="bonusInput" min="0" value="0" inputmode="numeric" enterkeyhint="done" autocomplete="off">
         </div>
+        <div class="price-row" id="bonusEarnRow" hidden>
+          <span>Начислим бонусов</span>
+          <strong id="sheetBonusEarn">0</strong>
+        </div>
         <div class="price-row total-row">
           <span>К оплате</span>
           <strong id="sheetTotal">0 ₽</strong>
@@ -305,6 +338,26 @@
     </div>
   </aside>
 
+  <div class="sheet-backdrop" id="ratingBackdrop" hidden></div>
+  <aside class="sheet rating-sheet" id="ratingSheet" aria-hidden="true">
+    <div class="sheet-scroll">
+      <div class="sheet-handle"></div>
+      <h3 id="ratingTitle">Оцените коктейль</h3>
+      <p class="sheet-mood" id="ratingSubtitle">Как вам напиток?</p>
+      <div class="rating-stars" id="ratingStars" role="group" aria-label="Оценка">
+        <button type="button" data-star="1" aria-label="1">★</button>
+        <button type="button" data-star="2" aria-label="2">★</button>
+        <button type="button" data-star="3" aria-label="3">★</button>
+        <button type="button" data-star="4" aria-label="4">★</button>
+        <button type="button" data-star="5" aria-label="5">★</button>
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button class="cta" id="ratingSubmitBtn" type="button">Отправить</button>
+      <button class="ghost" id="ratingSkipBtn" type="button">Пропустить</button>
+    </div>
+  </aside>
+
   <div class="toast" id="toast" hidden></div>
   <div class="loader" id="loader" hidden>
     <div class="loader-ring"></div>
@@ -313,6 +366,6 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script defer src="app.js?v=bill1"></script>
+  <script defer src="app.js?v=parity1"></script>
 </body>
 </html>

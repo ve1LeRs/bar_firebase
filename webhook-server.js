@@ -1608,6 +1608,73 @@ async function createOrUpdateBillAdmin(userId, userName, orderData, orderId) {
   };
 }
 
+async function awardBonusPointsAdmin(userId, orderAmount, meta = {}) {
+  const amount = Math.max(0, Number(orderAmount) || 0);
+  if (!userId || amount <= 0) return { awarded: 0 };
+
+  const settingsDoc = await db.collection('settings').doc('bonusSystem').get();
+  const settings = settingsDoc.exists ? settingsDoc.data() : {};
+  if (settings.active === false) return { awarded: 0, reason: 'inactive' };
+
+  const percentage = Number(settings.percentage) || 5;
+  const minOrder = Number(settings.minOrder) || 300;
+  if (amount < minOrder) return { awarded: 0, reason: 'below_min' };
+
+  const bonusPoints = Math.floor(amount * percentage / 100);
+  if (bonusPoints <= 0) return { awarded: 0 };
+
+  const bonusRef = db.collection('bonusAccounts').doc(userId);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(bonusRef);
+    const prev = snap.exists ? snap.data() : {};
+    tx.set(bonusRef, {
+      userId,
+      balance: (Number(prev.balance) || 0) + bonusPoints,
+      totalEarned: (Number(prev.totalEarned) || 0) + bonusPoints,
+      lastEarned: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+
+  await db.collection('bonusTransactions').add({
+    userId,
+    type: 'earn',
+    amount: bonusPoints,
+    orderAmount: amount,
+    percentage,
+    billId: meta.billId || null,
+    source: 'telegram-mini-app',
+    createdAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+
+  return { awarded: bonusPoints, percentage };
+}
+
+async function validatePromoCodeData(codeRaw) {
+  const code = String(codeRaw || '').trim().toUpperCase();
+  if (!code) return { ok: false, error: 'Промокод не указан' };
+  const promoRef = await db.collection('promocodes').doc(code).get();
+  if (!promoRef.exists) return { ok: false, error: 'Промокод не найден' };
+  const promoData = promoRef.data();
+  if (!promoData.active) return { ok: false, error: 'Промокод неактивен' };
+  if (promoData.expiryDate) {
+    const expiryDate = promoData.expiryDate.toDate ? promoData.expiryDate.toDate() : new Date(promoData.expiryDate);
+    if (expiryDate < new Date()) return { ok: false, error: 'Срок действия промокода истек' };
+  }
+  if (promoData.maxUses && promoData.maxUses > 0) {
+    const usedCount = promoData.usedCount || 0;
+    if (usedCount >= promoData.maxUses) return { ok: false, error: 'Промокод исчерпан' };
+  }
+  return {
+    ok: true,
+    promo: {
+      code,
+      discount: Number(promoData.discount) || 0,
+      description: promoData.description || ''
+    }
+  };
+}
+
 async function spendBonusPointsAdmin(userId, amount, orderId) {
   if (!amount || amount <= 0) return;
   const bonusRef = db.collection('bonusAccounts').doc(userId);
@@ -1815,42 +1882,75 @@ app.post('/api/mini-app/me', async (req, res) => {
       return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
     }
 
-    const [bonusDoc, settingsDoc, billsSnap] = await Promise.all([
+    const [bonusDoc, settingsDoc, billsSnap, historySnap] = await Promise.all([
       db.collection('bonusAccounts').doc(session.userId).get(),
       db.collection('settings').doc('bonusSystem').get(),
-      db.collection('bills').where('userId', '==', session.userId).where('status', '==', 'open').limit(1).get()
+      db.collection('bills').where('userId', '==', session.userId).where('status', '==', 'open').limit(1).get(),
+      db.collection('bills').where('userId', '==', session.userId).limit(30).get().catch(() => null)
     ]);
 
     let openBillTotal = 0;
     let openBillItems = [];
+    let openBillPromo = null;
     if (!billsSnap.empty) {
       const billDoc = billsSnap.docs[0];
       const bill = billDoc.data();
       openBillItems = await hydrateBillItemsWithOrderStatus(bill.items);
-      openBillTotal = billTotalFromItems(openBillItems);
+      openBillTotal = Number(bill.totalAmount);
+      if (!Number.isFinite(openBillTotal)) openBillTotal = billTotalFromItems(openBillItems);
+      openBillPromo = bill.promoCode
+        ? { code: bill.promoCode, discount: bill.discount || 0, originalTotal: bill.originalTotal || null }
+        : null;
       const stale = (Array.isArray(bill.items) ? bill.items : []).some((it, idx) => {
         const live = openBillItems[idx];
         return live && it.status !== live.status;
-      }) || Number(bill.totalAmount || 0) !== openBillTotal;
+      });
       if (stale) {
         billDoc.ref.update({
           items: openBillItems.map((it, idx) => ({
             ...(Array.isArray(bill.items) ? bill.items[idx] : {}),
             ...it
           })),
-          totalAmount: openBillTotal,
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         }).catch(() => {});
       }
     }
 
+    const bonusData = bonusDoc.exists ? bonusDoc.data() : {};
+    const settings = settingsDoc.exists ? settingsDoc.data() : {};
+    const billHistory = [];
+    if (historySnap && !historySnap.empty) {
+      historySnap.docs.forEach((doc) => {
+        const d = doc.data() || {};
+        if (d.status !== 'paid') return;
+        const items = Array.isArray(d.items) ? d.items : [];
+        billHistory.push({
+          id: doc.id,
+          totalAmount: Number(d.totalAmount) || 0,
+          itemsCount: items.length,
+          paymentMethod: d.paymentMethod || null,
+          promoCode: d.promoCode || null,
+          paidAtMs: d.paidAt?.toMillis?.() || d.updatedAt?.toMillis?.() || 0,
+          itemNames: items.slice(0, 3).map((i) => i.cocktailName || i.name || 'Коктейль')
+        });
+      });
+      billHistory.sort((a, b) => b.paidAtMs - a.paidAtMs);
+    }
+
     res.json({
       success: true,
       userId: session.userId,
-      bonusBalance: bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0,
-      maxBonusUsage: settingsDoc.exists ? Number(settingsDoc.data().maxUsage) || 50 : 50,
+      bonusBalance: Number(bonusData.balance) || 0,
+      totalEarned: Number(bonusData.totalEarned) || 0,
+      totalSpent: Number(bonusData.totalSpent) || 0,
+      maxBonusUsage: Number(settings.maxUsage) || 50,
+      bonusPercentage: Number(settings.percentage) || 5,
+      bonusMinOrder: Number(settings.minOrder) || 300,
+      bonusActive: settings.active !== false,
       openBillTotal,
-      openBillItems
+      openBillItems,
+      openBillPromo,
+      billHistory: billHistory.slice(0, 10)
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1890,7 +1990,8 @@ app.post('/api/mini-app/my-orders', async (req, res) => {
       status: o.status,
       price: o.price,
       displayTime: o.displayTime,
-      queuePosition: o.queuePosition
+      queuePosition: o.queuePosition,
+      rated: Boolean(o.rated)
     }));
 
     res.json({ success: true, orders });
@@ -2421,7 +2522,36 @@ app.post('/api/mini-app/admin/bills', async (req, res) => {
         console.warn('⚠️ close-bill order sync:', orderSyncErr?.message || orderSyncErr);
       }
 
-      return res.json({ success: true, totalAmount });
+      let bonus = { awarded: 0 };
+      try {
+        if (bill.userId && totalAmount > 0) {
+          bonus = await awardBonusPointsAdmin(bill.userId, totalAmount, { billId });
+        }
+      } catch (bonusErr) {
+        console.warn('⚠️ close-bill bonus award:', bonusErr?.message || bonusErr);
+      }
+
+      return res.json({ success: true, totalAmount, bonusAwarded: bonus.awarded || 0 });
+    }
+
+    if (action === 'reopen') {
+      const billId = String(req.body?.billId || '');
+      if (!billId) return res.status(400).json({ success: false, error: 'billId required' });
+      await db.collection('bills').doc(billId).set({
+        status: 'open',
+        paidAt: null,
+        paymentMethod: null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        reopenedBy: session.userId
+      }, { merge: true });
+      return res.json({ success: true });
+    }
+
+    if (action === 'delete') {
+      const billId = String(req.body?.billId || '');
+      if (!billId) return res.status(400).json({ success: false, error: 'billId required' });
+      await db.collection('bills').doc(billId).delete();
+      return res.json({ success: true });
     }
 
     let query = db.collection('bills').limit(40);
@@ -2431,14 +2561,23 @@ app.post('/api/mini-app/admin/bills', async (req, res) => {
     const snap = await query.get();
     const bills = snap.docs.map((doc) => {
       const d = doc.data();
+      const items = Array.isArray(d.items) ? d.items : [];
       return {
         id: doc.id,
         userName: d.userName || '',
         userId: d.userId || '',
         status: d.status || 'open',
         totalAmount: d.totalAmount || 0,
-        itemsCount: Array.isArray(d.items) ? d.items.length : 0,
-        paymentMethod: d.paymentMethod || null
+        itemsCount: items.length,
+        paymentMethod: d.paymentMethod || null,
+        promoCode: d.promoCode || null,
+        discount: d.discount || 0,
+        items: items.map((it) => ({
+          orderId: it.orderId || '',
+          cocktailName: it.cocktailName || it.name || 'Коктейль',
+          price: Number(it.price) || 0,
+          status: it.status || 'pending'
+        }))
       };
     });
 
@@ -2451,7 +2590,147 @@ app.post('/api/mini-app/admin/bills', async (req, res) => {
   }
 });
 
-// Admin: cocktails CRUD (lite)
+// Guest: apply promo to open bill
+app.post('/api/mini-app/apply-promo', async (req, res) => {
+  try {
+    const session = await resolveMiniAppUser(req);
+    if (!session.ok) return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
+
+    const checked = await validatePromoCodeData(req.body?.promoCode);
+    if (!checked.ok) return res.status(400).json({ success: false, error: checked.error });
+
+    const billsSnap = await db.collection('bills')
+      .where('userId', '==', session.userId)
+      .where('status', '==', 'open')
+      .limit(1)
+      .get();
+    if (billsSnap.empty) {
+      return res.status(400).json({ success: false, error: 'Нет открытого счёта' });
+    }
+
+    const billDoc = billsSnap.docs[0];
+    const bill = billDoc.data() || {};
+    if (bill.promoCode) {
+      return res.status(400).json({ success: false, error: 'Промокод уже применён к этому счёту' });
+    }
+
+    const items = await hydrateBillItemsWithOrderStatus(bill.items);
+    const originalTotal = billTotalFromItems(items);
+    if (originalTotal <= 0) {
+      return res.status(400).json({ success: false, error: 'Нечего оплачивать в счёте' });
+    }
+
+    const discountPct = Number(checked.promo.discount) || 0;
+    const discountAmount = Math.round(originalTotal * discountPct / 100);
+    const newTotal = Math.max(0, originalTotal - discountAmount);
+
+    await billDoc.ref.update({
+      promoCode: checked.promo.code,
+      discount: discountPct,
+      originalTotal,
+      totalAmount: newTotal,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    await db.collection('promocodes').doc(checked.promo.code).set({
+      usedCount: admin.firestore.FieldValue.increment(1),
+      lastUsedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    res.json({
+      success: true,
+      promo: checked.promo,
+      originalTotal,
+      discountAmount,
+      totalAmount: newTotal,
+      openBillItems: items,
+      openBillTotal: newTotal
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Guest: rate cocktail after ready
+app.post('/api/mini-app/rate', async (req, res) => {
+  try {
+    const session = await resolveMiniAppUser(req);
+    if (!session.ok) return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
+
+    const orderId = String(req.body?.orderId || '').trim();
+    const rating = Number(req.body?.rating);
+    const skip = Boolean(req.body?.skip);
+    if (!orderId) return res.status(400).json({ success: false, error: 'orderId required' });
+
+    const orderRef = db.collection('orders').doc(orderId);
+    const orderDoc = await orderRef.get();
+    if (!orderDoc.exists) return res.status(404).json({ success: false, error: 'Заказ не найден' });
+    const order = orderDoc.data() || {};
+    if (String(order.userId || '') !== String(session.userId)) {
+      return res.status(403).json({ success: false, error: 'Чужой заказ' });
+    }
+
+    if (skip) {
+      await orderRef.set({
+        status: order.status === 'ready' ? 'completed' : order.status,
+        rated: false,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      return res.json({ success: true, skipped: true });
+    }
+
+    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+      return res.status(400).json({ success: false, error: 'Оценка 1–5' });
+    }
+
+    await db.collection('ratings').add({
+      cocktailName: order.name || '',
+      rating,
+      userId: session.userId,
+      userName: session.displayName || order.user || '',
+      orderId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      source: 'telegram-mini-app'
+    });
+
+    await orderRef.set({
+      status: 'completed',
+      rated: true,
+      ratingValue: rating,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    res.json({ success: true, rating });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Public rating averages for menu cards
+app.get('/api/mini-app/ratings-summary', async (req, res) => {
+  try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const snap = await db.collection('ratings').limit(500).get();
+    const acc = new Map();
+    snap.forEach((doc) => {
+      const d = doc.data() || {};
+      const name = String(d.cocktailName || '').trim();
+      const rating = Number(d.rating) || 0;
+      if (!name || rating <= 0) return;
+      const cur = acc.get(name) || { sum: 0, count: 0 };
+      cur.sum += rating;
+      cur.count += 1;
+      acc.set(name, cur);
+    });
+    const averages = {};
+    acc.forEach((v, name) => {
+      averages[name] = Number((v.sum / v.count).toFixed(1));
+    });
+    res.json({ success: true, averages });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 app.post('/api/mini-app/admin/cocktails', async (req, res) => {
   try {
     const session = await resolveMiniAppAdmin(req);
@@ -2473,6 +2752,19 @@ app.post('/api/mini-app/admin/cocktails', async (req, res) => {
       if (!name || !Number.isFinite(price)) {
         return res.status(400).json({ success: false, error: 'Нужны name и price' });
       }
+      const category = String(c.category || 'classic');
+      const tasteTags = Array.isArray(c.tasteTags)
+        ? c.tasteTags.map((t) => String(t)).filter((t) => ['sour', 'sweet', 'bitter'].includes(t))
+        : [];
+      let stockRecipe = [];
+      if (Array.isArray(c.stockRecipe)) {
+        stockRecipe = c.stockRecipe
+          .map((r) => ({
+            ingredientName: String(r.ingredientName || '').trim(),
+            amount: Number(r.amount) || 0
+          }))
+          .filter((r) => r.ingredientName && r.amount > 0);
+      }
       const payload = {
         name,
         price,
@@ -2480,10 +2772,16 @@ app.post('/api/mini-app/admin/cocktails', async (req, res) => {
         description: String(c.description || ''),
         mood: String(c.mood || ''),
         alcohol: c.alcohol == null || c.alcohol === '' ? null : Number(c.alcohol),
-        category: String(c.category || 'classic'),
+        category,
         image: String(c.image || ''),
+        tasteTags,
+        isShot: category === 'shots',
+        isSignature: category === 'signature',
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       };
+      if (stockRecipe.length) payload.stockRecipe = stockRecipe;
+      else payload.stockRecipe = admin.firestore.FieldValue.delete();
+
       if (c.id) {
         await db.collection('cocktails').doc(String(c.id)).set(payload, { merge: true });
         return res.json({ success: true, id: String(c.id) });
