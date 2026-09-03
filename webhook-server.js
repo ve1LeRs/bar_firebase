@@ -1331,6 +1331,15 @@ app.post('/api/mini-app/auth', async (req, res) => {
     const tgUser = parsed.user;
     const uid = `tg_${tgUser.id}`;
     const displayName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Гость Telegram';
+    const adminIds = new Set(
+      String(process.env.TELEGRAM_ADMIN_IDS || TELEGRAM_CHAT_ID || '')
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+    );
+    // Owner chat id from project defaults
+    adminIds.add('1743362083');
+    const isAdmin = adminIds.has(String(tgUser.id));
 
     try {
       const updatePayload = { displayName };
@@ -1348,12 +1357,13 @@ app.post('/api/mini-app/auth', async (req, res) => {
 
     const userRef = db.collection('users').doc(uid);
     const existingUser = await userRef.get();
+    const existingRole = existingUser.exists ? (existingUser.data().role || 'user') : 'user';
     await userRef.set({
       displayName,
       telegramId: tgUser.id,
       telegramUsername: tgUser.username || null,
       photoURL: tgUser.photo_url || null,
-      role: existingUser.exists ? (existingUser.data().role || 'user') : 'user',
+      role: isAdmin ? 'admin' : existingRole,
       source: 'telegram-mini-app',
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       ...(existingUser.exists ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
@@ -1391,6 +1401,7 @@ app.post('/api/mini-app/auth', async (req, res) => {
       customToken,
       bonusBalance,
       openBillTotal,
+      role: isAdmin ? 'admin' : (existingRole || 'user'),
       user: {
         id: tgUser.id,
         first_name: tgUser.first_name,
