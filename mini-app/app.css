@@ -14,8 +14,12 @@
   --radius: 18px;
   --font-display: "Fraunces", Georgia, serif;
   --font-body: "Sora", system-ui, sans-serif;
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-top: env(safe-area-inset-top, 0px);
+  --tg-safe-top: 0px;
+  --tg-safe-bottom: 0px;
+  --tg-safe-left: 0px;
+  --tg-safe-right: 0px;
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-safe-bottom));
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--tg-safe-top));
   --tabbar-h: calc(64px + var(--safe-bottom));
 }
 
@@ -37,6 +41,7 @@ body.tg-themed {
 html, body {
   margin: 0;
   min-height: 100%;
+  min-height: 100dvh;
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-body);
@@ -47,7 +52,13 @@ html, body {
 body {
   padding-top: var(--safe-top);
   padding-bottom: var(--tabbar-h);
+  padding-left: var(--tg-safe-left);
+  padding-right: var(--tg-safe-right);
   overflow-x: hidden;
+}
+
+body.is-fullscreen .topbar {
+  padding-top: 10px;
 }
 
 button, input {
