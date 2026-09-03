@@ -21,6 +21,8 @@
   --safe-bottom: max(20px, env(safe-area-inset-bottom, 0px), var(--tg-safe-bottom));
   --safe-top: max(env(safe-area-inset-top, 0px), var(--tg-safe-top));
   --tabbar-h: calc(64px + var(--safe-bottom));
+  --keyboard-inset: 0px;
+  --vv-height: 100dvh;
 }
 
 /* Prefer Telegram theme when available, keep brand accents */
@@ -140,7 +142,12 @@ button, input {
   padding: 8px 12px;
   color: var(--accent);
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  max-width: 46vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 .shell {
@@ -157,8 +164,8 @@ button, input {
 }
 
 @keyframes rise {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { transform: translateY(8px); }
+  to { transform: translateY(0); }
 }
 
 .hero {
@@ -259,7 +266,27 @@ button, input {
 }
 
 .cocktail.stopped {
-  opacity: 0.55;
+  opacity: 0.45;
+  filter: grayscale(0.45) brightness(0.72);
+}
+
+.cocktail.stopped .thumb-wrap {
+  filter: brightness(0.75);
+}
+
+.cocktail.stopped .price,
+.cocktail.stopped h3,
+.cocktail.stopped .cocktail-meta {
+  opacity: 0.9;
+}
+
+.cocktail.stopped .badge.stop {
+  opacity: 1;
+  filter: none;
+}
+
+.cocktail-enter {
+  animation: rise 0.28s ease both;
 }
 
 .thumb-wrap {
@@ -351,6 +378,89 @@ button, input {
   gap: 8px;
 }
 
+.taste-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.taste-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  font-weight: 450;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  color: rgba(185, 169, 154, 0.85);
+  background: rgba(244, 238, 230, 0.04);
+  border: 1px solid rgba(244, 238, 230, 0.06);
+}
+
+.cocktail-rating {
+  font-size: 0.78rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.taste-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: 4px 0 8px;
+}
+
+.admin-textarea {
+  min-height: 72px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.promo-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  align-items: center;
+}
+
+.promo-row .admin-input {
+  flex: 1;
+  margin: 0;
+}
+
+.promo-row .ghost {
+  width: auto;
+  min-width: 110px;
+  padding: 10px 12px;
+}
+
+.rating-sheet {
+  z-index: 45;
+}
+
+.rating-stars {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 18px 0 8px;
+}
+
+.rating-stars button {
+  border: 0;
+  background: transparent;
+  color: rgba(244, 238, 230, 0.28);
+  font-size: 2rem;
+  line-height: 1;
+  padding: 4px;
+  cursor: pointer;
+}
+
+.rating-stars button.is-on {
+  color: var(--accent);
+}
+
 .price {
   color: var(--accent);
   font-weight: 700;
@@ -403,6 +513,74 @@ button, input {
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--line);
+}
+
+.bill-accordion {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.bill-accordion.is-open-bill {
+  border-color: rgba(212, 163, 92, 0.35);
+  background: rgba(212, 163, 92, 0.06);
+}
+
+.bill-accordion-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bill-accordion-title {
+  min-width: 0;
+  flex: 1;
+}
+
+.bill-accordion-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.bill-chevron {
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.18s ease;
+  margin-left: 2px;
+}
+
+.bill-accordion.is-open .bill-chevron {
+  transform: rotate(-135deg);
+  margin-top: 4px;
+}
+
+.bill-accordion-body {
+  padding: 0 10px 10px;
+  border-top: 1px solid var(--line);
+}
+
+.bill-accordion-body[hidden] {
+  display: none !important;
+}
+
+.order-card-nested {
+  margin-top: 8px;
+  background: rgba(0, 0, 0, 0.18);
 }
 
 .order-top {
@@ -565,6 +743,19 @@ button, input {
   flex-shrink: 0;
   color: var(--accent);
   font-size: 0.95rem;
+}
+
+.bill-item-row.is-cancelled {
+  opacity: 0.55;
+}
+
+.bill-item-row.is-cancelled .bill-item-name,
+.bill-item-row.is-cancelled .bill-item-price {
+  text-decoration: line-through;
+}
+
+.bill-item-row.is-cancelled .bill-item-meta {
+  color: var(--bad);
 }
 
 .auth-retry {
@@ -787,6 +978,32 @@ body.has-admin .tabbar {
   align-items: center;
 }
 
+.stoplist-row > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.stoplist-row button,
+.order-card > .stoplist-row button.danger,
+button.danger {
+  flex-shrink: 0;
+  border: 1px solid rgba(216, 122, 106, 0.45);
+  background: rgba(216, 122, 106, 0.16);
+  color: #f0b4a8;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  min-height: 34px;
+}
+
+.admin-actions button.danger {
+  background: rgba(216, 122, 106, 0.16);
+  color: #f0b4a8;
+  border-color: rgba(216, 122, 106, 0.45);
+}
+
 .tab {
   border: 0;
   background: transparent;
@@ -836,9 +1053,9 @@ body.has-admin .tabbar {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: var(--keyboard-inset, 0px);
   z-index: 40;
-  max-height: min(92dvh, 860px);
+  max-height: min(92dvh, 860px, calc(var(--vv-height, 100dvh) - 8px));
   overflow: hidden;
   padding: 0;
   border-radius: 24px 24px 0 0;
@@ -846,13 +1063,46 @@ body.has-admin .tabbar {
   border-top: 1px solid var(--line);
   box-shadow: var(--shadow);
   transform: translateY(110%);
-  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), max-height 0.2s ease, bottom 0.2s ease;
   display: flex;
   flex-direction: column;
 }
 
 .sheet.open {
   transform: translateY(0);
+}
+
+/* Keyboard open: keep sheet above keyboard, collapse bulky media */
+body.keyboard-open .sheet.open {
+  max-height: calc(var(--vv-height, 100dvh) - 4px);
+}
+
+.sheet.sheet-compact .sheet-media {
+  display: none;
+}
+
+.sheet.sheet-compact .sheet-mood {
+  display: none;
+}
+
+.sheet.sheet-compact .sheet-ingredients {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sheet.sheet-compact h3 {
+  font-size: 1.2rem;
+}
+
+.sheet.sheet-compact .price-block {
+  margin-top: 10px;
+}
+
+body.keyboard-open .sheet-actions {
+  padding-bottom: 12px;
 }
 
 body.sheet-open .tabbar {
@@ -999,17 +1249,40 @@ body.sheet-open .tabbar {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--tabbar-h) + 12px);
-  transform: translateX(-50%);
+  top: calc(var(--safe-top) + 14px);
+  bottom: auto;
   z-index: 50;
-  max-width: calc(100% - 32px);
-  padding: 12px 16px;
-  border-radius: 12px;
-  background: #2a231c;
+  width: max-content;
+  max-width: calc(100% - 28px);
+  padding: 14px 20px;
+  border-radius: 16px;
+  background: rgba(36, 30, 24, 0.96);
   border: 1px solid var(--line);
-  box-shadow: var(--shadow);
-  font-size: 0.88rem;
-  animation: rise 0.25s ease;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -12px) scale(0.98);
+  transition:
+    opacity 0.2s ease,
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, opacity;
+}
+
+.toast.is-on {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.toast.is-leaving {
+  opacity: 0;
+  transform: translate(-50%, -8px) scale(0.98);
+  transition:
+    opacity 0.18s ease,
+    transform 0.22s ease;
 }
 
 .loader {
@@ -1030,7 +1303,7 @@ body.sheet-open .tabbar {
 }
 
 .menu-grid[data-from-cache='1'] .cocktail {
-  opacity: 0.92;
+  opacity: 1;
 }
 
 .loader-ring {
