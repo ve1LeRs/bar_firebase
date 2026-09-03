@@ -461,6 +461,10 @@ button, input {
   font-size: 0.85rem;
 }
 
+.auth-retry {
+  margin-top: 10px;
+}
+
 .tabbar {
   position: fixed;
   left: 0;
