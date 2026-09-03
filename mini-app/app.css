@@ -266,7 +266,17 @@ button, input {
 }
 
 .cocktail.stopped {
-  opacity: 0.55;
+  opacity: 0.42;
+  filter: grayscale(0.35);
+}
+
+.cocktail.stopped .cocktail-thumb {
+  filter: brightness(0.72);
+}
+
+.cocktail.stopped .price,
+.cocktail.stopped h3 {
+  opacity: 0.85;
 }
 
 .cocktail-enter {
@@ -364,10 +374,22 @@ button, input {
 
 .taste-tags {
   display: flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 5px;
   margin-top: 6px;
-  font-size: 0.95rem;
-  line-height: 1;
+}
+
+.taste-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  background: rgba(244, 238, 230, 0.05);
+  border: 1px solid rgba(244, 238, 230, 0.08);
 }
 
 .cocktail-rating {
@@ -1220,21 +1242,23 @@ body.sheet-open .tabbar {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--tabbar-h) + 16px);
+  top: calc(var(--safe-top) + 14px);
+  bottom: auto;
   z-index: 50;
   width: max-content;
-  max-width: calc(100% - 32px);
-  padding: 12px 18px;
-  border-radius: 14px;
-  background: rgba(36, 30, 24, 0.94);
+  max-width: calc(100% - 28px);
+  padding: 14px 20px;
+  border-radius: 16px;
+  background: rgba(36, 30, 24, 0.96);
   border: 1px solid var(--line);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-  font-size: 0.88rem;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+  font-size: 1rem;
+  font-weight: 500;
   line-height: 1.35;
   text-align: center;
   pointer-events: none;
   opacity: 0;
-  transform: translate(-50%, 14px) scale(0.98);
+  transform: translate(-50%, -12px) scale(0.98);
   transition:
     opacity 0.2s ease,
     transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
@@ -1248,7 +1272,7 @@ body.sheet-open .tabbar {
 
 .toast.is-leaving {
   opacity: 0;
-  transform: translate(-50%, 10px) scale(0.98);
+  transform: translate(-50%, -8px) scale(0.98);
   transition:
     opacity 0.18s ease,
     transform 0.22s ease;

@@ -21,7 +21,7 @@
     completed: 'Выполнен',
     cancelled: 'Отменён'
   };
-  const TASTE_EMOJI = { sour: '🍋', sweet: '🍬', bitter: '☕' };
+  const TASTE_LABELS = { sour: 'кислое', sweet: 'сладкое', bitter: 'горькое' };
   const PAY_METHOD_RU = {
     cash: 'наличные',
     card: 'карта',
@@ -63,7 +63,10 @@
     adminOrdersTimer: null,
     adminTab: 'cocktails',
     knownOrderStatuses: new Map(),
+    promptedRatingOrders: new Set(),
     expandedBills: new Set(),
+    billExpandTouched: new Set(),
+    currentView: 'menu',
     ratingOrder: null,
     ratingValue: 0
   };
@@ -1943,7 +1946,9 @@
           <h3>${escapeHtml(cocktail.name || 'Коктейль')}</h3>
           <p class="cocktail-meta">${escapeHtml(cocktail.ingredients || cocktail.description || 'Авторский рецепт бара')}</p>
           ${Array.isArray(cocktail.tasteTags) && cocktail.tasteTags.length
-            ? `<div class="taste-tags">${cocktail.tasteTags.map((t) => TASTE_EMOJI[t] || '').join('')}</div>`
+            ? `<div class="taste-tags">${cocktail.tasteTags
+                .map((t) => TASTE_LABELS[t] ? `<span class="taste-chip">${TASTE_LABELS[t]}</span>` : '')
+                .join('')}</div>`
             : ''}
           <div class="cocktail-foot">
             <span class="price">${Number(cocktail.price) || 0} ₽</span>
@@ -1980,8 +1985,11 @@
   }
 
   function openRatingSheet(order) {
+    if (state.currentView === 'admin') return;
+    if (!order?.id || order.rated) return;
     state.ratingOrder = order;
     state.ratingValue = 0;
+    if (order.id) state.promptedRatingOrders.add(order.id);
     if (els.ratingTitle) els.ratingTitle.textContent = `Оцените: ${order.name || 'коктейль'}`;
     if (els.ratingSubtitle) els.ratingSubtitle.textContent = 'Поставьте оценку от 1 до 5';
     els.ratingStars?.querySelectorAll('button').forEach((b) => b.classList.remove('is-on'));
@@ -2048,15 +2056,31 @@
 
   function noteOrderStatusChanges(orders) {
     const list = Array.isArray(orders) ? orders : [];
+    const kitchen = new Set(['pending', 'confirmed', 'preparing']);
+    const busy =
+      state.currentView === 'admin' ||
+      els.ratingSheet?.classList.contains('open') ||
+      els.sheet?.classList.contains('open');
+
     list.forEach((order) => {
       const id = order.id;
       const status = order.status || 'pending';
       if (!id) return;
       const prev = state.knownOrderStatuses.get(id);
       if (prev && prev !== status) {
-        showToast(`${order.name || 'Заказ'}: ${STATUS_LABELS[status] || status}`);
-        haptic('light');
-        if (status === 'ready' && !order.rated) {
+        // Status toasts only on guest screens — don't interrupt admin work
+        if (state.currentView !== 'admin') {
+          showToast(`${order.name || 'Заказ'}: ${STATUS_LABELS[status] || status}`);
+          haptic('light');
+        }
+        const becameReady = status === 'ready' && kitchen.has(prev);
+        if (
+          becameReady &&
+          !order.rated &&
+          !busy &&
+          !state.promptedRatingOrders.has(id)
+        ) {
+          state.promptedRatingOrders.add(id);
           openRatingSheet(order);
         }
       }
@@ -2366,9 +2390,11 @@
     }
 
     if (!state.expandedBills) state.expandedBills = new Set();
-    // Default: open bills expanded, newest paid expanded once
+    if (!state.billExpandTouched) state.billExpandTouched = new Set();
+    // Auto-expand only bills the user hasn't toggled yet (don't re-open after collapse)
     billList.forEach((bill, idx) => {
-      if (state.expandedBills.has(bill.id) || state.expandedBills.has(`closed:${bill.id}`)) return;
+      if (state.billExpandTouched.has(bill.id)) return;
+      if (state.expandedBills.has(bill.id)) return;
       if (bill.status === 'open' || idx === 0) state.expandedBills.add(bill.id);
     });
 
@@ -2440,6 +2466,7 @@
       });
 
       card.querySelector('.bill-accordion-head')?.addEventListener('click', () => {
+        state.billExpandTouched.add(bill.id);
         const willOpen = !state.expandedBills.has(bill.id);
         if (willOpen) state.expandedBills.add(bill.id);
         else state.expandedBills.delete(bill.id);
@@ -2554,6 +2581,9 @@
       showToast('Нет прав админа');
       return;
     }
+    state.currentView = name;
+    // Never interrupt admin with guest rating UI
+    if (name === 'admin') closeRatingSheet();
     document.querySelectorAll('.view').forEach((v) => {
       v.classList.toggle('active', v.dataset.view === name);
     });
