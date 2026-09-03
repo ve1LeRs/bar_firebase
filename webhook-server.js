@@ -1970,21 +1970,84 @@ app.post('/api/mini-app/my-orders', async (req, res) => {
       const snap = await db.collection('orders')
         .where('userId', '==', session.userId)
         .orderBy('createdAt', 'desc')
-        .limit(20)
+        .limit(30)
         .get();
-      orders = snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), createdAt: undefined }));
+      orders = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     } catch (_) {
       const snap = await db.collection('orders')
         .where('userId', '==', session.userId)
-        .limit(20)
+        .limit(40)
         .get();
       orders = snap.docs
         .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .sort((a, b) => String(b.displayTime || '').localeCompare(String(a.displayTime || '')));
+        .sort((a, b) => {
+          const am = a.createdAt?.toMillis?.() || 0;
+          const bm = b.createdAt?.toMillis?.() || 0;
+          if (bm !== am) return bm - am;
+          return String(b.displayTime || '').localeCompare(String(a.displayTime || ''));
+        });
     }
 
-    // Strip heavy/unserializable fields
-    orders = orders.map((o) => ({
+    // Reconcile with paid bills: closed bill items must not stay "pending" in UI
+    try {
+      const billsSnap = await db.collection('bills')
+        .where('userId', '==', session.userId)
+        .where('status', '==', 'paid')
+        .limit(20)
+        .get();
+      const billStatusByOrder = new Map();
+      billsSnap.forEach((doc) => {
+        const items = Array.isArray(doc.data()?.items) ? doc.data().items : [];
+        items.forEach((item) => {
+          const oid = String(item.orderId || '').trim();
+          if (!oid) return;
+          // cancelled stays cancelled; everything else on a paid bill is completed
+          const st = item.status === 'cancelled' ? 'cancelled' : 'completed';
+          billStatusByOrder.set(oid, st);
+        });
+      });
+
+      if (billStatusByOrder.size) {
+        const fixes = [];
+        orders = orders.map((o) => {
+          const billStatus = billStatusByOrder.get(String(o.id));
+          if (!billStatus) return o;
+          const current = o.status || 'pending';
+          if (current === 'cancelled' || current === billStatus) return o;
+          // Live orders still in kitchen shouldn't be forced — only stale pending/confirmed after bill paid
+          if (['pending', 'confirmed', 'preparing', 'ready'].includes(current)) {
+            fixes.push({ id: o.id, from: current, to: billStatus });
+            return { ...o, status: billStatus };
+          }
+          return o;
+        });
+
+        // Persist repairs so next reads / Telegram stay consistent
+        if (fixes.length) {
+          let batch = db.batch();
+          let ops = 0;
+          for (const fix of fixes) {
+            batch.set(db.collection('orders').doc(fix.id), {
+              status: fix.to,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedBy: 'reconcile-paid-bill'
+            }, { merge: true });
+            ops += 1;
+            if (ops >= 400) {
+              await batch.commit();
+              batch = db.batch();
+              ops = 0;
+            }
+          }
+          if (ops > 0) await batch.commit();
+          console.log('🔧 reconciled orders with paid bills:', fixes.length);
+        }
+      }
+    } catch (reconcileErr) {
+      console.warn('my-orders reconcile:', reconcileErr?.message || reconcileErr);
+    }
+
+    orders = orders.slice(0, 20).map((o) => ({
       id: o.id,
       name: o.name,
       status: o.status,

@@ -2338,85 +2338,30 @@
   }
 
   function subscribeOrders() {
-    if (!state.firebaseUser) return;
+    // API polling is the source of truth — Firestore client cache can keep stale "pending"
+    // after a bill is closed via Admin SDK. Listener only triggers a refresh.
+    if (!state.firebaseUser || !db) {
+      startOrdersPolling();
+      return;
+    }
     if (state.ordersUnsub) state.ordersUnsub();
 
-    state.ordersUnsub = db
-      .collection('orders')
-      .where('userId', '==', state.firebaseUser.uid)
-      .orderBy('createdAt', 'desc')
-      .limit(20)
-      .onSnapshot(
-        (snap) => {
-          if (snap.empty) {
-            els.ordersList.innerHTML = '<div class="empty-state">Пока нет заказов</div>';
-            return;
+    try {
+      state.ordersUnsub = db
+        .collection('orders')
+        .where('userId', '==', state.firebaseUser.uid)
+        .limit(30)
+        .onSnapshot(
+          () => { refreshOrders(); },
+          (err) => {
+            console.warn('orders watch failed, polling only', err?.message || err);
+            startOrdersPolling();
           }
-
-          els.ordersList.innerHTML = '';
-          snap.forEach((doc) => {
-            const order = doc.data();
-            const status = order.status || 'pending';
-            const card = document.createElement('article');
-            card.className = 'order-card';
-            card.innerHTML = `
-              <div class="order-top">
-                <div>
-                  <p class="order-name">${escapeHtml(order.name || 'Заказ')}</p>
-                  <p class="order-time">${escapeHtml(order.displayTime || '')}</p>
-                </div>
-                <span class="status ${escapeAttr(status)}">${STATUS_LABELS[status] || status}</span>
-              </div>
-              ${
-                order.queuePosition && ['pending', 'confirmed', 'preparing', 'ready'].includes(status)
-                  ? `<div class="queue">Позиция в очереди: #${order.queuePosition}</div>`
-                  : ''
-              }
-              <div class="queue">${Number(order.price) || 0} ₽</div>
-            `;
-            els.ordersList.appendChild(card);
-          });
-        },
-        async (err) => {
-          console.warn('orders index fallback', err);
-          // Fallback without orderBy if composite index missing
-          const snap = await db
-            .collection('orders')
-            .where('userId', '==', state.firebaseUser.uid)
-            .limit(20)
-            .get();
-          const items = snap.docs
-            .map((d) => ({ id: d.id, ...d.data() }))
-            .sort((a, b) => {
-              const ta = a.createdAt?.toMillis?.() || 0;
-              const tb = b.createdAt?.toMillis?.() || 0;
-              return tb - ta;
-            });
-
-          if (!items.length) {
-            els.ordersList.innerHTML = '<div class="empty-state">Пока нет заказов</div>';
-            return;
-          }
-
-          els.ordersList.innerHTML = '';
-          items.forEach((order) => {
-            const status = order.status || 'pending';
-            const card = document.createElement('article');
-            card.className = 'order-card';
-            card.innerHTML = `
-              <div class="order-top">
-                <div>
-                  <p class="order-name">${escapeHtml(order.name || 'Заказ')}</p>
-                  <p class="order-time">${escapeHtml(order.displayTime || '')}</p>
-                </div>
-                <span class="status ${escapeAttr(status)}">${STATUS_LABELS[status] || status}</span>
-              </div>
-              <div class="queue">${Number(order.price) || 0} ₽</div>
-            `;
-            els.ordersList.appendChild(card);
-          });
-        }
-      );
+        );
+    } catch (err) {
+      console.warn('orders watch init failed', err);
+    }
+    startOrdersPolling();
   }
 
   function switchView(name) {
