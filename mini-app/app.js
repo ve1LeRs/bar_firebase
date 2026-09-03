@@ -589,10 +589,9 @@
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Ошибка стоп-листа');
       const items = data.items || [];
-      state.stoplist = new Set(items.map((i) => i.cocktailName).filter(Boolean));
+      applyStoplistNames(items.map((i) => i.cocktailName));
       renderAdminStoplist(items);
       populateAdminStopSelect();
-      renderMenu();
     } catch (err) {
       console.warn(err);
       if (els.adminStoplist) {
@@ -1200,8 +1199,15 @@
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Ошибка');
-      showToast(`${item.name}: ${stock}${item.unit ? ' ' + item.unit : ''}`);
+      const stopped = data.stoplist?.added
+        ? ` · в стоп: ${data.stoplist.names.slice(0, 3).join(', ')}${data.stoplist.added > 3 ? '…' : ''}`
+        : '';
+      showToast(`${item.name}: ${stock}${item.unit ? ' ' + item.unit : ''}${stopped}`);
       await refreshAdminPurchases();
+      if (data.stoplist?.added) {
+        refreshAdminStoplist().catch(() => {});
+        refreshStoplistFromApi().catch(() => {});
+      }
     } catch (err) {
       showToast(err.message || 'Ошибка');
     }
@@ -1480,6 +1486,16 @@
     }
   }
 
+  function applyStoplistNames(stoplistNames) {
+    const names = (stoplistNames || [])
+      .map((n) => String(n || '').trim())
+      .filter(Boolean);
+    state.stoplist = new Set(names);
+    writeMenuCache(state.cocktails, names);
+    renderMenu();
+    populateAdminStopSelect();
+  }
+
   function writeMenuCache(cocktails, stoplistNames) {
     try {
       localStorage.setItem(MENU_CACHE_KEY, JSON.stringify({
@@ -1492,13 +1508,54 @@
 
   function applyMenuData(cocktails, stoplistNames, { fromCache = false } = {}) {
     state.cocktails = cocktails || [];
-    state.stoplist = new Set(stoplistNames || []);
+    const names = (stoplistNames || [])
+      .map((n) => String(n || '').trim())
+      .filter(Boolean);
+    state.stoplist = new Set(names);
     renderMenu();
     if (fromCache) {
       els.menuGrid.dataset.fromCache = '1';
     } else {
       delete els.menuGrid.dataset.fromCache;
     }
+  }
+
+  let stoplistUnsub = null;
+  function watchStoplist() {
+    try {
+      initFirebase();
+      if (stoplistUnsub || !db) return;
+      stoplistUnsub = db.collection('stoplist').onSnapshot(
+        (snap) => {
+          const names = [];
+          snap.forEach((doc) => {
+            const n = String(doc.data()?.cocktailName || '').trim();
+            if (n) names.push(n);
+          });
+          applyStoplistNames(names);
+        },
+        (err) => {
+          console.warn('stoplist watch failed', err);
+          refreshStoplistFromApi().catch(() => {});
+        }
+      );
+    } catch (err) {
+      console.warn('stoplist watch init', err);
+    }
+  }
+
+  async function refreshStoplistFromApi() {
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/stoplist`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.names)) {
+        applyStoplistNames(data.names);
+        return true;
+      }
+    } catch (err) {
+      console.warn('stoplist api', err);
+    }
+    return false;
   }
 
   async function loadMenu() {
@@ -1509,24 +1566,23 @@
 
     try {
       initFirebase();
-      const [cocktailsSnap, stopSnap] = await Promise.all([
-        db.collection('cocktails').get({ source: 'default' }),
-        db.collection('stoplist').get({ source: 'default' })
-      ]);
+      watchStoplist();
 
-      const stoplistNames = [];
-      stopSnap.forEach((doc) => {
-        const item = doc.data();
-        if (item.cocktailName) stoplistNames.push(item.cocktailName);
-      });
+      // Load cocktails and stoplist independently — one failure must not wipe the other
+      const cocktailsPromise = db.collection('cocktails').get({ source: 'default' });
+      const stopPromise = db.collection('stoplist').get({ source: 'default' })
+        .catch(async () => {
+          await refreshStoplistFromApi();
+          return null;
+        });
 
+      const cocktailsSnap = await cocktailsPromise;
       const cocktails = [];
       cocktailsSnap.forEach((doc) => {
         const data = doc.data();
-        // Keep payload small for cache/render
         cocktails.push({
           id: doc.id,
-          name: data.name || '',
+          name: String(data.name || '').trim(),
           price: data.price || 0,
           image: data.image || '',
           ingredients: data.ingredients || '',
@@ -1538,12 +1594,23 @@
           isSignature: Boolean(data.isSignature)
         });
       });
-
       cocktails.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'));
+
+      const stopSnap = await stopPromise;
+      let stoplistNames = [...state.stoplist];
+      if (stopSnap) {
+        stoplistNames = [];
+        stopSnap.forEach((doc) => {
+          const n = String(doc.data()?.cocktailName || '').trim();
+          if (n) stoplistNames.push(n);
+        });
+      }
+
       writeMenuCache(cocktails, stoplistNames);
       applyMenuData(cocktails, stoplistNames);
     } catch (err) {
       console.error(err);
+      await refreshStoplistFromApi();
       if (!state.cocktails.length) {
         els.menuGrid.innerHTML = '<div class="empty-state">Не удалось загрузить меню</div>';
       }
@@ -1557,8 +1624,8 @@
         return getCategory(c) === state.category;
       })
       .sort((a, b) => {
-        const aStop = state.stoplist.has(a.name) ? 1 : 0;
-        const bStop = state.stoplist.has(b.name) ? 1 : 0;
+        const aStop = state.stoplist.has(String(a.name || '').trim()) ? 1 : 0;
+        const bStop = state.stoplist.has(String(b.name || '').trim()) ? 1 : 0;
         if (aStop !== bStop) return aStop - bStop;
         return (a.name || '').localeCompare(b.name || '', 'ru');
       });
@@ -1570,7 +1637,7 @@
 
     els.menuGrid.innerHTML = '';
     list.forEach((cocktail, index) => {
-      const stopped = state.stoplist.has(cocktail.name);
+      const stopped = state.stoplist.has(String(cocktail.name || '').trim());
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = `cocktail${stopped ? ' stopped' : ''}`;
@@ -1621,7 +1688,7 @@
   }
 
   function openOrderSheet(cocktail) {
-    if (state.stoplist.has(cocktail.name)) {
+    if (state.stoplist.has(String(cocktail?.name || '').trim())) {
       showToast('Коктейль временно недоступен');
       return;
     }
@@ -2157,6 +2224,15 @@
         f.classList.toggle('active', f === btn);
       });
       renderAdminPurchasesList();
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        refreshStoplistFromApi().catch(() => {});
+      }
+    });
+    window.addEventListener('focus', () => {
+      refreshStoplistFromApi().catch(() => {});
     });
     els.adminSubtabs?.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-admin-tab]');

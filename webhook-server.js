@@ -1378,9 +1378,16 @@ async function resolveMiniAppUser(req) {
 
 // In-memory stoplist cache — avoids Firestore roundtrip on every order
 const stoplistCache = { names: new Set(), at: 0, loading: null };
+
+function invalidateStoplistCache() {
+  stoplistCache.at = 0;
+  stoplistCache.names = new Set();
+  stoplistCache.loading = null;
+}
+
 async function refreshStoplistCache(force = false) {
   const fresh = Date.now() - stoplistCache.at < 20000;
-  if (!force && fresh) return stoplistCache.names;
+  if (!force && fresh && stoplistCache.at > 0) return stoplistCache.names;
   if (stoplistCache.loading) return stoplistCache.loading;
   stoplistCache.loading = (async () => {
     try {
@@ -1402,6 +1409,48 @@ async function refreshStoplistCache(force = false) {
 async function isCocktailStoppedCached(name) {
   const names = await refreshStoplistCache(false);
   return names.has(String(name || '').trim());
+}
+
+async function ensureCocktailInStoplist(cocktailName, reason = 'Недостаточно ингредиентов') {
+  const name = String(cocktailName || '').trim();
+  if (!name) return false;
+  const existing = await db.collection('stoplist')
+    .where('cocktailName', '==', name)
+    .limit(1)
+    .get();
+  if (!existing.empty) return false;
+  await db.collection('stoplist').add({
+    cocktailName: name,
+    reason,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    source: 'telegram-mini-app',
+    addedBy: 'system'
+  });
+  invalidateStoplistCache();
+  return true;
+}
+
+/** When an ingredient hits 0, put all cocktails that use it (stockRecipe) into stoplist */
+async function stoplistCocktailsForIngredient(ingredientName) {
+  const ing = String(ingredientName || '').trim();
+  if (!ing) return { added: 0, names: [] };
+  const cocktailsSnap = await db.collection('cocktails').get();
+  const addedNames = [];
+  for (const doc of cocktailsSnap.docs) {
+    const data = doc.data() || {};
+    const cocktailName = String(data.name || '').trim();
+    if (!cocktailName) continue;
+    const recipe = Array.isArray(data.stockRecipe) ? data.stockRecipe : [];
+    const uses = recipe.some((r) => String(r.ingredientName || '').trim() === ing);
+    if (!uses) continue;
+    const didAdd = await ensureCocktailInStoplist(
+      cocktailName,
+      `Недостаточно ингредиентов: ${ing}`
+    );
+    if (didAdd) addedNames.push(cocktailName);
+  }
+  if (addedNames.length) invalidateStoplistCache();
+  return { added: addedNames.length, names: addedNames };
 }
 
 async function createOrUpdateBillAdmin(userId, userName, orderData, orderId) {
@@ -1525,18 +1574,7 @@ async function deductIngredientsAdmin(cocktailName) {
     await batch.commit();
 
     if (needsStoplist) {
-      const existing = await db.collection('stoplist')
-        .where('cocktailName', '==', cocktailName)
-        .limit(1)
-        .get();
-      if (existing.empty) {
-        await db.collection('stoplist').add({
-          cocktailName,
-          reason: 'Недостаточно ингредиентов',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          source: 'telegram-mini-app'
-        });
-      }
+      await ensureCocktailInStoplist(cocktailName, 'Недостаточно ингредиентов');
     }
   } catch (error) {
     console.error('⚠️ Mini App: не удалось списать ингредиенты:', error.message);
@@ -2138,7 +2176,7 @@ app.post('/api/mini-app/admin/stoplist', async (req, res) => {
       const snap = await db.collection('stoplist').get();
       const items = snap.docs.map((doc) => ({
         id: doc.id,
-        cocktailName: doc.data().cocktailName,
+        cocktailName: String(doc.data().cocktailName || '').trim(),
         reason: doc.data().reason || ''
       }));
       return res.json({ success: true, items });
@@ -2152,6 +2190,7 @@ app.post('/api/mini-app/admin/stoplist', async (req, res) => {
       }
       const existing = await db.collection('stoplist').where('cocktailName', '==', cocktailName).limit(1).get();
       if (!existing.empty) {
+        invalidateStoplistCache();
         return res.json({ success: true, id: existing.docs[0].id, already: true });
       }
       const ref = await db.collection('stoplist').add({
@@ -2161,6 +2200,8 @@ app.post('/api/mini-app/admin/stoplist', async (req, res) => {
         source: 'telegram-mini-app',
         addedBy: session.userId
       });
+      invalidateStoplistCache();
+      await refreshStoplistCache(true);
       return res.json({ success: true, id: ref.id });
     }
 
@@ -2169,6 +2210,8 @@ app.post('/api/mini-app/admin/stoplist', async (req, res) => {
       const cocktailName = String(req.body?.cocktailName || '').trim();
       if (id) {
         await db.collection('stoplist').doc(id).delete();
+        invalidateStoplistCache();
+        await refreshStoplistCache(true);
         return res.json({ success: true });
       }
       if (cocktailName) {
@@ -2176,12 +2219,25 @@ app.post('/api/mini-app/admin/stoplist', async (req, res) => {
         const batch = db.batch();
         snap.forEach((doc) => batch.delete(doc.ref));
         await batch.commit();
+        invalidateStoplistCache();
+        await refreshStoplistCache(true);
         return res.json({ success: true, removed: snap.size });
       }
       return res.status(400).json({ success: false, error: 'Нужен id или cocktailName' });
     }
 
     res.status(400).json({ success: false, error: 'Неизвестное действие' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Public stoplist names for Mini App menu (no auth)
+app.get('/api/mini-app/stoplist', async (req, res) => {
+  try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const names = [...(await refreshStoplistCache(false))];
+    res.json({ success: true, names, count: names.length });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -2442,7 +2498,11 @@ app.post('/api/mini-app/admin/purchases', async (req, res) => {
       };
       if (ing.id) {
         await db.collection('ingredients').doc(String(ing.id)).set(payload, { merge: true });
-        return res.json({ success: true, id: String(ing.id) });
+        let stoplist = { added: 0, names: [] };
+        if (stock <= 0) {
+          stoplist = await stoplistCocktailsForIngredient(name);
+        }
+        return res.json({ success: true, id: String(ing.id), stoplist });
       }
       const existing = await db.collection('ingredients').where('name', '==', name).limit(1).get();
       if (!existing.empty) {
@@ -2450,7 +2510,11 @@ app.post('/api/mini-app/admin/purchases', async (req, res) => {
       }
       payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
       const ref = await db.collection('ingredients').add(payload);
-      return res.json({ success: true, id: ref.id });
+      let stoplist = { added: 0, names: [] };
+      if (stock <= 0) {
+        stoplist = await stoplistCocktailsForIngredient(name);
+      }
+      return res.json({ success: true, id: ref.id, stoplist });
     }
 
     if (action === 'delete') {
