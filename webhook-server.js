@@ -208,6 +208,8 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     service: 'AsafievBar Webhook Server'
   });
+  // Warm caches after response (do not block health)
+  try { refreshStoplistCache(false).catch(() => {}); } catch (_) { /* not ready yet */ }
 });
 
 // Диагностика переменных окружения
@@ -1193,6 +1195,34 @@ async function resolveMiniAppUser(req) {
   return { ok: false, reason: tg.reason || 'unauthorized' };
 }
 
+// In-memory stoplist cache — avoids Firestore roundtrip on every order
+const stoplistCache = { names: new Set(), at: 0, loading: null };
+async function refreshStoplistCache(force = false) {
+  const fresh = Date.now() - stoplistCache.at < 20000;
+  if (!force && fresh) return stoplistCache.names;
+  if (stoplistCache.loading) return stoplistCache.loading;
+  stoplistCache.loading = (async () => {
+    try {
+      const snap = await db.collection('stoplist').select('cocktailName').get();
+      stoplistCache.names = new Set(
+        snap.docs.map((d) => String(d.data().cocktailName || '').trim()).filter(Boolean)
+      );
+      stoplistCache.at = Date.now();
+    } catch (err) {
+      console.warn('stoplist cache refresh:', err.message);
+    } finally {
+      stoplistCache.loading = null;
+    }
+    return stoplistCache.names;
+  })();
+  return stoplistCache.loading;
+}
+
+async function isCocktailStoppedCached(name) {
+  const names = await refreshStoplistCache(false);
+  return names.has(String(name || '').trim());
+}
+
 async function createOrUpdateBillAdmin(userId, userName, orderData, orderId) {
   const billsSnapshot = await db.collection('bills')
     .where('userId', '==', userId)
@@ -1525,32 +1555,17 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Не указан коктейль или цена' });
     }
 
+    // Fast stoplist via memory cache (refreshed every ~20s)
+    if (await isCocktailStoppedCached(name)) {
+      return res.status(409).json({ success: false, error: 'Коктейль в стоп-листе' });
+    }
+
     const bonusAmount = Math.max(0, Number(bonusUsed) || 0);
     const finalPrice = Math.max(0, Number(price) || 0);
     const now = new Date();
     const displayName = user || session.displayName || 'Гость Telegram';
-
-    // Parallel: stoplist check + lightweight queue estimate (avoid slow IN queries)
-    const [stopSnap, recentSnap] = await Promise.all([
-      db.collection('stoplist').where('cocktailName', '==', name).limit(1).get(),
-      db.collection('orders').orderBy('createdAt', 'desc').limit(30).get().catch(() => null)
-    ]);
-    if (!stopSnap.empty) {
-      return res.status(409).json({ success: false, error: 'Коктейль в стоп-листе' });
-    }
-
-    let nextQueue = Number(queuePosition) || 0;
-    if (!nextQueue) {
-      if (recentSnap) {
-        const active = recentSnap.docs.filter((d) => {
-          const st = d.data().status;
-          return ['pending', 'confirmed', 'preparing', 'ready', 'accepted'].includes(st);
-        }).length;
-        nextQueue = active + 1;
-      } else {
-        nextQueue = 1;
-      }
-    }
+    // Skip Firestore queue scan — position is approximate and non-blocking for UX
+    const nextQueue = Math.max(1, Number(queuePosition) || 1);
 
     const orderData = {
       name,
@@ -1582,7 +1597,7 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       }
     }
 
-    // Respond fast; side-effects continue in background
+    // Respond immediately; side-effects continue in background
     res.json({
       success: true,
       orderId: orderRef.id,
@@ -1594,7 +1609,6 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       deductIngredientsAdmin(name)
     ]).catch((e) => console.warn('post-order side effects:', e.message));
 
-    // Notify bartender (alerts bot) — do not block client
     const queueInfoText = orderData.queuePosition > 0
       ? `🎯 *Позиция в очереди:* #${orderData.queuePosition}\n`
       : '';
