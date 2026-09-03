@@ -1171,26 +1171,120 @@
     }
   }
 
+  function formatUptime(sec) {
+    const s = Math.max(0, Number(sec) || 0);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    if (h > 48) return `${Math.floor(h / 24)}д ${h % 24}ч`;
+    if (h > 0) return `${h}ч ${m}м`;
+    return `${m}м`;
+  }
+
+  function monitorBadge(ok, status) {
+    if (ok || status === 'OK' || status === 'SET') return '<span class="monitor-ok">OK</span>';
+    if (status === 'EMPTY' || status === 'NOT SET') return '<span class="monitor-warn">НЕТ</span>';
+    return '<span class="monitor-bad">ОШИБКА</span>';
+  }
+
   async function refreshAdminMonitoring() {
     if (!isAdminUser()) return;
+    const box = els.adminMonitoringBox || document.getElementById('adminMonitoringBox');
+    const statsEl = document.getElementById('adminMonitoringStats');
+    if (box) box.innerHTML = '<div class="empty-state">Проверка системы…</div>';
     try {
+      const t0 = Date.now();
       const res = await fetch(`${state.apiBase}/api/mini-app/admin/monitoring`, {
         method: 'POST', headers: adminHeaders(), body: adminBody()
       });
+      const roundtrip = Date.now() - t0;
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Ошибка');
-      const s = data.status || {};
-      if (els.adminMonitoringBox) {
-        els.adminMonitoringBox.innerHTML = `
-          Сервер: <strong>${escapeHtml(s.server)}</strong><br>
-          Firebase: <strong>${escapeHtml(s.firebase)}</strong><br>
-          Alerts bot: <strong>${escapeHtml(s.alertsBot)}</strong><br>
-          Mini App bot: <strong>${escapeHtml(s.miniAppBot)}</strong><br>
-          <span class="order-time">${escapeHtml(s.timestamp || '')}</span>
+
+      const m = data.metrics || {};
+      const svc = data.services || {};
+      const host = data.host || {};
+      const api = svc.api || {};
+      const fb = svc.firebase || {};
+      const alerts = svc.alertsBot || {};
+      const mini = svc.miniAppBot || {};
+      const wh = svc.webhook || {};
+
+      if (statsEl) {
+        statsEl.innerHTML = `
+          <div class="stat"><span class="stat-label">Заказы сегодня</span><strong>${m.ordersToday ?? 0}</strong></div>
+          <div class="stat"><span class="stat-label">Выручка</span><strong>${m.revenueToday ?? 0} ₽</strong></div>
+          <div class="stat"><span class="stat-label">Активные</span><strong>${m.activeOrders ?? 0}</strong></div>
+        `;
+      }
+
+      if (box) {
+        box.innerHTML = `
+          <article class="monitor-card">
+            <div class="monitor-card-top">
+              <h4>API сервер</h4>
+              ${monitorBadge(true, api.status || 'OK')}
+            </div>
+            <p>URL: ${escapeHtml(state.apiBase)}</p>
+            <p>Uptime: ${escapeHtml(formatUptime(api.uptimeSec))} · Node ${escapeHtml(api.node || '—')}</p>
+            <p>Ответ API: ${api.responseMs ?? '—'} мс · до телефона: ${roundtrip} мс</p>
+            <p>RAM процесса: ${host.memory?.rssMb ?? '—'} МБ (heap ${host.memory?.heapMb ?? '—'} МБ)</p>
+            ${host.system ? `<p>VPS: свободно ${host.system.freeMb}/${host.system.totalMb} МБ · load ${host.system.load1} · CPU ${host.system.cpus}</p>` : ''}
+          </article>
+
+          <article class="monitor-card">
+            <div class="monitor-card-top">
+              <h4>Firebase</h4>
+              ${monitorBadge(fb.ok, fb.status)}
+            </div>
+            <p>Проект: ${escapeHtml(fb.projectId || '—')}</p>
+            <p>Задержка: ${fb.latencyMs != null ? fb.latencyMs + ' мс' : '—'}</p>
+            ${fb.error ? `<p>Ошибка: ${escapeHtml(fb.error)}</p>` : ''}
+          </article>
+
+          <article class="monitor-card">
+            <div class="monitor-card-top">
+              <h4>Alerts bot</h4>
+              ${monitorBadge(alerts.ok, alerts.status)}
+            </div>
+            <p>@${escapeHtml(alerts.username || '—')} · ${escapeHtml(alerts.name || '')}</p>
+            <p>getMe: ${alerts.ms != null ? alerts.ms + ' мс' : '—'}</p>
+            ${alerts.error ? `<p>Ошибка: ${escapeHtml(alerts.error)}</p>` : ''}
+          </article>
+
+          <article class="monitor-card">
+            <div class="monitor-card-top">
+              <h4>Mini App bot</h4>
+              ${monitorBadge(mini.ok, mini.status)}
+            </div>
+            <p>@${escapeHtml(mini.username || '—')} · ${escapeHtml(mini.name || '')}</p>
+            <p>Main Mini App (кнопка ОТКРЫТЬ): ${mini.hasMainWebApp ? 'включено' : 'выкл — BotFather'}</p>
+            <p>getMe: ${mini.ms != null ? mini.ms + ' мс' : '—'}</p>
+          </article>
+
+          <article class="monitor-card">
+            <div class="monitor-card-top">
+              <h4>Telegram webhook</h4>
+              ${monitorBadge(wh.ok, wh.status)}
+            </div>
+            <p>${escapeHtml(wh.url || 'не задан')}</p>
+            <p>Ожидают апдейты: ${wh.pending ?? 0}</p>
+            ${wh.lastError ? `<p>Последняя ошибка: ${escapeHtml(wh.lastError)}</p>` : '<p>Ошибок webhook нет</p>'}
+          </article>
+
+          <article class="monitor-card">
+            <div class="monitor-card-top">
+              <h4>Бар сейчас</h4>
+              <span class="monitor-ok">LIVE</span>
+            </div>
+            <p>Открытых счетов: ${m.openBills ?? 0}</p>
+            <p>В стоп-листе: ${m.stoplistCount ?? 0} · коктейлей: ${m.cocktailsCount ?? 0}</p>
+            <p>Ингредиенты: мало ${m.ingredientsLow ?? 0}, нет ${m.ingredientsOut ?? 0}</p>
+            <p class="order-time">${escapeHtml(data.status?.timestamp || '')}</p>
+          </article>
         `;
       }
     } catch (err) {
-      if (els.adminMonitoringBox) els.adminMonitoringBox.textContent = err.message;
+      if (box) box.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
     }
   }
 

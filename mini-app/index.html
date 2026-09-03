@@ -13,8 +13,8 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://telegram.org">
-  <link rel="preload" href="app.css?v=ingedit1" as="style">
-  <link rel="stylesheet" href="app.css?v=ingedit1">
+  <link rel="preload" href="app.css?v=monitor2" as="style">
+  <link rel="stylesheet" href="app.css?v=monitor2">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;600&display=swap" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;600&display=swap"></noscript>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -205,8 +205,9 @@
       </div>
 
       <div class="admin-pane" id="adminMonitoringPane">
-        <p class="admin-section-title">Мониторинг</p>
-        <div id="adminMonitoringBox" class="info-panel">Проверка системы…</div>
+        <p class="admin-section-title">Мониторинг системы</p>
+        <div id="adminMonitoringStats" class="stat-row" style="margin-bottom:12px"></div>
+        <div id="adminMonitoringBox" class="monitor-list">Проверка системы…</div>
         <button class="ghost auth-retry" id="adminMonitoringRefreshBtn" type="button">Обновить</button>
       </div>
     </section>
