@@ -2597,7 +2597,7 @@ autoSetupBtn?.addEventListener('click', async () => {
   
   try {
     // Шаг 1: Настройка URL webhook сервера
-    const railwayUrl = prompt('🌐 Введите URL сервера (например: https://bar-firebase.onrender.com):');
+    const railwayUrl = prompt('🌐 Введите URL сервера (например: https://asafievbar.duckdns.org):');
     
     if (!railwayUrl) {
       showError('❌ URL не введен. Автонастройка отменена.');
