@@ -1659,12 +1659,75 @@ app.post('/api/mini-app/setup-menu-button', async (req, res) => {
   }
 });
 
+async function ensureTelegramAdmin(telegramId) {
+  const id = String(telegramId || '').trim();
+  if (!id) throw new Error('telegramId required');
+
+  const uid = `tg_${id}`;
+  const payload = {
+    telegramId: Number(id) || id,
+    role: 'admin',
+    source: 'telegram-mini-app',
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  };
+
+  await db.collection('users').doc(uid).set(payload, { merge: true });
+
+  // Also upgrade any linked docs with the same telegramId
+  try {
+    const snap = await db.collection('users').where('telegramId', '==', Number(id)).get();
+    const batch = db.batch();
+    snap.forEach((doc) => {
+      batch.set(doc.ref, { role: 'admin', updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    });
+    // string form too
+    const snap2 = await db.collection('users').where('telegramId', '==', id).get();
+    snap2.forEach((doc) => {
+      batch.set(doc.ref, { role: 'admin', updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    });
+    await batch.commit();
+  } catch (err) {
+    console.warn('ensureTelegramAdmin linked users:', err.message);
+  }
+
+  return { uid, telegramId: id, role: 'admin' };
+}
+
+// Grant/ensure admin for owner Telegram id
+app.post('/api/mini-app/ensure-admin', async (req, res) => {
+  try {
+    const requestedId = String(req.body?.telegramId || TELEGRAM_CHAT_ID || '1743362083');
+    const allowed = new Set(
+      String(process.env.TELEGRAM_ADMIN_IDS || TELEGRAM_CHAT_ID || '1743362083')
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+    );
+    allowed.add('1743362083');
+
+    if (!allowed.has(requestedId)) {
+      return res.status(403).json({ success: false, error: 'Этот Telegram ID не в списке админов' });
+    }
+
+    const result = await ensureTelegramAdmin(requestedId);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('❌ ensure-admin error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Запуск сервера
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Webhook сервер запущен на порту ${PORT}`);
   console.log(`📱 Telegram webhook: ${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://your-railway-app.railway.app'}/telegram-webhook`);
   console.log(`📲 Mini App: ${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://your-railway-app.railway.app'}/mini-app/`);
   console.log(`🔍 Health check: ${process.env.RAILWAY_PUBLIC_DOMAIN || 'https://your-railway-app.railway.app'}/health`);
+
+  // Ensure owner is admin in Firestore on boot
+  ensureTelegramAdmin(process.env.TELEGRAM_CHAT_ID || '1743362083')
+    .then((r) => console.log('👑 Owner admin ensured:', r.uid))
+    .catch((e) => console.warn('Owner admin ensure failed:', e.message));
 });
 
 module.exports = app;
