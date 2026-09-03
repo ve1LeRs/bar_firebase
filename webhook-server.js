@@ -1538,6 +1538,19 @@ app.post('/api/mini-app/create-order', async (req, res) => {
     const now = new Date();
     const displayName = user || session.displayName || 'Гость Telegram';
 
+    let nextQueue = Number(queuePosition) || 0;
+    if (!nextQueue) {
+      try {
+        const active = await db.collection('orders')
+          .where('status', 'in', ['pending', 'confirmed', 'preparing', 'ready'])
+          .select()
+          .get();
+        nextQueue = active.size + 1;
+      } catch (_) {
+        nextQueue = 1;
+      }
+    }
+
     const orderData = {
       name,
       user: displayName,
@@ -1550,7 +1563,7 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       discount: bonusAmount,
       bonusUsed: bonusAmount,
       promoCode: null,
-      queuePosition: Number(queuePosition) || 0,
+      queuePosition: nextQueue,
       cocktailId: cocktailId || '',
       source,
       telegramId: session.telegramId || null,
@@ -1568,17 +1581,23 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       }
     }
 
-    await Promise.all([
+    // Respond fast; side-effects continue in background
+    res.json({
+      success: true,
+      orderId: orderRef.id,
+      queuePosition: orderData.queuePosition
+    });
+
+    Promise.all([
       createOrUpdateBillAdmin(userId, displayName, orderData, orderRef.id),
       deductIngredientsAdmin(name)
-    ]);
+    ]).catch((e) => console.warn('post-order side effects:', e.message));
 
-    // Notify bartender via existing Telegram flow
-    try {
-      const queueInfoText = orderData.queuePosition > 0
-        ? `🎯 *Позиция в очереди:* #${orderData.queuePosition}\n`
-        : '';
-      const message = `
+    // Notify bartender (alerts bot) — do not block client
+    const queueInfoText = orderData.queuePosition > 0
+      ? `🎯 *Позиция в очереди:* #${orderData.queuePosition}\n`
+      : '';
+    const message = `
 🍸 *Новый заказ (Mini App)!*
 
 🍸 *Коктейль:* ${orderData.name}
@@ -1587,45 +1606,40 @@ app.post('/api/mini-app/create-order', async (req, res) => {
 📊 *Статус:* Ожидание
 ${queueInfoText}🕒 *Время:* ${orderData.displayTime}
 🆔 *ID заказа:* ${orderRef.id}
-      `.trim();
+    `.trim();
 
-      const inlineKeyboard = {
-        inline_keyboard: [
-          [
-            { text: '👨‍🍳 Готовится', callback_data: `preparing_${orderRef.id}` },
-            { text: '🍸 Готов', callback_data: `ready_${orderRef.id}` }
-          ],
-          [
-            { text: '❌ Отменить', callback_data: `cancelled_${orderRef.id}` }
-          ]
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [
+          { text: '👨‍🍳 Готовится', callback_data: `preparing_${orderRef.id}` },
+          { text: '🍸 Готов', callback_data: `ready_${orderRef.id}` }
+        ],
+        [
+          { text: '❌ Отменить', callback_data: `cancelled_${orderRef.id}` }
         ]
-      };
+      ]
+    };
 
-      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: TELEGRAM_CHAT_ID,
-          text: message,
-          parse_mode: 'Markdown',
-          reply_markup: inlineKeyboard
-        })
-      });
-    } catch (notifyError) {
+    fetch(`https://api.telegram.org/bot${TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: message,
+        parse_mode: 'Markdown',
+        reply_markup: inlineKeyboard
+      })
+    }).catch((notifyError) => {
       console.error('⚠️ Mini App: заказ создан, но Telegram notify failed:', notifyError.message);
-    }
-
-    res.json({
-      success: true,
-      orderId: orderRef.id,
-      queuePosition: orderData.queuePosition
     });
   } catch (error) {
     console.error('❌ Mini App create-order error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Ошибка создания заказа'
-    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Ошибка создания заказа'
+      });
+    }
   }
 });
 
@@ -1812,12 +1826,10 @@ app.post('/api/mini-app/admin/orders', async (req, res) => {
     }
 
     let orders = [];
-    try {
-      const snap = await db.collection('orders')
-        .where('status', 'in', ['pending', 'confirmed', 'preparing', 'ready'])
-        .limit(40)
-        .get();
-      orders = snap.docs.map((doc) => {
+    // Avoid composite/IN index issues: read recent docs and filter in memory
+    const snap = await db.collection('orders').limit(80).get();
+    orders = snap.docs
+      .map((doc) => {
         const d = doc.data();
         return {
           id: doc.id,
@@ -1826,27 +1838,12 @@ app.post('/api/mini-app/admin/orders', async (req, res) => {
           status: d.status,
           price: d.price,
           displayTime: d.displayTime,
-          queuePosition: d.queuePosition || 0
+          queuePosition: d.queuePosition || 0,
+          createdAtMs: d.createdAt?.toMillis?.() || 0
         };
-      });
-      orders.sort((a, b) => (a.queuePosition || 99) - (b.queuePosition || 99));
-    } catch (err) {
-      const snap = await db.collection('orders').limit(40).get();
-      orders = snap.docs
-        .map((doc) => {
-          const d = doc.data();
-          return {
-            id: doc.id,
-            name: d.name,
-            user: d.user,
-            status: d.status,
-            price: d.price,
-            displayTime: d.displayTime,
-            queuePosition: d.queuePosition || 0
-          };
-        })
-        .filter((o) => ['pending', 'confirmed', 'preparing', 'ready'].includes(o.status));
-    }
+      })
+      .filter((o) => ['pending', 'confirmed', 'preparing', 'ready'].includes(o.status));
+    orders.sort((a, b) => (a.queuePosition || 99) - (b.queuePosition || 99) || b.createdAtMs - a.createdAtMs);
 
     res.json({ success: true, orders });
   } catch (error) {
