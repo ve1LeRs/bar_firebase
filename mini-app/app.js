@@ -397,21 +397,25 @@
   }
 
   async function refreshAdminOrders() {
-    if (!isAdminUser() || !canOrder()) return;
+    if (!isAdminUser()) return;
+    if (!els.adminOrdersList) return;
+    if (!tg?.initData) {
+      els.adminOrdersList.innerHTML = '<div class="empty-state">Нет Telegram-сессии — откройте из бота</div>';
+      return;
+    }
+    els.adminOrdersList.innerHTML = '<div class="empty-state">Загрузка заказов…</div>';
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/admin/orders`, {
         method: 'POST',
         headers: adminHeaders(),
         body: adminBody()
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Ошибка загрузки');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || `Ошибка ${res.status}`);
       renderAdminOrders(data.orders || []);
     } catch (err) {
       console.warn(err);
-      if (els.adminOrdersList) {
-        els.adminOrdersList.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
-      }
+      els.adminOrdersList.innerHTML = `<div class="empty-state">${escapeHtml(err.message || 'Не удалось загрузить')}</div>`;
     }
   }
 
@@ -488,7 +492,7 @@
   }
 
   async function refreshAdminStoplist() {
-    if (!isAdminUser() || !canOrder()) return;
+    if (!isAdminUser()) return;
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/admin/stoplist`, {
         method: 'POST',
@@ -615,7 +619,7 @@
   }
 
   async function refreshAdminBills() {
-    if (!isAdminUser() || !canOrder()) return;
+    if (!isAdminUser()) return;
     const filter = state.billFilter || 'open';
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/admin/bills`, {
@@ -680,7 +684,7 @@
   }
 
   async function refreshAdminCocktails() {
-    if (!isAdminUser() || !canOrder()) return;
+    if (!isAdminUser()) return;
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/admin/cocktails`, {
         method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'list' })
@@ -805,7 +809,7 @@
   }
 
   async function refreshAdminPromos() {
-    if (!isAdminUser() || !canOrder()) return;
+    if (!isAdminUser()) return;
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/admin/promos`, {
         method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'list' })
@@ -890,7 +894,7 @@
   }
 
   async function refreshAdminBonuses() {
-    if (!isAdminUser() || !canOrder()) return;
+    if (!isAdminUser()) return;
     const usersBox = document.getElementById('adminBonusUsersList');
     const statsBox = document.getElementById('adminBonusStats');
     if (usersBox) usersBox.innerHTML = '<div class="empty-state">Загрузка…</div>';
@@ -964,7 +968,7 @@
   }
 
   async function refreshAdminPurchases() {
-    if (!isAdminUser() || !canOrder()) return;
+    if (!isAdminUser()) return;
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/admin/purchases`, {
         method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'list' })
@@ -1092,7 +1096,7 @@
   }
 
   async function refreshAdminMonitoring() {
-    if (!isAdminUser() || !canOrder()) return;
+    if (!isAdminUser()) return;
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/admin/monitoring`, {
         method: 'POST', headers: adminHeaders(), body: adminBody()
