@@ -1127,7 +1127,7 @@
     if (startKeepAlive._timer) return;
     startKeepAlive._timer = setInterval(() => {
       fetch(`${state.apiBase}/health`, { cache: 'no-store', mode: 'cors' }).catch(() => {});
-    }, 4 * 60 * 1000);
+    }, 2 * 60 * 1000);
   }
 
   function updateProfileUI() {
@@ -1318,6 +1318,8 @@
       showToast('Коктейль временно недоступен');
       return;
     }
+    // Warm API while user fills the sheet
+    wakeApi();
     if (!canOrder()) {
       if (state.authError === 'timeout' || state.authError === 'auth_failed') {
         showToast('Сервер ещё не готов — повторяем вход');
@@ -1484,27 +1486,52 @@
     const finalPrice = Math.max(0, price - bonusUsed);
 
     els.confirmOrderBtn.disabled = true;
-    setLoader(true);
+    wakeApi();
+
+    const displayName =
+      [state.user?.first_name, state.user?.last_name].filter(Boolean).join(' ') ||
+      state.firebaseUser?.displayName ||
+      'Гость Telegram';
+
+    const payload = {
+      initData: tg.initData,
+      cocktailId: cocktail.id,
+      name: cocktail.name,
+      price: finalPrice,
+      originalPrice: price,
+      bonusUsed,
+      user: displayName,
+      image: cocktail.image || '',
+      source: 'telegram-mini-app'
+    };
+
+    // Optimistic UX: close sheet immediately, confirm in background
+    if (bonusUsed > 0) {
+      state.bonusBalance = Math.max(0, state.bonusBalance - bonusUsed);
+      updateProfileUI();
+    }
+    haptic('medium');
+    closeOrderSheet();
+    showToast('Отправляем заказ…');
+    switchView('orders');
+    // Optimistic placeholder in orders list
+    if (els.ordersList && !els.ordersList.querySelector('[data-optimistic]')) {
+      const pending = document.createElement('article');
+      pending.className = 'order-card';
+      pending.dataset.optimistic = '1';
+      pending.innerHTML = `
+        <div class="order-top">
+          <div>
+            <p class="order-name">${escapeHtml(cocktail.name)}</p>
+            <p class="order-time">Отправка…</p>
+          </div>
+          <span class="status pending">Отправка</span>
+        </div>
+      `;
+      els.ordersList.prepend(pending);
+    }
 
     try {
-      // Queue position is computed on server — don't block on extra roundtrips
-      const displayName =
-        [state.user?.first_name, state.user?.last_name].filter(Boolean).join(' ') ||
-        state.firebaseUser?.displayName ||
-        'Гость Telegram';
-
-      const payload = {
-        initData: tg.initData,
-        cocktailId: cocktail.id,
-        name: cocktail.name,
-        price: finalPrice,
-        originalPrice: price,
-        bonusUsed,
-        user: displayName,
-        image: cocktail.image || '',
-        source: 'telegram-mini-app'
-      };
-
       const res = await fetchWithTimeout(
         `${state.apiBase}/api/mini-app/create-order`,
         {
@@ -1512,7 +1539,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         },
-        25000
+        20000
       );
 
       const data = await res.json();
@@ -1520,24 +1547,21 @@
         throw new Error(data.error || 'Не удалось создать заказ');
       }
 
-      if (bonusUsed > 0) {
-        state.bonusBalance = Math.max(0, state.bonusBalance - bonusUsed);
-        updateProfileUI();
-      }
-
-      haptic('medium');
-      closeOrderSheet();
       showToast(`Заказ принят · очередь #${data.queuePosition || '—'}`);
-      switchView('orders');
       refreshOrders();
       refreshProfile();
     } catch (err) {
       console.error(err);
+      // Rollback optimistic bonus spend
+      if (bonusUsed > 0) {
+        state.bonusBalance += bonusUsed;
+        updateProfileUI();
+      }
+      document.querySelector('[data-optimistic]')?.remove();
       showToast(err.name === 'AbortError' ? 'Сервер долго отвечает, попробуйте ещё раз' : (err.message || 'Ошибка заказа'));
       haptic('heavy');
     } finally {
       els.confirmOrderBtn.disabled = false;
-      setLoader(false);
     }
   }
 
