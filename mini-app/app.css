@@ -549,6 +549,20 @@ body.has-admin .tabbar {
   gap: 8px;
   overflow-x: auto;
   padding-bottom: 12px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  flex-wrap: nowrap;
+}
+
+.admin-subtabs::-webkit-scrollbar { display: none; }
+
+.admin-subtabs .filter {
+  flex: 0 0 auto;
+}
+
+.admin-pane {
+  position: relative;
+  z-index: 1;
 }
 
 .admin-pane[hidden] {
@@ -641,9 +655,9 @@ body.has-admin .tabbar {
   right: 0;
   bottom: 0;
   z-index: 40;
-  max-height: min(88vh, 720px);
+  max-height: min(92dvh, 820px);
   overflow: auto;
-  padding: 10px 16px calc(18px + var(--safe-bottom));
+  padding: 10px 16px calc(28px + var(--safe-bottom) + 56px);
   border-radius: 24px 24px 0 0;
   background: var(--bg-elevated);
   border-top: 1px solid var(--line);
@@ -656,6 +670,11 @@ body.has-admin .tabbar {
   transform: translateY(0);
 }
 
+body.sheet-open .tabbar {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .sheet-handle {
   width: 42px;
   height: 4px;
@@ -666,27 +685,29 @@ body.has-admin .tabbar {
 
 .sheet-media {
   width: 100%;
-  aspect-ratio: 4 / 3;
-  max-height: min(42vh, 320px);
+  min-height: 180px;
+  max-height: none;
   border-radius: 16px;
   margin-bottom: 12px;
   overflow: hidden;
   background:
     linear-gradient(145deg, rgba(212, 163, 92, 0.18), rgba(40, 28, 18, 0.95));
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .sheet-media img {
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: 52dvh;
   object-fit: contain;
   object-position: center;
   display: block;
 }
 
 .sheet-media.is-empty {
-  min-height: 120px;
+  min-height: 140px;
 }
 
 .sheet h3 {
