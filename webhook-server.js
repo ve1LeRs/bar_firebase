@@ -72,9 +72,13 @@ app.use('/m', express.static(path.join(__dirname, 'mini-app'), {
   extensions: ['html'],
   etag: false,
   lastModified: false,
-  setHeaders: (res) => {
+  setHeaders: (res, filePath) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    if (String(filePath).endsWith('.html')) {
+      res.setHeader('Clear-Site-Data', '"cache"');
+    }
   }
 }));
 app.get('/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'logo.png')));
@@ -194,10 +198,15 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'polish1';
+
+function alertsBotToken() {
+  return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
+}
 
 /** Outbound Telegram helper — logs + blocks junk keep-alive dots */
 async function sendTelegramAlert(text, options = {}) {
-  const token = options.token || TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
+  const token = options.token || alertsBotToken();
   const chatId = options.chatId || TELEGRAM_CHAT_ID;
   const trimmed = String(text ?? '').trim();
   if (!token || !chatId) {
@@ -551,8 +560,7 @@ app.post('/notify-telegram', async (req, res) => {
 
     const telegramResult = await sendTelegramAlert(message, {
       parse_mode: 'HTML',
-      reply_markup: inlineKeyboard,
-      token: TELEGRAM_BOT_TOKEN
+      reply_markup: inlineKeyboard
     });
     
     if (telegramResult.ok) {
@@ -703,8 +711,7 @@ app.post('/send-purchase-list', async (req, res) => {
     
     // Отправляем сообщение в Telegram
     const telegramResult = await sendTelegramAlert(message, {
-      parse_mode: 'Markdown',
-      token: TELEGRAM_BOT_TOKEN
+      parse_mode: 'Markdown'
     });
     
     if (telegramResult.ok) {
@@ -734,7 +741,7 @@ app.post('/send-purchase-list', async (req, res) => {
 function getMiniAppPublicUrl() {
   const base = (process.env.PUBLIC_BASE_URL || 'https://asafievbar.duckdns.org').replace(/\/$/, '');
   // /m/ is a fresh alias — Telegram WebView often keeps a stale /mini-app/ shell
-  return `${base}/m/?v=r0904`;
+  return `${base}/m/?v=${MINI_APP_ASSET_VERSION}`;
 }
 
 const MINIAPP_BOT_DESCRIPTION =
@@ -920,26 +927,53 @@ async function handleCallbackQuery(callbackQuery) {
 
 // Получение следующей позиции в очереди
 async function getNextQueuePosition() {
+  const active = ['pending', 'confirmed', 'preparing', 'ready'];
   try {
-    const activeOrdersSnapshot = await db.collection('orders')
-      .where('status', 'in', ['confirmed', 'preparing', 'ready'])
+    const snap = await db.collection('orders')
+      .where('status', 'in', active)
       .orderBy('queuePosition', 'desc')
       .limit(1)
       .get();
-    
-    if (activeOrdersSnapshot.empty) {
-      return 1; // Первый заказ в очереди
-    }
-    
-    const lastOrder = activeOrdersSnapshot.docs[0];
-    const lastPosition = lastOrder.data().queuePosition || 0;
-    return lastPosition + 1;
-    
+
+    if (snap.empty) return 1;
+    const lastPosition = Number(snap.docs[0].data().queuePosition) || 0;
+    return Math.max(1, lastPosition + 1);
   } catch (error) {
-    console.error('❌ Ошибка получения позиции в очереди:', error);
-    // Fallback: используем timestamp как позицию
-    return Date.now();
+    console.warn('queuePosition orderBy failed, counting active:', error.message);
+    try {
+      const snap = await db.collection('orders')
+        .where('status', 'in', active)
+        .limit(200)
+        .get();
+      return snap.size + 1;
+    } catch (err2) {
+      console.error('❌ Ошибка получения позиции в очереди:', err2.message);
+      return Math.floor(Date.now() / 1000) % 100000;
+    }
   }
+}
+
+async function resolveMenuCocktailPrice({ cocktailId, name }) {
+  try {
+    if (cocktailId) {
+      const doc = await db.collection('cocktails').doc(String(cocktailId)).get();
+      if (doc.exists) {
+        const p = Number(doc.data()?.price);
+        if (Number.isFinite(p) && p >= 0) return p;
+      }
+    }
+    const nm = String(name || '').trim();
+    if (nm) {
+      const snap = await db.collection('cocktails').where('name', '==', nm).limit(1).get();
+      if (!snap.empty) {
+        const p = Number(snap.docs[0].data()?.price);
+        if (Number.isFinite(p) && p >= 0) return p;
+      }
+    }
+  } catch (err) {
+    console.warn('resolveMenuCocktailPrice:', err.message);
+  }
+  return null;
 }
 
 // Обновление позиций в очереди после завершения заказа
@@ -1179,11 +1213,12 @@ function billTotalFromItems(items) {
 // Ответ на callback query (обязательно вызвать, иначе у пользователя крутится загрузка на кнопке)
 async function answerCallbackQuery(callbackQueryId, text, showAlert = false) {
   try {
-    if (!TELEGRAM_BOT_TOKEN) {
-      console.error('❌ TELEGRAM_BOT_TOKEN не задан');
+    const token = alertsBotToken();
+    if (!token) {
+      console.error('❌ Alerts bot token не задан');
       return;
     }
-    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+    const response = await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1219,11 +1254,12 @@ async function updateTelegramMessage(messageId, orderId, newStatus, orderData, c
     });
     const inlineKeyboard = buildOrderActionKeyboard(orderId, newStatus);
 
-    if (!TELEGRAM_BOT_TOKEN || !chatId) {
-      console.error('❌ TELEGRAM_BOT_TOKEN или chat_id не заданы');
+    const token = alertsBotToken();
+    if (!token || !chatId) {
+      console.error('❌ Alerts bot token или chat_id не заданы');
       return;
     }
-    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`, {
+    const response = await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1494,7 +1530,14 @@ function invalidateStoplistCache() {
   stoplistCache.at = 0;
   stoplistCache.names = new Set();
   stoplistCache.loading = null;
-  try { menuBootstrapCache.at = 0; menuBootstrapCache.payload = null; } catch (_) { /* defined later */ }
+  invalidateMenuBootstrapCache();
+}
+
+function invalidateMenuBootstrapCache() {
+  try {
+    menuBootstrapCache.at = 0;
+    menuBootstrapCache.payload = null;
+  } catch (_) { /* defined later */ }
 }
 
 async function refreshStoplistCache(force = false) {
@@ -2181,8 +2224,8 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       source = 'telegram-mini-app'
     } = req.body || {};
 
-    if (!name || price == null) {
-      return res.status(400).json({ success: false, error: 'Не указан коктейль или цена' });
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Не указан коктейль' });
     }
 
     // Fast stoplist via memory cache (refreshed every ~20s)
@@ -2190,12 +2233,22 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       return res.status(409).json({ success: false, error: 'Коктейль в стоп-листе' });
     }
 
+    const menuPrice = await resolveMenuCocktailPrice({ cocktailId, name });
+    let listedPrice = menuPrice;
+    if (listedPrice == null) {
+      const fallback = Number(originalPrice != null ? originalPrice : price);
+      if (!Number.isFinite(fallback) || fallback < 0) {
+        return res.status(400).json({ success: false, error: 'Коктейль не найден в меню' });
+      }
+      console.warn('create-order: menu price missing for', name, '— fallback', fallback);
+      listedPrice = fallback;
+    }
+
     const bonusAmount = Math.max(0, Number(bonusUsed) || 0);
-    const finalPrice = Math.max(0, Number(price) || 0);
+    const finalPrice = Math.max(0, listedPrice - bonusAmount);
     const now = new Date();
     const displayName = user || session.displayName || 'Гость Telegram';
-    // Skip Firestore queue scan — position is approximate and non-blocking for UX
-    const nextQueue = Math.max(1, Number(queuePosition) || 1);
+    const nextQueue = await getNextQueuePosition();
 
     const orderData = {
       name,
@@ -2205,7 +2258,7 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       image: image || '',
       status: 'pending',
       price: finalPrice,
-      originalPrice: Number(originalPrice) != null ? Number(originalPrice) : finalPrice + bonusAmount,
+      originalPrice: listedPrice,
       discount: bonusAmount,
       bonusUsed: bonusAmount,
       promoCode: null,
@@ -2284,8 +2337,7 @@ app.post('/api/mini-app/create-order', async (req, res) => {
 // Helper: configure Telegram Menu Button to open Mini App
 app.post('/api/mini-app/setup-menu-button', async (req, res) => {
   try {
-    const miniAppUrl = (req.body?.url || '').trim() ||
-      `${req.protocol}://${req.get('host')}/mini-app/`;
+    const miniAppUrl = (req.body?.url || '').trim() || getMiniAppPublicUrl();
 
     const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_MINIAPP_BOT_TOKEN}/setChatMenuButton`, {
       method: 'POST',
@@ -2323,8 +2375,7 @@ app.post('/api/mini-app/setup-menu-button', async (req, res) => {
 app.post('/api/mini-app/setup-bot-profile', async (req, res) => {
   try {
     const token = TELEGRAM_MINIAPP_BOT_TOKEN;
-    const miniAppUrl = (req.body?.url || '').trim() ||
-      'https://asafievbar.duckdns.org/mini-app/?v=domain1';
+    const miniAppUrl = (req.body?.url || '').trim() || getMiniAppPublicUrl();
     const name = req.body?.name || 'AsafievBar';
     const shortDescription = req.body?.shortDescription ||
       'Коктейли AsafievBar — нажмите «Открыть»';
@@ -2965,6 +3016,7 @@ app.post('/api/mini-app/admin/cocktails', async (req, res) => {
       const id = String(req.body?.id || '');
       if (!id) return res.status(400).json({ success: false, error: 'id required' });
       await db.collection('cocktails').doc(id).delete();
+      invalidateMenuBootstrapCache();
       return res.json({ success: true });
     }
 
@@ -3007,10 +3059,12 @@ app.post('/api/mini-app/admin/cocktails', async (req, res) => {
 
       if (c.id) {
         await db.collection('cocktails').doc(String(c.id)).set(payload, { merge: true });
+        invalidateMenuBootstrapCache();
         return res.json({ success: true, id: String(c.id) });
       }
       payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
       const ref = await db.collection('cocktails').add(payload);
+      invalidateMenuBootstrapCache();
       return res.json({ success: true, id: ref.id });
     }
 
@@ -3443,6 +3497,30 @@ app.post('/api/mini-app/ensure-admin', async (req, res) => {
   }
 });
 
+async function ensureAlertsBotWebhook() {
+  const token = alertsBotToken();
+  if (!token) {
+    console.warn('⚠️ Alerts bot token missing — skip alerts webhook');
+    return;
+  }
+  const publicBase = (process.env.PUBLIC_BASE_URL || 'https://asafievbar.duckdns.org').replace(/\/$/, '');
+  const webhookUrl = `${publicBase}/telegram-webhook`;
+  try {
+    const setRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: webhookUrl,
+        allowed_updates: ['message', 'callback_query'],
+        drop_pending_updates: false
+      })
+    }).then((r) => r.json());
+    console.log('📱 Alerts webhook:', setRes.ok ? webhookUrl : setRes);
+  } catch (e) {
+    console.warn('⚠️ ensureAlertsBotWebhook failed:', e.message);
+  }
+}
+
 async function ensureMiniAppBotWebhook() {
   if (!TELEGRAM_MINIAPP_BOT_TOKEN) {
     console.warn('⚠️ TELEGRAM_MINIAPP_BOT_TOKEN missing — skip mini app webhook');
@@ -3499,7 +3577,7 @@ app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   const publicBase = process.env.PUBLIC_BASE_URL || process.env.RAILWAY_PUBLIC_DOMAIN || 'https://asafievbar.duckdns.org';
   console.log(`📱 Telegram webhook: ${publicBase}/telegram-webhook`);
   console.log(`📲 Mini App webhook: ${publicBase}/telegram-miniapp-webhook`);
-  console.log(`📲 Mini App: ${publicBase}/mini-app/`);
+  console.log(`📲 Mini App: ${getMiniAppPublicUrl()}`);
   console.log(`🔍 Health check: ${publicBase}/health`);
 
   // Ensure owner is admin in Firestore on boot
@@ -3507,6 +3585,7 @@ app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
     .then((r) => console.log('👑 Owner admin ensured:', r.uid))
     .catch((e) => console.warn('Owner admin ensure failed:', e.message));
 
+  ensureAlertsBotWebhook().catch((e) => console.warn('Alerts webhook ensure failed:', e.message));
   ensureMiniAppBotWebhook().catch((e) => console.warn('Mini App webhook ensure failed:', e.message));
 });
 

@@ -11,7 +11,7 @@
   };
 
   const DEFAULT_API = 'https://asafievbar.duckdns.org';
-  const MENU_CACHE_KEY = 'asafiev_mini_menu_v3';
+  const MENU_CACHE_KEY = 'asafiev_mini_menu_v4';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
   const STATUS_LABELS = {
     pending: 'Ожидание',
@@ -64,6 +64,7 @@
     adminTab: 'cocktails',
     knownOrderStatuses: new Map(),
     promptedRatingOrders: new Set(),
+    pendingRatingOrders: new Map(),
     billExpandPrefs: new Map(),
     currentView: 'menu',
     ratingOrder: null,
@@ -528,14 +529,17 @@
     return JSON.stringify({ initData: tg?.initData || '', ...extra });
   }
 
-  async function refreshAdminOrders() {
+  async function refreshAdminOrders({ silent = false } = {}) {
     if (!isAdminUser()) return;
     if (!els.adminOrdersList) return;
     if (!tg?.initData) {
       els.adminOrdersList.innerHTML = '<div class="empty-state">Нет Telegram-сессии — откройте из бота</div>';
       return;
     }
-    els.adminOrdersList.innerHTML = '<div class="empty-state">Загрузка заказов…</div>';
+    const hasCards = Boolean(els.adminOrdersList.querySelector('.order-card'));
+    if (!silent && !hasCards) {
+      els.adminOrdersList.innerHTML = '<div class="empty-state">Загрузка заказов…</div>';
+    }
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/admin/orders`, {
         method: 'POST',
@@ -547,7 +551,9 @@
       renderAdminOrders(data.orders || []);
     } catch (err) {
       console.warn(err);
-      els.adminOrdersList.innerHTML = `<div class="empty-state">${escapeHtml(err.message || 'Не удалось загрузить')}</div>`;
+      if (!hasCards) {
+        els.adminOrdersList.innerHTML = `<div class="empty-state">${escapeHtml(err.message || 'Не удалось загрузить')}</div>`;
+      }
     }
   }
 
@@ -1539,7 +1545,7 @@
     if (state.adminOrdersTimer) clearInterval(state.adminOrdersTimer);
     state.adminOrdersTimer = setInterval(() => {
       if (document.querySelector('.view.active')?.dataset.view === 'admin' && state.adminTab === 'orders') {
-        refreshAdminOrders();
+        refreshAdminOrders({ silent: true });
       }
     }, 5000);
   }
@@ -2018,6 +2024,8 @@
     els.ratingSheet?.classList.remove('open');
     els.ratingSheet?.setAttribute('aria-hidden', 'true');
     if (els.ratingBackdrop) els.ratingBackdrop.hidden = true;
+    // After skip/submit, show next queued rating if any
+    setTimeout(() => flushPendingRating(), 280);
   }
 
   async function submitRating({ skip = false } = {}) {
@@ -2071,10 +2079,7 @@
   function noteOrderStatusChanges(orders) {
     const list = Array.isArray(orders) ? orders : [];
     const kitchen = new Set(['pending', 'confirmed', 'preparing']);
-    const busy =
-      state.currentView === 'admin' ||
-      els.ratingSheet?.classList.contains('open') ||
-      els.sheet?.classList.contains('open');
+    const busy = isRatingUiBusy();
 
     list.forEach((order) => {
       const id = order.id;
@@ -2088,18 +2093,48 @@
           haptic('light');
         }
         const becameReady = status === 'ready' && kitchen.has(prev);
-        if (
-          becameReady &&
-          !order.rated &&
-          !busy &&
-          !state.promptedRatingOrders.has(id)
-        ) {
-          state.promptedRatingOrders.add(id);
-          openRatingSheet(order);
+        if (becameReady && !order.rated && !state.promptedRatingOrders.has(id)) {
+          if (busy) {
+            state.pendingRatingOrders.set(id, order);
+          } else {
+            state.promptedRatingOrders.add(id);
+            state.pendingRatingOrders.delete(id);
+            openRatingSheet(order);
+          }
         }
+      }
+      // Keep pending rating payload fresh while still ready
+      if (status === 'ready' && state.pendingRatingOrders.has(id) && !order.rated) {
+        state.pendingRatingOrders.set(id, order);
+      }
+      if (status !== 'ready' || order.rated) {
+        state.pendingRatingOrders.delete(id);
       }
       state.knownOrderStatuses.set(id, status);
     });
+
+    flushPendingRating();
+  }
+
+  function isRatingUiBusy() {
+    return (
+      state.currentView === 'admin' ||
+      els.ratingSheet?.classList.contains('open') ||
+      els.sheet?.classList.contains('open')
+    );
+  }
+
+  function flushPendingRating() {
+    if (isRatingUiBusy()) return;
+    if (!state.pendingRatingOrders?.size) return;
+    for (const [id, order] of state.pendingRatingOrders) {
+      state.pendingRatingOrders.delete(id);
+      if (!order || order.rated || state.promptedRatingOrders.has(id)) continue;
+      if ((order.status || 'ready') !== 'ready') continue;
+      state.promptedRatingOrders.add(id);
+      openRatingSheet(order);
+      break;
+    }
   }
 
   function getCategory(cocktail) {
@@ -2202,6 +2237,7 @@
     document.body.classList.remove('sheet-open');
     state.selected = null;
     syncKeyboardLayout();
+    flushPendingRating();
   }
 
   function updateSheetTotal() {
@@ -2268,27 +2304,6 @@
       console.error(err);
       state.openBillTotal = null;
       updateProfileUI();
-    }
-  }
-
-  async function getNextQueuePosition() {
-    try {
-      const res = await fetch(`${state.apiBase}/queue-info`);
-      const data = await res.json();
-      const total = data?.queueInfo?.totalOrders ?? data?.totalOrders;
-      if (data?.success && typeof total === 'number') {
-        return total + 1;
-      }
-    } catch (_) { /* fallback below */ }
-
-    try {
-      const snap = await db
-        .collection('orders')
-        .where('status', 'in', ['pending', 'confirmed', 'preparing', 'ready'])
-        .get();
-      return snap.size + 1;
-    } catch (_) {
-      return 1;
     }
   }
 
@@ -2637,6 +2652,7 @@
     if (name === 'orders') {
       refreshOrders();
     }
+    if (name !== 'admin') flushPendingRating();
     haptic('light');
   }
 
