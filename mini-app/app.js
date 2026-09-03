@@ -93,6 +93,12 @@
     adminStopReason: document.getElementById('adminStopReason'),
     adminStopAddBtn: document.getElementById('adminStopAddBtn'),
     adminSubtabs: document.getElementById('adminSubtabs'),
+    adminBillsList: document.getElementById('adminBillsList'),
+    adminBillsStats: document.getElementById('adminBillsStats'),
+    adminCocktailsList: document.getElementById('adminCocktailsList'),
+    adminPromosList: document.getElementById('adminPromosList'),
+    adminPurchasesList: document.getElementById('adminPurchasesList'),
+    adminMonitoringBox: document.getElementById('adminMonitoringBox'),
     viewAdmin: document.getElementById('view-admin'),
     sheet: document.getElementById('orderSheet'),
     sheetBackdrop: document.getElementById('sheetBackdrop'),
@@ -573,15 +579,392 @@
 
   function switchAdminTab(name) {
     state.adminTab = name;
+    state.billFilter = state.billFilter || 'open';
     els.adminSubtabs?.querySelectorAll('[data-admin-tab]').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.adminTab === name);
     });
-    const ordersPane = document.getElementById('adminOrdersPane');
-    const stopPane = document.getElementById('adminStoplistPane');
-    if (ordersPane) ordersPane.hidden = name !== 'orders';
-    if (stopPane) stopPane.hidden = name !== 'stoplist';
+
+    const panes = {
+      orders: 'adminOrdersPane',
+      bills: 'adminBillsPane',
+      stoplist: 'adminStoplistPane',
+      cocktails: 'adminCocktailsPane',
+      promos: 'adminPromosPane',
+      bonuses: 'adminBonusesPane',
+      purchases: 'adminPurchasesPane',
+      monitoring: 'adminMonitoringPane'
+    };
+    Object.entries(panes).forEach(([key, id]) => {
+      const el = document.getElementById(id);
+      if (el) el.hidden = key !== name;
+    });
+
     if (name === 'orders') refreshAdminOrders();
+    if (name === 'bills') refreshAdminBills();
     if (name === 'stoplist') refreshAdminStoplist();
+    if (name === 'cocktails') refreshAdminCocktails();
+    if (name === 'promos') refreshAdminPromos();
+    if (name === 'bonuses') refreshAdminBonuses();
+    if (name === 'purchases') refreshAdminPurchases();
+    if (name === 'monitoring') refreshAdminMonitoring();
+  }
+
+  async function refreshAdminBills() {
+    if (!isAdminUser() || !canOrder()) return;
+    const filter = state.billFilter || 'open';
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/bills`, {
+        method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'list', filter })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Ошибка счетов');
+      if (els.adminBillsStats) {
+        els.adminBillsStats.innerHTML = `
+          <div class="stat"><span class="stat-label">Открытых</span><strong>${data.stats?.openCount ?? 0}</strong></div>
+          <div class="stat"><span class="stat-label">Сумма paid</span><strong>${data.stats?.paidSum ?? 0} ₽</strong></div>
+        `;
+      }
+      const list = data.bills || [];
+      if (!els.adminBillsList) return;
+      if (!list.length) {
+        els.adminBillsList.innerHTML = '<div class="empty-state">Счетов нет</div>';
+        return;
+      }
+      els.adminBillsList.innerHTML = '';
+      list.forEach((bill) => {
+        const card = document.createElement('article');
+        card.className = 'order-card';
+        card.innerHTML = `
+          <div class="order-top">
+            <div>
+              <p class="order-name">${escapeHtml(bill.userName || 'Гость')}</p>
+              <p class="order-time">${bill.itemsCount || 0} поз. · ${bill.status}</p>
+            </div>
+            <strong class="price">${Number(bill.totalAmount) || 0} ₽</strong>
+          </div>
+          ${bill.status === 'open' ? `<div class="admin-actions">
+            <button type="button" class="primary" data-close-bill="${escapeAttr(bill.id)}">Закрыть (наличные)</button>
+            <button type="button" data-close-bill="${escapeAttr(bill.id)}" data-method="card">Закрыть (карта)</button>
+          </div>` : `<div class="queue">Оплата: ${escapeHtml(bill.paymentMethod || '—')}</div>`}
+        `;
+        card.querySelectorAll('[data-close-bill]').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            await closeAdminBill(btn.dataset.closeBill, btn.dataset.method || 'cash');
+          });
+        });
+        els.adminBillsList.appendChild(card);
+      });
+    } catch (err) {
+      if (els.adminBillsList) els.adminBillsList.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function closeAdminBill(billId, paymentMethod) {
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/bills`, {
+        method: 'POST', headers: adminHeaders(),
+        body: adminBody({ action: 'close', billId, paymentMethod })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Не удалось закрыть');
+      showToast('Счёт закрыт');
+      refreshAdminBills();
+    } catch (err) {
+      showToast(err.message || 'Ошибка');
+    }
+  }
+
+  async function refreshAdminCocktails() {
+    if (!isAdminUser() || !canOrder()) return;
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/cocktails`, {
+        method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'list' })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Ошибка');
+      const list = data.cocktails || [];
+      // Keep local menu in sync
+      state.cocktails = list.map((c) => ({
+        id: c.id, name: c.name, price: c.price, image: c.image || '',
+        ingredients: c.ingredients || '', description: c.description || '',
+        mood: c.mood || '', alcohol: c.alcohol, category: c.category || ''
+      }));
+      populateAdminStopSelect();
+      renderMenu();
+      const box = document.getElementById('adminCocktailsList');
+      if (!box) return;
+      if (!list.length) {
+        box.innerHTML = '<div class="empty-state">Нет коктейлей</div>';
+        return;
+      }
+      box.innerHTML = '';
+      list.forEach((c) => {
+        const card = document.createElement('article');
+        card.className = 'order-card';
+        card.innerHTML = `
+          <div class="order-top">
+            <div>
+              <p class="order-name">${escapeHtml(c.name || '')}</p>
+              <p class="order-time">${escapeHtml(c.category || '')} · ${c.alcohol != null ? c.alcohol + '%' : '—'}</p>
+            </div>
+            <strong class="price">${Number(c.price) || 0} ₽</strong>
+          </div>
+          <div class="admin-actions">
+            <button type="button" data-edit-cocktail="${escapeAttr(c.id)}">Изменить</button>
+            <button type="button" class="danger" data-del-cocktail="${escapeAttr(c.id)}">Удалить</button>
+          </div>
+        `;
+        card.querySelector('[data-edit-cocktail]')?.addEventListener('click', () => fillCocktailForm(c));
+        card.querySelector('[data-del-cocktail]')?.addEventListener('click', async () => {
+          if (!confirm(`Удалить ${c.name}?`)) return;
+          await deleteAdminCocktail(c.id);
+        });
+        box.appendChild(card);
+      });
+    } catch (err) {
+      const box = document.getElementById('adminCocktailsList');
+      if (box) box.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  function fillCocktailForm(c) {
+    document.getElementById('adminCocktailId').value = c.id || '';
+    document.getElementById('adminCocktailName').value = c.name || '';
+    document.getElementById('adminCocktailPrice').value = c.price || '';
+    document.getElementById('adminCocktailIngredients').value = c.ingredients || '';
+    document.getElementById('adminCocktailCategory').value = c.category || 'classic';
+    document.getElementById('adminCocktailAlcohol').value = c.alcohol ?? '';
+    showToast('Редактирование: сохраните изменения');
+  }
+
+  async function saveAdminCocktail() {
+    const cocktail = {
+      id: document.getElementById('adminCocktailId').value || undefined,
+      name: document.getElementById('adminCocktailName').value.trim(),
+      price: Number(document.getElementById('adminCocktailPrice').value),
+      ingredients: document.getElementById('adminCocktailIngredients').value.trim(),
+      category: document.getElementById('adminCocktailCategory').value,
+      alcohol: document.getElementById('adminCocktailAlcohol').value
+    };
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/cocktails`, {
+        method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'upsert', cocktail })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Ошибка сохранения');
+      document.getElementById('adminCocktailId').value = '';
+      document.getElementById('adminCocktailName').value = '';
+      document.getElementById('adminCocktailPrice').value = '';
+      document.getElementById('adminCocktailIngredients').value = '';
+      document.getElementById('adminCocktailAlcohol').value = '';
+      showToast('Коктейль сохранён');
+      refreshAdminCocktails();
+    } catch (err) {
+      showToast(err.message || 'Ошибка');
+    }
+  }
+
+  async function deleteAdminCocktail(id) {
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/cocktails`, {
+        method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'delete', id })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Ошибка удаления');
+      showToast('Удалено');
+      refreshAdminCocktails();
+    } catch (err) {
+      showToast(err.message || 'Ошибка');
+    }
+  }
+
+  async function refreshAdminPromos() {
+    if (!isAdminUser() || !canOrder()) return;
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/promos`, {
+        method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'list' })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Ошибка');
+      const box = document.getElementById('adminPromosList');
+      const list = data.promos || [];
+      if (!box) return;
+      if (!list.length) {
+        box.innerHTML = '<div class="empty-state">Промокодов нет</div>';
+        return;
+      }
+      box.innerHTML = '';
+      list.forEach((p) => {
+        const code = p.code || p.id;
+        const card = document.createElement('article');
+        card.className = 'order-card';
+        card.innerHTML = `
+          <div class="order-top">
+            <div>
+              <p class="order-name">${escapeHtml(code)}</p>
+              <p class="order-time">${escapeHtml(p.description || '')} · ${p.discount || 0}%</p>
+            </div>
+            <span class="status ${p.active ? 'ready' : 'cancelled'}">${p.active ? 'Активен' : 'Выкл'}</span>
+          </div>
+          <div class="admin-actions">
+            <button type="button" data-toggle-promo="${escapeAttr(code)}">Вкл/Выкл</button>
+            <button type="button" class="danger" data-del-promo="${escapeAttr(code)}">Удалить</button>
+          </div>
+        `;
+        card.querySelector('[data-toggle-promo]')?.addEventListener('click', async () => {
+          await fetch(`${state.apiBase}/api/mini-app/admin/promos`, {
+            method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'toggle', code })
+          });
+          refreshAdminPromos();
+        });
+        card.querySelector('[data-del-promo]')?.addEventListener('click', async () => {
+          await fetch(`${state.apiBase}/api/mini-app/admin/promos`, {
+            method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'delete', code })
+          });
+          refreshAdminPromos();
+        });
+        box.appendChild(card);
+      });
+    } catch (err) {
+      const box = document.getElementById('adminPromosList');
+      if (box) box.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function saveAdminPromo() {
+    const promo = {
+      code: document.getElementById('adminPromoCode').value.trim(),
+      discount: Number(document.getElementById('adminPromoDiscount').value),
+      description: document.getElementById('adminPromoDescription').value.trim(),
+      maxUses: Number(document.getElementById('adminPromoMaxUses').value) || 0,
+      active: true
+    };
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/promos`, {
+        method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'upsert', promo })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Ошибка');
+      showToast('Промокод сохранён');
+      document.getElementById('adminPromoCode').value = '';
+      document.getElementById('adminPromoDiscount').value = '';
+      document.getElementById('adminPromoDescription').value = '';
+      document.getElementById('adminPromoMaxUses').value = '';
+      refreshAdminPromos();
+    } catch (err) {
+      showToast(err.message || 'Ошибка');
+    }
+  }
+
+  async function refreshAdminBonuses() {
+    if (!isAdminUser() || !canOrder()) return;
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/bonuses`, {
+        method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'get' })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Ошибка');
+      const s = data.settings || {};
+      document.getElementById('adminBonusPct').value = s.percentage ?? 5;
+      document.getElementById('adminBonusMin').value = s.minOrder ?? 300;
+      document.getElementById('adminBonusMax').value = s.maxUsage ?? 50;
+      document.getElementById('adminBonusExpire').value = s.expireDays ?? 180;
+      document.getElementById('adminBonusActive').checked = s.active !== false;
+    } catch (err) {
+      showToast(err.message || 'Ошибка бонусов');
+    }
+  }
+
+  async function saveAdminBonuses() {
+    const settings = {
+      percentage: Number(document.getElementById('adminBonusPct').value),
+      minOrder: Number(document.getElementById('adminBonusMin').value),
+      maxUsage: Number(document.getElementById('adminBonusMax').value),
+      expireDays: Number(document.getElementById('adminBonusExpire').value),
+      active: document.getElementById('adminBonusActive').checked
+    };
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/bonuses`, {
+        method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'save', settings })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Ошибка');
+      showToast('Настройки бонусов сохранены');
+    } catch (err) {
+      showToast(err.message || 'Ошибка');
+    }
+  }
+
+  async function refreshAdminPurchases() {
+    if (!isAdminUser() || !canOrder()) return;
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/purchases`, {
+        method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'list' })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Ошибка');
+      const box = document.getElementById('adminPurchasesList');
+      const list = data.items || [];
+      if (!box) return;
+      if (!list.length) {
+        box.innerHTML = '<div class="empty-state">Ингредиентов нет</div>';
+        return;
+      }
+      box.innerHTML = '';
+      list.forEach((item) => {
+        const card = document.createElement('article');
+        card.className = 'order-card';
+        card.innerHTML = `
+          <div class="order-top">
+            <div>
+              <p class="order-name">${escapeHtml(item.name)}</p>
+              <p class="order-time">мин ${item.minStock}${item.unit ? ' ' + item.unit : ''}</p>
+            </div>
+            <span class="status ${item.low ? 'cancelled' : 'ready'}">${item.stock}${item.unit ? ' ' + item.unit : ''}</span>
+          </div>
+        `;
+        box.appendChild(card);
+      });
+    } catch (err) {
+      const box = document.getElementById('adminPurchasesList');
+      if (box) box.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function sendAdminPurchases() {
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/purchases`, {
+        method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'send' })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Ошибка');
+      showToast(`Отправлено позиций: ${data.sent ?? 0}`);
+    } catch (err) {
+      showToast(err.message || 'Ошибка');
+    }
+  }
+
+  async function refreshAdminMonitoring() {
+    if (!isAdminUser() || !canOrder()) return;
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/admin/monitoring`, {
+        method: 'POST', headers: adminHeaders(), body: adminBody()
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Ошибка');
+      const s = data.status || {};
+      if (els.adminMonitoringBox) {
+        els.adminMonitoringBox.innerHTML = `
+          Сервер: <strong>${escapeHtml(s.server)}</strong><br>
+          Firebase: <strong>${escapeHtml(s.firebase)}</strong><br>
+          Alerts bot: <strong>${escapeHtml(s.alertsBot)}</strong><br>
+          Mini App bot: <strong>${escapeHtml(s.miniAppBot)}</strong><br>
+          <span class="order-time">${escapeHtml(s.timestamp || '')}</span>
+        `;
+      }
+    } catch (err) {
+      if (els.adminMonitoringBox) els.adminMonitoringBox.textContent = err.message;
+    }
   }
 
   function startAdminPolling() {
@@ -1223,6 +1606,20 @@
       authenticate({ manual: true });
     });
     els.adminStopAddBtn?.addEventListener('click', addToAdminStoplist);
+    document.getElementById('adminCocktailSaveBtn')?.addEventListener('click', saveAdminCocktail);
+    document.getElementById('adminPromoSaveBtn')?.addEventListener('click', saveAdminPromo);
+    document.getElementById('adminBonusSaveBtn')?.addEventListener('click', saveAdminBonuses);
+    document.getElementById('adminPurchaseSendBtn')?.addEventListener('click', sendAdminPurchases);
+    document.getElementById('adminMonitoringRefreshBtn')?.addEventListener('click', refreshAdminMonitoring);
+    document.getElementById('adminBillFilters')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-bill-filter]');
+      if (!btn) return;
+      state.billFilter = btn.dataset.billFilter;
+      document.querySelectorAll('#adminBillFilters .filter').forEach((f) => {
+        f.classList.toggle('active', f === btn);
+      });
+      refreshAdminBills();
+    });
     els.adminSubtabs?.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-admin-tab]');
       if (!btn) return;

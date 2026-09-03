@@ -64,17 +64,33 @@
 
     <section class="view" id="view-admin" data-view="admin">
       <h2 class="section-title">Админ</h2>
-      <p class="section-sub">Управление заказами и стоп-листом.</p>
+      <p class="section-sub">Полная панель управления баром.</p>
 
       <div class="admin-subtabs" id="adminSubtabs">
         <button class="filter active" type="button" data-admin-tab="orders">Заказы</button>
+        <button class="filter" type="button" data-admin-tab="bills">Счета</button>
         <button class="filter" type="button" data-admin-tab="stoplist">Стоп-лист</button>
+        <button class="filter" type="button" data-admin-tab="cocktails">Коктейли</button>
+        <button class="filter" type="button" data-admin-tab="promos">Промо</button>
+        <button class="filter" type="button" data-admin-tab="bonuses">Бонусы</button>
+        <button class="filter" type="button" data-admin-tab="purchases">Закупки</button>
+        <button class="filter" type="button" data-admin-tab="monitoring">Мониторинг</button>
       </div>
 
       <div class="admin-pane active" id="adminOrdersPane">
         <div id="adminOrdersList" class="orders-list">
           <div class="empty-state">Загрузка заказов…</div>
         </div>
+      </div>
+
+      <div class="admin-pane" id="adminBillsPane" hidden>
+        <div class="admin-subtabs" id="adminBillFilters">
+          <button class="filter active" type="button" data-bill-filter="open">Открытые</button>
+          <button class="filter" type="button" data-bill-filter="paid">Оплаченные</button>
+          <button class="filter" type="button" data-bill-filter="all">Все</button>
+        </div>
+        <div id="adminBillsStats" class="stat-row" style="margin-bottom:12px"></div>
+        <div id="adminBillsList" class="orders-list"></div>
       </div>
 
       <div class="admin-pane" id="adminStoplistPane" hidden>
@@ -85,9 +101,60 @@
           <input id="adminStopReason" class="admin-input" type="text" placeholder="Причина (необязательно)" maxlength="80">
           <button class="cta" id="adminStopAddBtn" type="button">В стоп-лист</button>
         </div>
-        <div id="adminStoplist" class="orders-list">
-          <div class="empty-state">Стоп-лист пуст</div>
+        <div id="adminStoplist" class="orders-list"></div>
+      </div>
+
+      <div class="admin-pane" id="adminCocktailsPane" hidden>
+        <div class="admin-add">
+          <input id="adminCocktailName" class="admin-input" type="text" placeholder="Название">
+          <input id="adminCocktailPrice" class="admin-input" type="number" placeholder="Цена ₽" min="0">
+          <input id="adminCocktailIngredients" class="admin-input" type="text" placeholder="Состав">
+          <select id="adminCocktailCategory" class="admin-select">
+            <option value="classic">Классика</option>
+            <option value="signature">Авторские</option>
+            <option value="shots">Шоты</option>
+          </select>
+          <input id="adminCocktailAlcohol" class="admin-input" type="number" placeholder="Крепость %" min="0" max="100">
+          <input id="adminCocktailId" type="hidden" value="">
+          <button class="cta" id="adminCocktailSaveBtn" type="button">Сохранить коктейль</button>
         </div>
+        <div id="adminCocktailsList" class="orders-list"></div>
+      </div>
+
+      <div class="admin-pane" id="adminPromosPane" hidden>
+        <div class="admin-add">
+          <input id="adminPromoCode" class="admin-input" type="text" placeholder="Код (SUMMER)" maxlength="20">
+          <input id="adminPromoDiscount" class="admin-input" type="number" placeholder="Скидка %" min="1" max="100">
+          <input id="adminPromoDescription" class="admin-input" type="text" placeholder="Описание">
+          <input id="adminPromoMaxUses" class="admin-input" type="number" placeholder="Макс. использований (0 = ∞)" min="0">
+          <button class="cta" id="adminPromoSaveBtn" type="button">Создать промокод</button>
+        </div>
+        <div id="adminPromosList" class="orders-list"></div>
+      </div>
+
+      <div class="admin-pane" id="adminBonusesPane" hidden>
+        <div class="admin-add">
+          <label class="order-time">Процент кэшбэка %</label>
+          <input id="adminBonusPct" class="admin-input" type="number" min="1" max="100">
+          <label class="order-time">Мин. сумма заказа ₽</label>
+          <input id="adminBonusMin" class="admin-input" type="number" min="0">
+          <label class="order-time">Макс. % оплаты бонусами</label>
+          <input id="adminBonusMax" class="admin-input" type="number" min="1" max="100">
+          <label class="order-time">Срок бонусов (дни, 0 = ∞)</label>
+          <input id="adminBonusExpire" class="admin-input" type="number" min="0">
+          <label class="order-time"><input id="adminBonusActive" type="checkbox" checked> Система активна</label>
+          <button class="cta" id="adminBonusSaveBtn" type="button">Сохранить бонусы</button>
+        </div>
+      </div>
+
+      <div class="admin-pane" id="adminPurchasesPane" hidden>
+        <button class="cta" id="adminPurchaseSendBtn" type="button">Отправить список закупок в Telegram</button>
+        <div id="adminPurchasesList" class="orders-list" style="margin-top:12px"></div>
+      </div>
+
+      <div class="admin-pane" id="adminMonitoringPane" hidden>
+        <div id="adminMonitoringBox" class="info-panel">Проверка системы…</div>
+        <button class="ghost auth-retry" id="adminMonitoringRefreshBtn" type="button">Обновить</button>
       </div>
     </section>
 

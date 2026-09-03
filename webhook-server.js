@@ -1949,6 +1949,257 @@ app.post('/api/mini-app/admin/stoplist', async (req, res) => {
   }
 });
 
+// Admin: bills
+app.post('/api/mini-app/admin/bills', async (req, res) => {
+  try {
+    const session = await resolveMiniAppAdmin(req);
+    if (!session.ok) return res.status(403).json({ success: false, error: 'Нет прав админа', reason: session.reason });
+
+    const action = req.body?.action || 'list';
+    const filter = req.body?.filter || 'open';
+
+    if (action === 'close') {
+      const billId = String(req.body?.billId || '');
+      if (!billId) return res.status(400).json({ success: false, error: 'billId required' });
+      const paymentMethod = req.body?.paymentMethod || 'cash';
+      await db.collection('bills').doc(billId).set({
+        status: 'paid',
+        paidAt: admin.firestore.FieldValue.serverTimestamp(),
+        paymentMethod,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        closedBy: session.userId
+      }, { merge: true });
+      return res.json({ success: true });
+    }
+
+    let query = db.collection('bills').limit(40);
+    if (filter === 'open' || filter === 'paid') {
+      query = db.collection('bills').where('status', '==', filter).limit(40);
+    }
+    const snap = await query.get();
+    const bills = snap.docs.map((doc) => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        userName: d.userName || '',
+        userId: d.userId || '',
+        status: d.status || 'open',
+        totalAmount: d.totalAmount || 0,
+        itemsCount: Array.isArray(d.items) ? d.items.length : 0,
+        paymentMethod: d.paymentMethod || null
+      };
+    });
+
+    const openCount = bills.filter((b) => b.status === 'open').length;
+    const paidSum = bills.filter((b) => b.status === 'paid').reduce((s, b) => s + (Number(b.totalAmount) || 0), 0);
+
+    res.json({ success: true, bills, stats: { openCount, paidSum } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Admin: cocktails CRUD (lite)
+app.post('/api/mini-app/admin/cocktails', async (req, res) => {
+  try {
+    const session = await resolveMiniAppAdmin(req);
+    if (!session.ok) return res.status(403).json({ success: false, error: 'Нет прав админа', reason: session.reason });
+
+    const action = req.body?.action || 'list';
+
+    if (action === 'delete') {
+      const id = String(req.body?.id || '');
+      if (!id) return res.status(400).json({ success: false, error: 'id required' });
+      await db.collection('cocktails').doc(id).delete();
+      return res.json({ success: true });
+    }
+
+    if (action === 'upsert') {
+      const c = req.body?.cocktail || {};
+      const name = String(c.name || '').trim();
+      const price = Number(c.price);
+      if (!name || !Number.isFinite(price)) {
+        return res.status(400).json({ success: false, error: 'Нужны name и price' });
+      }
+      const payload = {
+        name,
+        price,
+        ingredients: String(c.ingredients || ''),
+        description: String(c.description || ''),
+        mood: String(c.mood || ''),
+        alcohol: c.alcohol == null || c.alcohol === '' ? null : Number(c.alcohol),
+        category: String(c.category || 'classic'),
+        image: String(c.image || ''),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+      if (c.id) {
+        await db.collection('cocktails').doc(String(c.id)).set(payload, { merge: true });
+        return res.json({ success: true, id: String(c.id) });
+      }
+      payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
+      const ref = await db.collection('cocktails').add(payload);
+      return res.json({ success: true, id: ref.id });
+    }
+
+    const snap = await db.collection('cocktails').get();
+    const cocktails = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    cocktails.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ru'));
+    res.json({ success: true, cocktails });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Admin: promocodes
+app.post('/api/mini-app/admin/promos', async (req, res) => {
+  try {
+    const session = await resolveMiniAppAdmin(req);
+    if (!session.ok) return res.status(403).json({ success: false, error: 'Нет прав админа', reason: session.reason });
+
+    const action = req.body?.action || 'list';
+
+    if (action === 'upsert') {
+      const p = req.body?.promo || {};
+      const code = String(p.code || '').trim().toUpperCase();
+      if (!code) return res.status(400).json({ success: false, error: 'code required' });
+      await db.collection('promocodes').doc(code).set({
+        code,
+        discount: Number(p.discount) || 0,
+        description: String(p.description || ''),
+        maxUses: Number(p.maxUses) || 0,
+        usedCount: Number(p.usedCount) || 0,
+        active: p.active !== false,
+        expiryDate: p.expiryDate || null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      return res.json({ success: true, code });
+    }
+
+    if (action === 'toggle') {
+      const code = String(req.body?.code || '').trim().toUpperCase();
+      const ref = db.collection('promocodes').doc(code);
+      const doc = await ref.get();
+      if (!doc.exists) return res.status(404).json({ success: false, error: 'not found' });
+      await ref.set({ active: !doc.data().active, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      return res.json({ success: true, active: !doc.data().active });
+    }
+
+    if (action === 'delete') {
+      const code = String(req.body?.code || '').trim().toUpperCase();
+      await db.collection('promocodes').doc(code).delete();
+      return res.json({ success: true });
+    }
+
+    const snap = await db.collection('promocodes').get();
+    const promos = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    res.json({ success: true, promos });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Admin: bonus settings
+app.post('/api/mini-app/admin/bonuses', async (req, res) => {
+  try {
+    const session = await resolveMiniAppAdmin(req);
+    if (!session.ok) return res.status(403).json({ success: false, error: 'Нет прав админа', reason: session.reason });
+
+    const action = req.body?.action || 'get';
+    const ref = db.collection('settings').doc('bonusSystem');
+
+    if (action === 'save') {
+      const s = req.body?.settings || {};
+      const settings = {
+        percentage: Number(s.percentage) || 5,
+        minOrder: Number(s.minOrder) || 300,
+        maxUsage: Number(s.maxUsage) || 50,
+        expireDays: Number(s.expireDays) || 180,
+        active: s.active !== false,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+      await ref.set(settings, { merge: true });
+      return res.json({ success: true, settings });
+    }
+
+    const doc = await ref.get();
+    const settings = doc.exists ? doc.data() : {
+      percentage: 5, minOrder: 300, maxUsage: 50, expireDays: 180, active: true
+    };
+    res.json({ success: true, settings });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Admin: purchases / ingredients
+app.post('/api/mini-app/admin/purchases', async (req, res) => {
+  try {
+    const session = await resolveMiniAppAdmin(req);
+    if (!session.ok) return res.status(403).json({ success: false, error: 'Нет прав админа', reason: session.reason });
+
+    const action = req.body?.action || 'list';
+    const snap = await db.collection('ingredients').get();
+    const items = snap.docs.map((doc) => {
+      const d = doc.data();
+      const stock = Number(d.stock) || 0;
+      const minStock = Number(d.minStock) || 0;
+      return {
+        id: doc.id,
+        name: d.name || '',
+        unit: d.unit || '',
+        stock,
+        minStock,
+        low: stock <= minStock
+      };
+    }).sort((a, b) => Number(b.low) - Number(a.low) || String(a.name).localeCompare(String(b.name), 'ru'));
+
+    if (action === 'send') {
+      const low = items.filter((i) => i.low);
+      const text = low.length
+        ? `🛒 *Список закупок AsafievBar*\n\n` + low.map((i) => `• ${i.name}: ${i.stock}${i.unit ? ' ' + i.unit : ''} (мин ${i.minStock})`).join('\n')
+        : '🛒 Список закупок пуст — всё в норме.';
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text, parse_mode: 'Markdown' })
+      });
+      return res.json({ success: true, sent: low.length });
+    }
+
+    res.json({ success: true, items, lowCount: items.filter((i) => i.low).length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Admin: monitoring
+app.post('/api/mini-app/admin/monitoring', async (req, res) => {
+  try {
+    const session = await resolveMiniAppAdmin(req);
+    if (!session.ok) return res.status(403).json({ success: false, error: 'Нет прав админа', reason: session.reason });
+
+    let firebaseOk = false;
+    try {
+      await db.collection('test').doc('connection').get();
+      firebaseOk = true;
+    } catch (_) { firebaseOk = false; }
+
+    res.json({
+      success: true,
+      status: {
+        server: 'OK',
+        firebase: firebaseOk ? 'OK' : 'ERROR',
+        alertsBot: TELEGRAM_BOT_TOKEN ? 'SET' : 'NOT SET',
+        miniAppBot: TELEGRAM_MINIAPP_BOT_TOKEN ? 'SET' : 'NOT SET',
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Grant/ensure admin for owner Telegram id
 app.post('/api/mini-app/ensure-admin', async (req, res) => {
   try {
