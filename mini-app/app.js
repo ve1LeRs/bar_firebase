@@ -64,8 +64,7 @@
     adminTab: 'cocktails',
     knownOrderStatuses: new Map(),
     promptedRatingOrders: new Set(),
-    expandedBills: new Set(),
-    billExpandTouched: new Set(),
+    billExpandPrefs: new Map(),
     currentView: 'menu',
     ratingOrder: null,
     ratingValue: 0
@@ -2411,18 +2410,41 @@
       return;
     }
 
-    if (!state.expandedBills) state.expandedBills = new Set();
-    if (!state.billExpandTouched) state.billExpandTouched = new Set();
-    // Auto-expand only bills the user hasn't toggled yet (don't re-open after collapse)
-    billList.forEach((bill, idx) => {
-      if (state.billExpandTouched.has(bill.id)) return;
-      if (state.expandedBills.has(bill.id)) return;
-      if (bill.status === 'open' || idx === 0) state.expandedBills.add(bill.id);
-    });
+    if (!state.billExpandPrefs) state.billExpandPrefs = new Map();
+
+    const billKey = (bill) => String(bill?.id || '');
+    const isExpanded = (bill) => {
+      const key = billKey(bill);
+      if (!key) return false;
+      if (state.billExpandPrefs.has(key)) return state.billExpandPrefs.get(key) === true;
+      // Default: only live open bills are expanded; closed stay collapsed
+      return bill.status === 'open' && key !== 'orphan';
+    };
+    const setExpanded = (bill, open) => {
+      const key = billKey(bill);
+      if (!key) return;
+      state.billExpandPrefs.set(key, Boolean(open));
+      try {
+        const obj = Object.fromEntries(state.billExpandPrefs);
+        sessionStorage.setItem('asafiev_bill_expand_v1', JSON.stringify(obj));
+      } catch (_) { /* ignore */ }
+    };
+
+    // Restore prefs once per session if Map empty
+    if (!state.billExpandPrefs.size) {
+      try {
+        const raw = sessionStorage.getItem('asafiev_bill_expand_v1');
+        if (raw) {
+          const obj = JSON.parse(raw);
+          Object.entries(obj || {}).forEach(([k, v]) => {
+            state.billExpandPrefs.set(String(k), Boolean(v));
+          });
+        }
+      } catch (_) { /* ignore */ }
+    }
 
     els.ordersList.innerHTML = '';
     if (!billList.length) {
-      // fallback flat list
       orders.forEach((order) => {
         els.ordersList.appendChild(buildOrderItemCard(order));
       });
@@ -2430,9 +2452,9 @@
     }
 
     billList.forEach((bill) => {
-      const expanded = state.expandedBills.has(bill.id);
+      const expanded = isExpanded(bill);
       const isOpen = bill.status === 'open';
-      const isOrphan = bill.id === 'orphan';
+      const isOrphan = billKey(bill) === 'orphan';
       const whenMs = isOpen ? bill.createdAtMs : (bill.paidAtMs || bill.createdAtMs);
       const when = whenMs ? new Date(whenMs).toLocaleString('ru-RU') : '';
       const pay = PAY_METHOD_RU[bill.paymentMethod] || bill.paymentMethod || '';
@@ -2453,6 +2475,7 @@
 
       const card = document.createElement('article');
       card.className = `bill-accordion${expanded ? ' is-open' : ''}${isOpen ? ' is-open-bill' : ''}`;
+      card.dataset.billId = billKey(bill);
       card.innerHTML = `
         <button type="button" class="bill-accordion-head" aria-expanded="${expanded ? 'true' : 'false'}">
           <div class="bill-accordion-title">
@@ -2488,10 +2511,8 @@
       });
 
       card.querySelector('.bill-accordion-head')?.addEventListener('click', () => {
-        state.billExpandTouched.add(bill.id);
-        const willOpen = !state.expandedBills.has(bill.id);
-        if (willOpen) state.expandedBills.add(bill.id);
-        else state.expandedBills.delete(bill.id);
+        const willOpen = !isExpanded(bill);
+        setExpanded(bill, willOpen);
         card.classList.toggle('is-open', willOpen);
         body.hidden = !willOpen;
         card.querySelector('.bill-accordion-head')?.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
