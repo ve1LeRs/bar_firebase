@@ -198,7 +198,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'promo-kb1';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'bill-del1';
 
 function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
@@ -2246,23 +2246,62 @@ app.post('/api/mini-app/my-orders', async (req, res) => {
       console.warn('my-orders bills:', billErr?.message || billErr);
     }
 
-    // Orders that somehow are not attached to a bill
+    // Orders that somehow are not attached to a bill (e.g. bill was deleted).
+    // Active orphans must not appear as a fake open "Без счёта" bill — cancel them.
     const linked = new Set();
     bills.forEach((b) => b.items.forEach((i) => { if (i.orderId) linked.add(i.orderId); }));
-    const orphanOrders = orders.filter((o) => !linked.has(o.id));
-    if (orphanOrders.length) {
+    let orphanOrders = orders.filter((o) => !linked.has(o.id));
+    const activeOrphanStatuses = new Set(['pending', 'confirmed', 'preparing', 'ready']);
+    const orphansToCancel = orphanOrders.filter((o) =>
+      activeOrphanStatuses.has(String(o.status || 'pending'))
+    );
+    if (orphansToCancel.length) {
+      try {
+        let batch = db.batch();
+        let ops = 0;
+        for (const o of orphansToCancel) {
+          batch.set(db.collection('orders').doc(o.id), {
+            status: 'cancelled',
+            cancelledReason: 'orphan-no-bill',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedBy: 'reconcile-orphan'
+          }, { merge: true });
+          ops += 1;
+          if (ops >= 400) {
+            await batch.commit();
+            batch = db.batch();
+            ops = 0;
+          }
+        }
+        if (ops > 0) await batch.commit();
+        console.log('🔧 cancelled orphan orders without bill:', orphansToCancel.length);
+      } catch (orphanErr) {
+        console.warn('my-orders orphan cancel:', orphanErr?.message || orphanErr);
+      }
+      const cancelledIds = new Set(orphansToCancel.map((o) => o.id));
+      orphanOrders = orphanOrders.map((o) =>
+        cancelledIds.has(o.id) ? { ...o, status: 'cancelled' } : o
+      );
+      orders = orders.map((o) =>
+        cancelledIds.has(o.id) ? { ...o, status: 'cancelled' } : o
+      );
+    }
+    // Do not invent a synthetic open bill for leftovers (cancelled/completed only)
+    const visibleOrphans = orphanOrders.filter((o) =>
+      !['cancelled', 'completed'].includes(String(o.status || ''))
+    );
+    if (visibleOrphans.length) {
       bills.push({
         id: 'orphan',
         status: 'open',
-        totalAmount: orphanOrders
-          .filter((o) => o.status !== 'cancelled')
+        totalAmount: visibleOrphans
           .reduce((s, o) => s + (Number(o.price) || 0), 0),
         paymentMethod: null,
         promoCode: null,
         discount: 0,
         createdAtMs: Date.now(),
         paidAtMs: 0,
-        items: orphanOrders.map((o) => ({
+        items: visibleOrphans.map((o) => ({
           orderId: o.id,
           cocktailName: o.name,
           price: o.price,
@@ -2922,8 +2961,43 @@ app.post('/api/mini-app/admin/bills', async (req, res) => {
     if (action === 'delete') {
       const billId = String(req.body?.billId || '');
       if (!billId) return res.status(400).json({ success: false, error: 'billId required' });
-      await db.collection('bills').doc(billId).delete();
-      return res.json({ success: true });
+      const billRef = db.collection('bills').doc(billId);
+      const billDoc = await billRef.get();
+      if (!billDoc.exists) {
+        return res.status(404).json({ success: false, error: 'Счёт не найден' });
+      }
+      const bill = billDoc.data() || {};
+      const items = Array.isArray(bill.items) ? bill.items : [];
+
+      // Cancel linked kitchen orders — otherwise they resurface as "Без счёта"
+      let cancelledOrders = 0;
+      try {
+        let batch = db.batch();
+        let ops = 0;
+        for (const item of items) {
+          const orderId = String(item.orderId || '').trim();
+          if (!orderId) continue;
+          batch.set(db.collection('orders').doc(orderId), {
+            status: 'cancelled',
+            cancelledReason: 'bill-deleted',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedBy: `bill-delete:${session.userId}`
+          }, { merge: true });
+          cancelledOrders += 1;
+          ops += 1;
+          if (ops >= 400) {
+            await batch.commit();
+            batch = db.batch();
+            ops = 0;
+          }
+        }
+        if (ops > 0) await batch.commit();
+      } catch (orderSyncErr) {
+        console.warn('⚠️ delete-bill order sync:', orderSyncErr?.message || orderSyncErr);
+      }
+
+      await billRef.delete();
+      return res.json({ success: true, cancelledOrders });
     }
 
     let query = db.collection('bills').limit(40);

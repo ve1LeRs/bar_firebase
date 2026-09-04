@@ -308,9 +308,29 @@ window.deleteBill = async function(billId) {
     '🗑️',
     async () => {
       try {
-        await db.collection('bills').doc(billId).delete();
-        
-        showSuccess('✅ Счет удален');
+        const billRef = db.collection('bills').doc(billId);
+        const billDoc = await billRef.get();
+        if (!billDoc.exists) {
+          showError('❌ Счет не найден');
+          return;
+        }
+        const bill = billDoc.data() || {};
+        const items = Array.isArray(bill.items) ? bill.items : [];
+        const batch = db.batch();
+        items.forEach((item) => {
+          const orderId = String(item.orderId || '').trim();
+          if (!orderId) return;
+          batch.set(db.collection('orders').doc(orderId), {
+            status: 'cancelled',
+            cancelledReason: 'bill-deleted',
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedBy: 'admin-bills-web'
+          }, { merge: true });
+        });
+        batch.delete(billRef);
+        await batch.commit();
+
+        showSuccess('✅ Счет удален, связанные заказы отменены');
         loadAdminBills(currentBillFilter);
         
       } catch (error) {

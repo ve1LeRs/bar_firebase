@@ -968,8 +968,10 @@
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Не удалось удалить');
-      showToast('Счёт удалён');
+      const n = Number(data.cancelledOrders) || 0;
+      showToast(n > 0 ? `Счёт удалён · заказов отменено: ${n}` : 'Счёт удалён');
       refreshAdminBills();
+      // Guest "Мои заказы" may be open on another device — local admin list is enough here
     } catch (err) {
       showToast(err.message || 'Ошибка');
     }
