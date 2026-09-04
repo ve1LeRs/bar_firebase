@@ -1545,7 +1545,32 @@ body.keyboard-open {
 .wheel-stage {
   position: relative;
   width: min(320px, 84vw);
-  margin: 14px auto 8px;
+  margin: 10px auto 8px;
+  overflow: visible;
+}
+
+.wheel-pointer {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 6;
+  width: 28px;
+  height: 34px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
+}
+
+.wheel-pointer svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.wheel-disc {
+  position: relative;
+  width: 100%;
+  margin-top: 18px;
   aspect-ratio: 1;
 }
 
@@ -1557,6 +1582,7 @@ body.keyboard-open {
   pointer-events: none;
 }
 
+.wheel-disc canvas,
 .wheel-stage canvas {
   position: relative;
   z-index: 1;
@@ -1565,20 +1591,6 @@ body.keyboard-open {
   display: block;
   border-radius: 50%;
   filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.4));
-}
-
-.wheel-pointer {
-  position: absolute;
-  top: -2px;
-  left: 50%;
-  z-index: 3;
-  width: 0;
-  height: 0;
-  transform: translateX(-50%);
-  border-left: 9px solid transparent;
-  border-right: 9px solid transparent;
-  border-top: 16px solid var(--wheel-gold);
-  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
 }
 
 .wheel-hub {

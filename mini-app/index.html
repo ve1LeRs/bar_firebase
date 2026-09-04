@@ -13,8 +13,8 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://telegram.org">
-  <link rel="preload" href="app.css?v=wheel3" as="style">
-  <link rel="stylesheet" href="app.css?v=wheel3">
+  <link rel="preload" href="app.css?v=wheel4" as="style">
+  <link rel="stylesheet" href="app.css?v=wheel4">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700&display=swap">
@@ -394,12 +394,18 @@
         <p class="wheel-head-sub" id="wheelSheetSub">1 крутка = раз в сутки</p>
       </div>
       <div class="wheel-stage">
-        <div class="wheel-glow" aria-hidden="true"></div>
-        <div class="wheel-pointer" aria-hidden="true"></div>
-        <canvas id="wheelCanvas" width="360" height="360" aria-label="Колесо удачи"></canvas>
-        <button class="wheel-hub" id="wheelHubBtn" type="button" aria-label="Крутить">
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M8 5.5v13l11-6.5L8 5.5z"/></svg>
-        </button>
+        <div class="wheel-pointer" aria-hidden="true">
+          <svg viewBox="0 0 28 34" width="28" height="34" focusable="false">
+            <path d="M14 2 L26 18 H19 V32 H9 V18 H2 Z" fill="#d4a35c" stroke="#1a1208" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="wheel-disc">
+          <div class="wheel-glow" aria-hidden="true"></div>
+          <canvas id="wheelCanvas" width="360" height="360" aria-label="Колесо удачи"></canvas>
+          <button class="wheel-hub" id="wheelHubBtn" type="button" aria-label="Крутить">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M8 5.5v13l11-6.5L8 5.5z"/></svg>
+          </button>
+        </div>
       </div>
       <button class="wheel-inside-link" id="wheelInsideBtn" type="button">Что внутри колеса</button>
       <div class="wheel-result" id="wheelResult" hidden>
@@ -428,6 +434,6 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script defer src="app.js?v=wheel3"></script>
+  <script defer src="app.js?v=wheel4"></script>
 </body>
 </html>
