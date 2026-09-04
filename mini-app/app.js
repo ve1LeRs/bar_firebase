@@ -2370,7 +2370,30 @@
     }
   }
 
-  function animateWheelToIndex(prizeIndex) {
+  function stopWheelSpinLoop() {
+    if (wheelState._spinRaf) {
+      cancelAnimationFrame(wheelState._spinRaf);
+      wheelState._spinRaf = 0;
+    }
+  }
+
+  function startWheelSpinLoop() {
+    stopWheelSpinLoop();
+    let last = performance.now();
+    let speed = 0.018; // rad per ms — ramps up quickly
+    const loop = (now) => {
+      const dt = Math.min(34, now - last);
+      last = now;
+      speed = Math.min(0.055, speed + dt * 0.00035);
+      wheelState.rotation += speed * dt;
+      drawWheel();
+      wheelState._spinRaf = requestAnimationFrame(loop);
+    };
+    wheelState._spinRaf = requestAnimationFrame(loop);
+  }
+
+  function animateWheelToIndex(prizeIndex, { duration = 2600, extraTurns = 3 } = {}) {
+    stopWheelSpinLoop();
     return new Promise((resolve) => {
       const n = Math.max(1, wheelState.prizes.length);
       const slice = (Math.PI * 2) / n;
@@ -2379,14 +2402,14 @@
       const currentMod = ((wheelState.rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
       let delta = targetMod - currentMod;
       if (delta <= 0) delta += Math.PI * 2;
-      const extraTurns = 5 + Math.floor(Math.random() * 3);
-      const totalDelta = delta + extraTurns * Math.PI * 2;
+      const turns = Math.max(2, Number(extraTurns) || 3);
+      const totalDelta = delta + turns * Math.PI * 2;
       const start = wheelState.rotation;
-      const duration = 4200;
       const t0 = performance.now();
 
       const tick = (now) => {
         const p = Math.min(1, (now - t0) / duration);
+        // ease-out cubic — already spinning, so settle smoothly
         const ease = 1 - Math.pow(1 - p, 3);
         wheelState.rotation = start + totalDelta * ease;
         drawWheel();
@@ -2410,8 +2433,13 @@
     wheelState.spinning = true;
     if (els.wheelResult) els.wheelResult.hidden = true;
     updateWheelSheetChrome();
-    if (els.wheelSpinBtn) els.wheelSpinBtn.disabled = true;
+    if (els.wheelSpinBtn) {
+      els.wheelSpinBtn.disabled = true;
+      els.wheelSpinBtn.textContent = 'Крутим…';
+    }
     haptic('medium');
+    // Visual spin starts immediately — don't wait for the API
+    startWheelSpinLoop();
 
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/wheel/spin`, {
@@ -2423,7 +2451,8 @@
       if (!data.success) throw new Error(data.error || 'Не удалось крутить');
 
       const prizeIndex = Number(data.prizeIndex) || 0;
-      await animateWheelToIndex(prizeIndex);
+      // Shorter landing — coast already covered the wait
+      await animateWheelToIndex(prizeIndex, { duration: 2400, extraTurns: 2 + Math.floor(Math.random() * 2) });
 
       const prize = data.prize || {};
       wheelState.unlimited = Boolean(data.unlimited) || isAdminUser();
@@ -2463,11 +2492,13 @@
       syncWheelCardUI();
       updateWheelSheetChrome();
     } catch (err) {
+      stopWheelSpinLoop();
       showToast(err.message || 'Ошибка колеса');
       if (err.message?.includes('недоступно') || String(err).includes('429')) {
         await refreshWheelStatus();
       }
     } finally {
+      stopWheelSpinLoop();
       wheelState.spinning = false;
       updateWheelSheetChrome();
     }

@@ -193,7 +193,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'adminwheel1';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'wheelspin1';
 
 function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
@@ -3618,13 +3618,14 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
     const session = await resolveMiniAppUser(req);
     if (!session.ok) return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
 
-    const isAdmin = await isMiniAppAdminUser(session);
-    const config = await getWheelConfig();
+    const [isAdmin, config, prizes] = await Promise.all([
+      isMiniAppAdminUser(session),
+      getWheelConfig(),
+      ensureWheelPrizes()
+    ]);
     if (!config.active) {
       return res.status(400).json({ success: false, error: 'Колесо временно выключено' });
     }
-
-    const prizes = await ensureWheelPrizes();
     if (!prizes.length) {
       return res.status(500).json({ success: false, error: 'Призы не настроены' });
     }
@@ -3635,6 +3636,7 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
     // Atomic cooldown check + reserve spin slot before awarding
     // Admins skip the daily limit
     let reserved = false;
+    let prize = null;
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(spinRef);
       const prev = snap.exists ? snap.data() : {};
@@ -3647,17 +3649,20 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
           throw err;
         }
       }
+      // Pick inside tx so we can persist pending prize id atomically
+      prize = pickWheelPrize(prizes);
       tx.set(spinRef, {
         userId: session.userId,
         lastSpinDate: admin.firestore.FieldValue.serverTimestamp(),
         totalSpins: (Number(prev.totalSpins) || 0) + 1,
         pending: true,
+        pendingPrizeId: prize?.id || null,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
       reserved = true;
     });
 
-    const prize = pickWheelPrize(prizes);
+    if (!prize) prize = pickWheelPrize(prizes);
     const prizeIndex = Math.max(0, prizes.findIndex((p) => p.id === prize.id));
     let award = { type: prize.type, promoCode: null, bonusAwarded: 0, balance: null };
 
@@ -3681,8 +3686,10 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
         claimed: true
       };
 
+      // Don't block the response on the final write for "nothing" — still await for consistency
       await spinRef.set({
         pending: false,
+        pendingPrizeId: admin.firestore.FieldValue.delete(),
         prize: publicPrize,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
