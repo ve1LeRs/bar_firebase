@@ -198,16 +198,20 @@ textarea {
 
 .view {
   display: none;
-  animation: rise 0.35s ease;
 }
 
 .view.active {
   display: block;
 }
 
+/* Only when switching tabs after boot — not on first paint */
+.view.view-enter.active {
+  animation: rise 0.28s ease;
+}
+
 @keyframes rise {
-  from { transform: translateY(8px); }
-  to { transform: translateY(0); }
+  from { transform: translateY(8px); opacity: 0.92; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 .hero {

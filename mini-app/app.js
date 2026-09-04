@@ -295,26 +295,14 @@
     }
 
     tg.ready();
-    tg.expand();
+    try { tg.expand(); } catch (_) { /* ignore */ }
 
-    // Fullscreen (Bot API 8.0+) + max height fallback
     try {
       tg.disableVerticalSwipes?.();
     } catch (_) { /* older clients */ }
 
-    try {
-      if (typeof tg.requestFullscreen === 'function') {
-        tg.requestFullscreen();
-      }
-    } catch (_) { /* not supported / needs user gesture on some clients */ }
-
-    // Retry fullscreen shortly after open (iOS sometimes ignores first call)
-    setTimeout(() => {
-      try {
-        tg.expand();
-        tg.requestFullscreen?.();
-      } catch (_) { /* ignore */ }
-    }, 300);
+    // Do NOT auto requestFullscreen on open — it resizes the WebView twice and jerks the menu.
+    // Fullscreen only after an explicit tap (below).
 
     try {
       tg.setHeaderColor('#14110f');
@@ -346,7 +334,7 @@
 
     bindKeyboardAwareLayout();
 
-    // Tap anywhere early to request fullscreen if first call was blocked
+    // Fullscreen only on user gesture (avoids boot viewport jump)
     const askFsOnce = () => {
       try { tg.requestFullscreen?.(); } catch (_) { /* ignore */ }
       document.body.removeEventListener('touchstart', askFsOnce);
@@ -2723,11 +2711,12 @@
 
   async function loadMenu() {
     const cached = readMenuCache();
-    if (cached?.cocktails?.length) {
+    // Boot may already have painted cache — don't re-animate / re-render it
+    if (cached?.cocktails?.length && !state.cocktails.length) {
       applyMenuData(cached.cocktails, cached.stoplist || [], {
         fromCache: true,
         ratings: cached.ratings || {},
-        animate: true,
+        animate: false,
         render: true
       });
     }
@@ -2747,7 +2736,7 @@
       applyMenuData(data.cocktails, data.stoplist || [], {
         fromCache: false,
         ratings: data.ratings || {},
-        animate: !cached?.cocktails?.length,
+        animate: false,
         render: true
       });
 
@@ -3667,6 +3656,7 @@
       return;
     }
     dismissKeyboard();
+    const prev = state.currentView;
     state.currentView = name;
     document.body.dataset.view = name;
     // Never interrupt admin with guest rating UI
@@ -3676,7 +3666,14 @@
       clearTimeout(flushPendingRating._t);
     }
     document.querySelectorAll('.view').forEach((v) => {
-      v.classList.toggle('active', v.dataset.view === name);
+      const on = v.dataset.view === name;
+      v.classList.toggle('active', on);
+      v.classList.remove('view-enter');
+      if (on && prev && prev !== name) {
+        // Force reflow so enter animation can replay
+        void v.offsetWidth;
+        v.classList.add('view-enter');
+      }
     });
     document.querySelectorAll('.tab').forEach((t) => {
       t.classList.toggle('active', t.dataset.nav === name);
@@ -3903,20 +3900,21 @@
     try {
       document.body.dataset.view = state.currentView || 'menu';
       bindUi();
+      // Admin tab before expand — avoids tabbar width jump after paint
+      applyCachedAuthHint();
       initTelegram();
       syncPromoVaultUI();
       syncWheelCardUI();
       updateProfileUI();
-      applyCachedAuthHint();
       wakeApi();
 
-      // Instant paint from cache before network
+      // Instant paint from cache — no enter animation (prevents boot jerk)
       const cached = readMenuCache();
       if (cached?.cocktails?.length) {
         applyMenuData(cached.cocktails, cached.stoplist || [], {
           fromCache: true,
           ratings: cached.ratings || {},
-          animate: true,
+          animate: false,
           render: true
         });
       }
@@ -3932,8 +3930,10 @@
       if (tg?.initData) void refreshWheelStatus();
 
       await Promise.all([loadMenu(), authenticate()]);
+      document.body.classList.add('is-ready');
     } catch (err) {
       console.error('boot failed', err);
+      document.body.classList.add('is-ready');
       try {
         const grid = document.getElementById('menuGrid');
         if (grid) {
