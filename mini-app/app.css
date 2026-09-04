@@ -1254,16 +1254,19 @@ body.sheet-open .tabbar {
   visibility: hidden;
 }
 
-/* Keyboard on main views: hide tabbar so promo/inputs stay visible */
-body.keyboard-open .tabbar {
+/* Keyboard / field focus: hide tabbar entirely (don't let it ride above the keyboard) */
+body.keyboard-open .tabbar,
+body.field-focused .tabbar {
+  display: none !important;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(120%);
   visibility: hidden;
+  transform: none;
 }
 
-body.keyboard-open {
-  padding-bottom: max(16px, calc(var(--keyboard-inset) + 16px));
+body.keyboard-open,
+body.field-focused {
+  padding-bottom: max(16px, calc(var(--keyboard-inset, 0px) + 16px));
 }
 
 .sheet-scroll {

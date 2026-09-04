@@ -372,13 +372,22 @@
     let vvHeight = layoutHeight;
     if (vv) {
       vvHeight = vv.height;
-      inset = Math.max(0, Math.round(layoutHeight - vv.height - vv.offsetTop));
+      // Prefer layout viewport vs visual viewport; also compare to cold baseline
+      // (on iOS Telegram innerHeight often shrinks with the keyboard → inset≈0)
+      const baseline = syncKeyboardLayout._baseline || layoutHeight;
+      const fromInner = Math.max(0, Math.round(layoutHeight - vv.height - (vv.offsetTop || 0)));
+      const fromBaseline = Math.max(0, Math.round(baseline - vv.height - (vv.offsetTop || 0)));
+      inset = Math.max(fromInner, fromBaseline);
     }
     document.documentElement.style.setProperty('--keyboard-inset', `${inset}px`);
     document.documentElement.style.setProperty('--vv-height', `${Math.round(vvHeight)}px`);
-    const keyboardOpen = inset > 60;
+
+    const fieldFocused = isTextField(document.activeElement);
+    // iOS WebView: visualViewport inset is unreliable — treat focused text fields as keyboard open
+    const keyboardOpen = inset > 60 || fieldFocused;
     const keyboardJustOpened = keyboardOpen && !document.body.classList.contains('keyboard-open');
     document.body.classList.toggle('keyboard-open', keyboardOpen);
+    document.body.classList.toggle('field-focused', fieldFocused);
 
     // Admin typing / keyboard dismiss must never reveal guest rating UI
     if (state.currentView === 'admin' || keyboardOpen) {
@@ -402,6 +411,14 @@
     }
   }
 
+  function captureViewportBaseline() {
+    const vv = window.visualViewport;
+    const h = vv?.height || window.innerHeight || document.documentElement.clientHeight || 0;
+    if (h > 200 && !isTextField(document.activeElement)) {
+      syncKeyboardLayout._baseline = Math.round(h);
+    }
+  }
+
   function ensureFieldAboveKeyboard(el) {
     if (!el || typeof el.scrollIntoView !== 'function') return;
     const run = () => {
@@ -420,6 +437,7 @@
   }
 
   function focusOrdersPromoField() {
+    document.body.classList.add('field-focused', 'keyboard-open');
     ensureFieldAboveKeyboard(els.ordersPromoInput);
   }
 
@@ -435,6 +453,7 @@
     const active = document.activeElement;
     if (!isTextField(active)) return false;
     try { active.blur(); } catch (_) { /* ignore */ }
+    document.body.classList.remove('field-focused');
     syncKeyboardLayout();
     return true;
   }
@@ -459,17 +478,38 @@
   }
 
   function bindKeyboardAwareLayout() {
+    captureViewportBaseline();
     const onViewport = () => syncKeyboardLayout();
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', onViewport);
       window.visualViewport.addEventListener('scroll', onViewport);
     }
-    window.addEventListener('resize', onViewport);
+    window.addEventListener('resize', () => {
+      captureViewportBaseline();
+      onViewport();
+    });
+    document.addEventListener('focusin', (e) => {
+      if (!isTextField(e.target)) return;
+      document.body.classList.add('field-focused', 'keyboard-open');
+      syncKeyboardLayout();
+      if (e.target.id === 'ordersPromoInput' || e.target.id === 'bonusInput') {
+        ensureFieldAboveKeyboard(e.target);
+      }
+    });
+    document.addEventListener('focusout', () => {
+      clearTimeout(bindKeyboardAwareLayout._blurT);
+      bindKeyboardAwareLayout._blurT = setTimeout(() => {
+        if (isTextField(document.activeElement)) return;
+        document.body.classList.remove('field-focused');
+        syncKeyboardLayout();
+      }, 80);
+    });
     bindDismissKeyboardOnOutsideTap();
     syncKeyboardLayout();
   }
 
   function focusBonusField() {
+    document.body.classList.add('field-focused', 'keyboard-open');
     els.sheet?.classList.add('sheet-compact');
     syncKeyboardLayout();
     // Scroll bonus row into the visible sheet area above action buttons
