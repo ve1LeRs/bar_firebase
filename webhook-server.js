@@ -198,7 +198,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'stopfix1';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'bonus1';
 
 function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
@@ -2327,6 +2327,22 @@ app.post('/api/mini-app/create-order', async (req, res) => {
     }
 
     const bonusAmount = Math.max(0, Number(bonusUsed) || 0);
+    if (bonusAmount > 0) {
+      const [bonusDoc, settingsDoc] = await Promise.all([
+        db.collection('bonusAccounts').doc(userId).get(),
+        db.collection('settings').doc('bonusSystem').get()
+      ]);
+      const balance = bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0;
+      const maxUsage = settingsDoc.exists ? (Number(settingsDoc.data().maxUsage) || 50) : 50;
+      const maxByPrice = Math.floor(listedPrice * (maxUsage / 100));
+      const maxBonus = Math.min(balance, maxByPrice);
+      if (bonusAmount > maxBonus) {
+        const error = bonusAmount > balance
+          ? `Недостаточно бонусов. У вас ${balance}`
+          : `Можно списать не больше ${maxBonus} бонусов`;
+        return res.status(400).json({ success: false, error, maxBonus, balance });
+      }
+    }
     const finalPrice = Math.max(0, listedPrice - bonusAmount);
     const now = new Date();
     const displayName = user || session.displayName || 'Гость Telegram';

@@ -370,6 +370,17 @@
   }
 
   function blurBonusField() {
+    // Clamp over-limit bonus and tell the user — don't silently spend "all available"
+    if (state.selected && els.bonusInput && !els.bonusRow?.hidden) {
+      const price = Number(state.selected.price) || 0;
+      const { maxBonus, raw, overLimit, message } = resolveBonusInput(price, { clampInput: true });
+      if (overLimit) {
+        showToast(message);
+        haptic('heavy');
+      }
+      state.bonusToUse = Math.min(raw, maxBonus);
+      updateSheetTotal();
+    }
     // Delay so we don't flicker if focus moves briefly
     setTimeout(() => {
       if (document.activeElement === els.bonusInput) return;
@@ -378,6 +389,29 @@
       }
       syncKeyboardLayout();
     }, 180);
+  }
+
+  function resolveBonusInput(price, { clampInput = false } = {}) {
+    const balance = Math.max(0, Number(state.bonusBalance) || 0);
+    const percentCap = Math.floor(price * (state.maxBonusUsage / 100));
+    const maxBonus = Math.min(balance, percentCap);
+    const raw = Math.max(0, Number(els.bonusInput?.value) || 0);
+    const overLimit = raw > maxBonus;
+    let message = '';
+    if (overLimit) {
+      if (raw > balance) {
+        message = `Недостаточно бонусов. У вас ${balance}`;
+      } else {
+        message = `Можно списать не больше ${maxBonus} (до ${state.maxBonusUsage}% от суммы)`;
+      }
+    }
+    if (clampInput && els.bonusInput) {
+      els.bonusInput.value = String(Math.min(raw, maxBonus));
+    }
+    if (els.bonusInput) {
+      els.bonusInput.classList.toggle('is-invalid', overLimit && !clampInput);
+    }
+    return { maxBonus, balance, percentCap, raw, overLimit, message };
   }
 
   function sleep(ms) {
@@ -2296,6 +2330,8 @@
     state.selected = cocktail;
     state.bonusToUse = 0;
     els.bonusInput.value = '0';
+    els.bonusInput.classList.remove('is-invalid');
+    updateSheetTotal._overWarned = false;
 
     els.sheetName.textContent = cocktail.name;
     els.sheetIngredients.textContent = cocktail.ingredients || 'Состав уточнит бармен';
@@ -2364,13 +2400,21 @@
   function updateSheetTotal() {
     if (!state.selected) return;
     const price = Number(state.selected.price) || 0;
-    const maxBonus = Math.min(
-      state.bonusBalance,
-      Math.floor(price * (state.maxBonusUsage / 100))
-    );
-    let bonus = Number(els.bonusInput.value) || 0;
-    bonus = Math.max(0, Math.min(bonus, maxBonus));
+    const { maxBonus, raw, overLimit, message } = resolveBonusInput(price);
+    const bonus = Math.min(raw, maxBonus);
     state.bonusToUse = bonus;
+    if (els.bonusInput) {
+      els.bonusInput.max = String(maxBonus);
+      els.bonusInput.classList.toggle('is-invalid', overLimit);
+    }
+    // Warn once when the typed value first exceeds the limit (not on every keystroke)
+    if (overLimit && !updateSheetTotal._overWarned) {
+      updateSheetTotal._overWarned = true;
+      showToast(message);
+      haptic('heavy');
+    } else if (!overLimit) {
+      updateSheetTotal._overWarned = false;
+    }
     const payable = Math.max(0, price - bonus);
     els.sheetTotal.textContent = `${payable} ₽`;
 
@@ -2434,7 +2478,19 @@
 
     const cocktail = state.selected;
     const price = Number(cocktail.price) || 0;
-    const bonusUsed = state.bonusToUse || 0;
+    const bonusCheck = resolveBonusInput(price);
+    if (bonusCheck.overLimit) {
+      showToast(bonusCheck.message);
+      haptic('heavy');
+      // Keep sheet open — user must fix the amount
+      if (els.bonusInput) {
+        els.bonusInput.focus();
+        els.bonusInput.select?.();
+      }
+      return;
+    }
+    const bonusUsed = Math.min(bonusCheck.raw, bonusCheck.maxBonus);
+    state.bonusToUse = bonusUsed;
     const finalPrice = Math.max(0, price - bonusUsed);
 
     state.placingOrder = true;

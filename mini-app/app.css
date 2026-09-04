@@ -1311,6 +1311,11 @@ body.sheet-open .tabbar {
   color: var(--ink);
 }
 
+.bonus-row input.is-invalid {
+  border-color: #e35d5d;
+  box-shadow: 0 0 0 1px rgba(227, 93, 93, 0.35);
+}
+
 .total-row {
   border-top: 1px solid var(--line);
   margin-top: 4px;
