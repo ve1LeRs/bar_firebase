@@ -193,7 +193,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'adminfold1';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'fastauth1';
 
 function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
@@ -2060,79 +2060,98 @@ app.post('/api/mini-app/auth', async (req, res) => {
     );
     // Owner chat id from project defaults
     adminIds.add('1743362083');
-    const isAdmin = adminIds.has(String(tgUser.id));
+    const isAdminEnv = adminIds.has(String(tgUser.id));
 
-    try {
-      const updatePayload = { displayName };
-      if (tgUser.photo_url) updatePayload.photoURL = tgUser.photo_url;
-      await admin.auth().updateUser(uid, updatePayload);
-    } catch (error) {
-      if (error.code === 'auth/user-not-found') {
-        const createPayload = { uid, displayName };
-        if (tgUser.photo_url) createPayload.photoURL = tgUser.photo_url;
-        await admin.auth().createUser(createPayload);
-      } else {
-        console.warn('Firebase user upsert skipped:', error.message);
+    // Firebase Auth upsert is ~0.8s+ — never block login on it
+    void (async () => {
+      try {
+        const updatePayload = { displayName };
+        if (tgUser.photo_url) updatePayload.photoURL = tgUser.photo_url;
+        await admin.auth().updateUser(uid, updatePayload);
+      } catch (error) {
+        if (error.code === 'auth/user-not-found') {
+          try {
+            const createPayload = { uid, displayName };
+            if (tgUser.photo_url) createPayload.photoURL = tgUser.photo_url;
+            await admin.auth().createUser(createPayload);
+          } catch (createErr) {
+            console.warn('Firebase user create skipped:', createErr.message);
+          }
+        } else {
+          console.warn('Firebase user upsert skipped:', error.message);
+        }
       }
-    }
+    })();
 
     const userRef = db.collection('users').doc(uid);
-    const existingUser = await userRef.get();
-    const existingRole = existingUser.exists ? (existingUser.data().role || 'user') : 'user';
-    await userRef.set({
+
+    // One parallel round-trip: role + bonuses + bill + custom token
+    const [existingUser, bonusDoc, billsSnap, customToken] = await Promise.all([
+      userRef.get().catch(() => null),
+      db.collection('bonusAccounts').doc(uid).get().catch(() => null),
+      db.collection('bills')
+        .where('userId', '==', uid)
+        .where('status', '==', 'open')
+        .limit(1)
+        .get()
+        .catch(() => null),
+      admin.auth().createCustomToken(uid, {
+        telegramId: tgUser.id,
+        provider: 'telegram-mini-app'
+      }).catch((tokenError) => {
+        console.warn('Custom token unavailable:', tokenError.message);
+        return null;
+      })
+    ]);
+
+    const existingRole = existingUser?.exists ? (existingUser.data().role || 'user') : 'user';
+    const role = isAdminEnv ? 'admin' : (existingRole || 'user');
+
+    // Profile write in background
+    void userRef.set({
       displayName,
       telegramId: tgUser.id,
       telegramUsername: tgUser.username || null,
       photoURL: tgUser.photo_url || null,
-      role: isAdmin ? 'admin' : existingRole,
+      role,
       source: 'telegram-mini-app',
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...(existingUser.exists ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
-    }, { merge: true });
+      ...(existingUser?.exists ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
+    }, { merge: true }).catch((e) => console.warn('user profile write:', e.message));
 
-    let customToken = null;
-    try {
-      customToken = await admin.auth().createCustomToken(uid, {
-        telegramId: tgUser.id,
-        provider: 'telegram-mini-app'
-      });
-    } catch (tokenError) {
-      console.warn('Custom token unavailable:', tokenError.message);
-    }
-
-    const bonusDoc = await db.collection('bonusAccounts').doc(uid).get();
-    const bonusBalance = bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0;
+    const bonusBalance = bonusDoc?.exists ? Number(bonusDoc.data().balance) || 0 : 0;
 
     let openBillTotal = 0;
     let openBillItems = [];
-    try {
-      const billsSnap = await db.collection('bills')
-        .where('userId', '==', uid)
-        .where('status', '==', 'open')
-        .limit(1)
-        .get();
-      if (!billsSnap.empty) {
-        const billDoc = billsSnap.docs[0];
-        const bill = billDoc.data();
-        openBillItems = await hydrateBillItemsWithOrderStatus(bill.items);
-        openBillTotal = billTotalFromItems(openBillItems);
-        // Repair stale item statuses / total in Firestore (best-effort)
-        const stale = (Array.isArray(bill.items) ? bill.items : []).some((it, idx) => {
-          const live = openBillItems[idx];
-          return live && it.status !== live.status;
-        }) || Number(bill.totalAmount || 0) !== openBillTotal;
-        if (stale) {
-          billDoc.ref.update({
-            items: openBillItems.map((it, idx) => ({
-              ...(Array.isArray(bill.items) ? bill.items[idx] : {}),
-              ...it
-            })),
-            totalAmount: openBillTotal,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-          }).catch(() => {});
-        }
-      }
-    } catch (_) { /* index optional */ }
+    if (billsSnap && !billsSnap.empty) {
+      const billDoc = billsSnap.docs[0];
+      const bill = billDoc.data() || {};
+      // Fast path: return stored items; hydrate statuses in background
+      openBillItems = mapBillItemsForClient(bill.items);
+      openBillTotal = Number(bill.totalAmount);
+      if (!Number.isFinite(openBillTotal)) openBillTotal = billTotalFromItems(openBillItems);
+
+      void (async () => {
+        try {
+          const hydrated = await hydrateBillItemsWithOrderStatus(bill.items);
+          const total = billTotalFromItems(hydrated);
+          const stale = (Array.isArray(bill.items) ? bill.items : []).some((it, idx) => {
+            const live = hydrated[idx];
+            return live && it.status !== live.status;
+          }) || Number(bill.totalAmount || 0) !== total;
+          if (stale) {
+            await billDoc.ref.update({
+              items: hydrated.map((it, idx) => ({
+                ...(Array.isArray(bill.items) ? bill.items[idx] : {}),
+                ...it
+              })),
+              totalAmount: total,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
+        } catch (_) { /* ignore */ }
+      })();
+    }
 
     res.json({
       success: true,
@@ -2142,7 +2161,7 @@ app.post('/api/mini-app/auth', async (req, res) => {
       bonusBalance,
       openBillTotal,
       openBillItems,
-      role: isAdmin ? 'admin' : (existingRole || 'user'),
+      role,
       user: {
         id: tgUser.id,
         first_name: tgUser.first_name,
@@ -3289,60 +3308,103 @@ const DEFAULT_WHEEL_PRIZES = [
   { id: 'nothing', name: 'Повезёт завтра', short: '—', description: 'В этот раз без приза — загляните завтра', type: 'nothing', value: 0, probability: 4, color: '#1f1a16', icon: '—' }
 ];
 
+const wheelRuntimeCache = {
+  prizesAt: 0,
+  prizes: null,
+  configAt: 0,
+  config: null,
+  seeding: null
+};
+
 async function ensureWheelPrizes() {
-  const all = await db.collection('wheelPrizes').get();
-  const existing = new Map(all.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() }]));
-  const defaultIds = new Set(DEFAULT_WHEEL_PRIZES.map((p) => p.id));
-  let batch = db.batch();
-  let ops = 0;
+  const now = Date.now();
+  if (wheelRuntimeCache.prizes && now - wheelRuntimeCache.prizesAt < 300000) {
+    return wheelRuntimeCache.prizes;
+  }
+  if (wheelRuntimeCache.seeding) return wheelRuntimeCache.seeding;
 
-  const commitIfNeeded = async (force = false) => {
-    if (ops >= 400 || (force && ops > 0)) {
-      await batch.commit();
-      batch = db.batch();
-      ops = 0;
+  wheelRuntimeCache.seeding = (async () => {
+    const all = await db.collection('wheelPrizes').get();
+    const existing = new Map(all.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() }]));
+    const defaultIds = new Set(DEFAULT_WHEEL_PRIZES.map((p) => p.id));
+    let batch = db.batch();
+    let ops = 0;
+    let changed = false;
+
+    const commitIfNeeded = async (force = false) => {
+      if (ops >= 400 || (force && ops > 0)) {
+        await batch.commit();
+        batch = db.batch();
+        ops = 0;
+      }
+    };
+
+    // Upsert canonical prizes only when missing or outdated labels/colors
+    for (const prize of DEFAULT_WHEEL_PRIZES) {
+      const prev = existing.get(prize.id);
+      const needsWrite = !prev
+        || prev.active === false
+        || prev.short !== prize.short
+        || prev.color !== prize.color
+        || Number(prev.probability) !== Number(prize.probability);
+      if (needsWrite) {
+        batch.set(db.collection('wheelPrizes').doc(prize.id), {
+          ...prize,
+          active: true,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...(prev ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
+        }, { merge: true });
+        ops += 1;
+        changed = true;
+        await commitIfNeeded();
+      }
+      existing.set(prize.id, { ...prev, ...prize, active: true });
     }
-  };
 
-  // Upsert canonical prizes (fixes rainbow legacy colors / short labels)
-  for (const prize of DEFAULT_WHEEL_PRIZES) {
-    batch.set(db.collection('wheelPrizes').doc(prize.id), {
-      ...prize,
-      active: true,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...(existing.has(prize.id) ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
-    }, { merge: true });
-    existing.set(prize.id, { ...existing.get(prize.id), ...prize, active: true });
-    ops += 1;
-    await commitIfNeeded();
+    // Disable legacy prizes (e.g. free_shot / −100%) that make the wheel look childish
+    for (const [id, data] of existing.entries()) {
+      if (defaultIds.has(id)) continue;
+      if (data.active === false) continue;
+      batch.set(db.collection('wheelPrizes').doc(id), {
+        active: false,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      data.active = false;
+      ops += 1;
+      changed = true;
+      await commitIfNeeded();
+    }
+    if (changed) await commitIfNeeded(true);
+
+    const list = [...existing.values()]
+      .filter((p) => p.active !== false)
+      .sort((a, b) => (Number(b.probability) || 0) - (Number(a.probability) || 0));
+    wheelRuntimeCache.prizes = list;
+    wheelRuntimeCache.prizesAt = Date.now();
+    return list;
+  })();
+
+  try {
+    return await wheelRuntimeCache.seeding;
+  } finally {
+    wheelRuntimeCache.seeding = null;
   }
-
-  // Disable legacy prizes (e.g. free_shot / −100%) that make the wheel look childish
-  for (const [id, data] of existing.entries()) {
-    if (defaultIds.has(id)) continue;
-    if (data.active === false) continue;
-    batch.set(db.collection('wheelPrizes').doc(id), {
-      active: false,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-    data.active = false;
-    ops += 1;
-    await commitIfNeeded();
-  }
-  await commitIfNeeded(true);
-
-  return [...existing.values()]
-    .filter((p) => p.active !== false)
-    .sort((a, b) => (Number(b.probability) || 0) - (Number(a.probability) || 0));
 }
 
 async function getWheelConfig() {
+  const now = Date.now();
+  if (wheelRuntimeCache.config && now - wheelRuntimeCache.configAt < 120000) {
+    return wheelRuntimeCache.config;
+  }
   const doc = await db.collection('wheelConfig').doc('settings').get();
   const data = doc.exists ? doc.data() : {};
-  return {
+  const config = {
     active: data.active !== false,
     cooldownHours: Number(data.cooldownHours) || 24
   };
+  wheelRuntimeCache.config = config;
+  wheelRuntimeCache.configAt = now;
+  return config;
 }
 
 function pickWheelPrize(prizes) {
@@ -4311,6 +4373,10 @@ app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   warmMenuBootstrapCache()
     .then((p) => console.log('🍹 Menu bootstrap cache warm:', p?.cocktails?.length || 0, 'cocktails'))
     .catch((e) => console.warn('Menu bootstrap warm failed:', e.message));
+  ensureWheelPrizes()
+    .then((p) => console.log('🎡 Wheel prizes cache warm:', p?.length || 0))
+    .catch((e) => console.warn('Wheel prizes warm failed:', e.message));
+  getWheelConfig().catch(() => {});
 });
 
 module.exports = app;

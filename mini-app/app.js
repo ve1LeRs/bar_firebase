@@ -12,6 +12,7 @@
 
   const DEFAULT_API = 'https://asafievbar.duckdns.org';
   const MENU_CACHE_KEY = 'asafiev_mini_menu_v4';
+  const AUTH_CACHE_KEY = 'asafiev_mini_auth_v1';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
   const STATUS_LABELS = {
     pending: 'Ожидание',
@@ -669,6 +670,12 @@
         }
         if (data.role) state.role = data.role;
         applyAdminUi();
+        writeAuthCache({
+          tgId: data.user?.id || state.user?.id,
+          role: state.role,
+          uid: state.uid,
+          bonusBalance: state.bonusBalance
+        });
 
         // Firebase sign-in is only needed for live stoplist — never block auth/UI
         if (data.customToken) {
@@ -713,8 +720,50 @@
     return false;
   }
 
+  function readAuthCache(tgId) {
+    try {
+      const raw = localStorage.getItem(AUTH_CACHE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (!parsed || String(parsed.tgId) !== String(tgId)) return null;
+      return parsed;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeAuthCache(payload) {
+    try {
+      localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify({
+        tgId: payload.tgId,
+        role: payload.role || 'user',
+        uid: payload.uid || null,
+        bonusBalance: typeof payload.bonusBalance === 'number' ? payload.bonusBalance : undefined,
+        at: Date.now()
+      }));
+    } catch (_) { /* ignore */ }
+  }
+
+  function applyCachedAuthHint() {
+    const tgUser = tg?.initDataUnsafe?.user;
+    if (!tgUser?.id) return;
+    const cached = readAuthCache(tgUser.id);
+    if (!cached) return;
+    if (cached.role === 'admin') {
+      state.role = 'admin';
+      applyAdminUi();
+    }
+    if (typeof cached.bonusBalance === 'number') {
+      state.bonusBalance = cached.bonusBalance;
+      updateProfileUI();
+    }
+  }
+
   function canOrder() {
     return Boolean(state.sessionOk && tg?.initData);
+  }
+
+  function hasTelegramSession() {
+    return Boolean(tg?.initData);
   }
 
   function isAdminUser() {
@@ -2057,7 +2106,7 @@
   }
 
   async function refreshWheelStatus() {
-    if (!canOrder()) return;
+    if (!hasTelegramSession()) return;
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/wheel/status`, {
         method: 'POST',
@@ -2340,7 +2389,14 @@
   }
 
   async function spinWheel() {
-    if (wheelState.spinning || !wheelState.canSpin || !canOrder()) return;
+    if (wheelState.spinning || !wheelState.canSpin || !wheelState.active) return;
+    if (!canOrder()) {
+      showToast('Подключаем сессию…');
+      void authenticate().then((ok) => {
+        if (ok) spinWheel();
+      });
+      return;
+    }
     wheelState.spinning = true;
     if (els.wheelResult) els.wheelResult.hidden = true;
     updateWheelSheetChrome();
@@ -3852,6 +3908,7 @@
       syncPromoVaultUI();
       syncWheelCardUI();
       updateProfileUI();
+      applyCachedAuthHint();
       wakeApi();
 
       // Instant paint from cache before network
@@ -3871,6 +3928,9 @@
           try { initFirebase(); } catch (_) { /* ignore */ }
         })
         .catch(() => {});
+
+      // Prefetch wheel as soon as Telegram session exists (does not need auth response)
+      if (tg?.initData) void refreshWheelStatus();
 
       await Promise.all([loadMenu(), authenticate()]);
     } catch (err) {
