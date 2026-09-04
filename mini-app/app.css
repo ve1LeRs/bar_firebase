@@ -1629,6 +1629,11 @@ body.field-focused {
   display: inline-block;
 }
 
+.wheel-result .ghost[hidden],
+.wheel-result-code[hidden] {
+  display: none !important;
+}
+
 .wheel-sheet {
   max-height: min(92dvh, 760px);
   /* Brand tokens — ignore Telegram blue button theme */
