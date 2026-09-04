@@ -299,8 +299,16 @@
       tg.disableVerticalSwipes?.();
     } catch (_) { /* older clients */ }
 
-    // Do NOT auto requestFullscreen on open — it resizes the WebView twice and jerks the menu.
-    // Fullscreen only after an explicit tap (below).
+    // Fullscreen immediately once — no delayed second call (that caused the boot jerk)
+    const requestFs = () => {
+      try {
+        if (typeof tg.requestFullscreen === 'function' && !tg.isFullscreen) {
+          tg.requestFullscreen();
+        }
+      } catch (_) { /* needs gesture on some clients */ }
+    };
+    requestFs();
+    requestAnimationFrame(requestFs);
 
     try {
       tg.setHeaderColor('#14110f');
@@ -315,6 +323,7 @@
       document.documentElement.style.setProperty('--tg-safe-left', `${(sa.left || 0) + (csa.left || 0)}px`);
       document.documentElement.style.setProperty('--tg-safe-right', `${(sa.right || 0) + (csa.right || 0)}px`);
       document.body.classList.toggle('is-fullscreen', Boolean(tg.isFullscreen));
+      captureViewportBaseline();
     };
 
     applySafeArea();
@@ -332,9 +341,9 @@
 
     bindKeyboardAwareLayout();
 
-    // Fullscreen only on user gesture (avoids boot viewport jump)
+    // Fallback if auto-FS was blocked — first tap only
     const askFsOnce = () => {
-      try { tg.requestFullscreen?.(); } catch (_) { /* ignore */ }
+      requestFs();
       document.body.removeEventListener('touchstart', askFsOnce);
       document.body.removeEventListener('click', askFsOnce);
     };
@@ -3905,33 +3914,33 @@
     try {
       document.body.dataset.view = state.currentView || 'menu';
       bindUi();
-      // Admin tab before expand — avoids tabbar width jump after paint
+      // Admin tab + cached menu BEFORE expand/fullscreen — less visible jump
       applyCachedAuthHint();
-      initTelegram();
       syncPromoVaultUI();
       syncWheelCardUI();
       updateProfileUI();
-      wakeApi();
 
-      // Instant paint from cache — no enter animation (prevents boot jerk)
       const cached = readMenuCache();
       if (cached?.cocktails?.length) {
         applyMenuData(cached.cocktails, cached.stoplist || [], {
           fromCache: true,
           ratings: cached.ratings || {},
           animate: false,
-          render: true
+          render: false
         });
+        lastMenuSignature = '';
+        renderMenu({ animate: false });
       }
 
-      // Menu + auth immediately — Firebase SDK loads in parallel for stoplist only
+      initTelegram();
+      wakeApi();
+
       void waitForFirebase(8000)
         .then(() => {
           try { initFirebase(); } catch (_) { /* ignore */ }
         })
         .catch(() => {});
 
-      // Prefetch wheel as soon as Telegram session exists (does not need auth response)
       if (tg?.initData) void refreshWheelStatus();
 
       await Promise.all([loadMenu(), authenticate()]);
