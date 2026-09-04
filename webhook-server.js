@@ -2085,16 +2085,12 @@ app.post('/api/mini-app/auth', async (req, res) => {
 
     const userRef = db.collection('users').doc(uid);
 
-    // One parallel round-trip: role + bonuses + bill + custom token
-    const [existingUser, bonusDoc, billsSnap, customToken] = await Promise.all([
-      userRef.get().catch(() => null),
-      db.collection('bonusAccounts').doc(uid).get().catch(() => null),
-      db.collection('bills')
-        .where('userId', '==', uid)
-        .where('status', '==', 'open')
-        .limit(1)
-        .get()
-        .catch(() => null),
+    // Fast path: env admins don't need a Firestore role lookup.
+    // Bonus/bill come from /me + polling right after login — don't block session.
+    const [existingUser, customToken] = await Promise.all([
+      isAdminEnv
+        ? Promise.resolve(null)
+        : userRef.get().catch(() => null),
       admin.auth().createCustomToken(uid, {
         telegramId: tgUser.id,
         provider: 'telegram-mini-app'
@@ -2107,7 +2103,7 @@ app.post('/api/mini-app/auth', async (req, res) => {
     const existingRole = existingUser?.exists ? (existingUser.data().role || 'user') : 'user';
     const role = isAdminEnv ? 'admin' : (existingRole || 'user');
 
-    // Profile write in background
+    // Profile + bonus/bill snapshot in background (client refreshes via /me)
     void userRef.set({
       displayName,
       telegramId: tgUser.id,
@@ -2119,39 +2115,60 @@ app.post('/api/mini-app/auth', async (req, res) => {
       ...(existingUser?.exists ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
     }, { merge: true }).catch((e) => console.warn('user profile write:', e.message));
 
-    const bonusBalance = bonusDoc?.exists ? Number(bonusDoc.data().balance) || 0 : 0;
-
+    let bonusBalance = 0;
     let openBillTotal = 0;
     let openBillItems = [];
-    if (billsSnap && !billsSnap.empty) {
-      const billDoc = billsSnap.docs[0];
-      const bill = billDoc.data() || {};
-      // Fast path: return stored items; hydrate statuses in background
-      openBillItems = mapBillItemsForClient(bill.items);
-      openBillTotal = Number(bill.totalAmount);
-      if (!Number.isFinite(openBillTotal)) openBillTotal = billTotalFromItems(openBillItems);
 
-      void (async () => {
-        try {
-          const hydrated = await hydrateBillItemsWithOrderStatus(bill.items);
-          const total = billTotalFromItems(hydrated);
-          const stale = (Array.isArray(bill.items) ? bill.items : []).some((it, idx) => {
-            const live = hydrated[idx];
-            return live && it.status !== live.status;
-          }) || Number(bill.totalAmount || 0) !== total;
-          if (stale) {
-            await billDoc.ref.update({
-              items: hydrated.map((it, idx) => ({
-                ...(Array.isArray(bill.items) ? bill.items[idx] : {}),
-                ...it
-              })),
-              totalAmount: total,
-              updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-          }
-        } catch (_) { /* ignore */ }
-      })();
-    }
+    // Non-blocking enrich — race a short timeout so cold Firestore can't stall login
+    try {
+      const enrich = Promise.all([
+        db.collection('bonusAccounts').doc(uid).get().catch(() => null),
+        db.collection('bills')
+          .where('userId', '==', uid)
+          .where('status', '==', 'open')
+          .limit(1)
+          .get()
+          .catch(() => null)
+      ]);
+      const timed = await Promise.race([
+        enrich.then((v) => ({ ok: true, v })),
+        new Promise((resolve) => setTimeout(() => resolve({ ok: false }), 450))
+      ]);
+      if (timed.ok) {
+        const [bonusDoc, billsSnap] = timed.v;
+        bonusBalance = bonusDoc?.exists ? Number(bonusDoc.data().balance) || 0 : 0;
+        if (billsSnap && !billsSnap.empty) {
+          const billDoc = billsSnap.docs[0];
+          const bill = billDoc.data() || {};
+          openBillItems = mapBillItemsForClient(bill.items);
+          openBillTotal = Number(bill.totalAmount);
+          if (!Number.isFinite(openBillTotal)) openBillTotal = billTotalFromItems(openBillItems);
+          void (async () => {
+            try {
+              const hydrated = await hydrateBillItemsWithOrderStatus(bill.items);
+              const total = billTotalFromItems(hydrated);
+              const stale = (Array.isArray(bill.items) ? bill.items : []).some((it, idx) => {
+                const live = hydrated[idx];
+                return live && it.status !== live.status;
+              }) || Number(bill.totalAmount || 0) !== total;
+              if (stale) {
+                await billDoc.ref.update({
+                  items: hydrated.map((it, idx) => ({
+                    ...(Array.isArray(bill.items) ? bill.items[idx] : {}),
+                    ...it
+                  })),
+                  totalAmount: total,
+                  updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+              }
+            } catch (_) { /* ignore */ }
+          })();
+        }
+      } else {
+        // Still load in background; client /me will pick it up
+        enrich.catch(() => {});
+      }
+    } catch (_) { /* ignore */ }
 
     res.json({
       success: true,
