@@ -1267,10 +1267,20 @@ body.keyboard-open .sheet.open,
   margin-top: 10px;
 }
 
-/* While typing bonuses: hide order actions so they don't ride above the keyboard */
+/* While typing bonuses: keep CTA visible above the keyboard.
+   Sheet is flex column — actions stay pinned to the sheet bottom (inside vv height). */
 body.keyboard-open .sheet.open .sheet-actions,
 .sheet.sheet-compact .sheet-actions {
-  display: none !important;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* Keyboard replaces home indicator — don't waste space on large safe-area padding */
+  padding: 8px 16px 12px;
+}
+
+.sheet.sheet-compact .sheet-actions .ghost {
+  padding: 10px 16px;
+  min-height: 40px;
 }
 
 .sheet.sheet-compact .sheet-scroll {

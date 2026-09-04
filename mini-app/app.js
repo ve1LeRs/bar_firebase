@@ -380,12 +380,22 @@
       const fromBaseline = Math.max(0, Math.round(baseline - vv.height - (vv.offsetTop || 0)));
       inset = Math.max(fromInner, fromBaseline);
     }
-    document.documentElement.style.setProperty('--keyboard-inset', `${inset}px`);
-    document.documentElement.style.setProperty('--vv-height', `${Math.round(vvHeight)}px`);
 
     const fieldFocused = isTextField(document.activeElement);
     // iOS WebView: visualViewport inset is unreliable — treat focused text fields as keyboard open
     const keyboardOpen = inset > 60 || fieldFocused;
+
+    // When focused but inset is still ~0, assume a phone keyboard so the sheet
+    // (and «Заказать») stays in the visible area above the keys.
+    if (fieldFocused && inset < 80 && layoutHeight > 320) {
+      const assumed = Math.round(Math.min(360, Math.max(240, layoutHeight * 0.42)));
+      inset = Math.max(inset, assumed);
+      vvHeight = Math.max(220, layoutHeight - inset);
+    }
+
+    document.documentElement.style.setProperty('--keyboard-inset', `${inset}px`);
+    document.documentElement.style.setProperty('--vv-height', `${Math.round(vvHeight)}px`);
+
     const keyboardJustOpened = keyboardOpen && !document.body.classList.contains('keyboard-open');
     document.body.classList.toggle('keyboard-open', keyboardOpen);
     document.body.classList.toggle('field-focused', fieldFocused);
@@ -403,7 +413,7 @@
       }
     }
 
-    // Once when keyboard appears — scroll focused promo/bonus into view
+    // Once when keyboard appears — keep bonus field + order CTA in view
     if (keyboardJustOpened) {
       const active = document.activeElement;
       if (active?.id === 'ordersPromoInput' || active?.id === 'bonusInput') {
@@ -513,9 +523,10 @@
     document.body.classList.add('field-focused', 'keyboard-open');
     els.sheet?.classList.add('sheet-compact');
     syncKeyboardLayout();
-    // Keep bonus row visible in the compact sheet (actions are hidden while typing)
+    // Keep bonus row + «Заказать» visible in the compact sheet above the keyboard
     const pin = () => {
       try {
+        els.confirmOrderBtn?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         els.bonusRow?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       } catch (_) {
         try { els.bonusRow?.scrollIntoView(); } catch (__) { /* ignore */ }
