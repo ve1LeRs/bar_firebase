@@ -388,6 +388,12 @@ textarea {
   margin-bottom: 4px;
 }
 
+.cocktail-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .cocktail-body h3 {
   margin: 0 0 4px;
   font-family: var(--font-body);
@@ -414,8 +420,19 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 8px;
+  margin-top: auto;
+  padding-top: 8px;
   gap: 8px;
+  min-width: 0;
+}
+
+.cocktail-foot > span:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
 }
 
 .taste-tags {
@@ -540,6 +557,8 @@ body[data-view='admin'] #ratingBackdrop {
   font-weight: 700;
   font-size: var(--text-md);
   letter-spacing: var(--tracking-tight);
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .badge {
@@ -550,6 +569,8 @@ body[data-view='admin'] #ratingBackdrop {
   border-radius: 999px;
   border: 1px solid var(--line);
   color: var(--muted);
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .badge.stop {
@@ -1830,7 +1851,13 @@ body.keyboard-open {
   text-transform: uppercase;
 }
 
-pbar, .tabbar {
+@media (min-width: 720px) {
+  .shell {
+    max-width: 560px;
+    margin: 0 auto;
+  }
+
+  .topbar, .tabbar {
     max-width: 560px;
     margin-left: auto;
     margin-right: auto;
@@ -1838,5 +1865,16 @@ pbar, .tabbar {
 
   .menu-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .cocktail {
+    grid-template-columns: 72px 1fr;
+    gap: 10px;
+    padding: 8px;
+  }
+
+  .thumb-wrap {
+    width: 72px;
+    height: 72px;
   }
 }
