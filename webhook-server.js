@@ -58,13 +58,10 @@ app.use('/mini-app', express.static(path.join(__dirname, 'mini-app'), {
   etag: false,
   lastModified: false,
   setHeaders: (res, filePath) => {
-    // Always revalidate — Telegram WebView caches aggressively
+    // Revalidate — but NEVER Clear-Site-Data: it blanks Telegram WebView loads
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
-    if (String(filePath).endsWith('.html')) {
-      res.setHeader('Clear-Site-Data', '"cache"');
-    }
   }
 }));
 // Fresh alias path to bust stubborn Telegram WebView caches
@@ -76,9 +73,6 @@ app.use('/m', express.static(path.join(__dirname, 'mini-app'), {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
-    if (String(filePath).endsWith('.html')) {
-      res.setHeader('Clear-Site-Data', '"cache"');
-    }
   }
 }));
 app.get('/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'logo.png')));
@@ -198,7 +192,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'wheel5';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'fixblank1';
 
 function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';

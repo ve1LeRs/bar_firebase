@@ -221,12 +221,16 @@
   };
 
   function resolveApiBase() {
-    const saved = localStorage.getItem('mini_app_api_url');
-    if (saved) return saved.replace(/\/$/, '');
+    try {
+      const saved = localStorage.getItem('mini_app_api_url');
+      if (saved) return saved.replace(/\/$/, '');
+    } catch (_) { /* private mode */ }
 
-    const host = window.location.hostname;
-    if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3000';
-    if (host.includes('onrender.com')) return `https://${host}`;
+    try {
+      const host = String(window.location?.hostname || '');
+      if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3000';
+      if (host.includes('onrender.com')) return `https://${host}`;
+    } catch (_) { /* ignore */ }
     return DEFAULT_API;
   }
 
@@ -3508,36 +3512,49 @@
   }
 
   async function boot() {
-    document.body.dataset.view = state.currentView || 'menu';
-    bindUi();
-    initTelegram();
-    updateProfileUI();
-
-    // Instant paint from cache before network
-    const cached = readMenuCache();
-    if (cached?.cocktails?.length) {
-      applyMenuData(cached.cocktails, cached.stoplist || [], {
-        fromCache: true,
-        ratings: cached.ratings || {},
-        animate: true,
-        render: true
-      });
-    }
-
     try {
-      await waitForFirebase();
-      initFirebase();
-    } catch (err) {
-      console.error(err);
-      setAuthStatus('Не удалось загрузить SDK. Проверьте сеть.', { error: true });
-      if (!state.cocktails.length) {
-        els.menuGrid.innerHTML = '<div class="empty-state">Нет сети для загрузки меню</div>';
-      }
-      return;
-    }
+      document.body.dataset.view = state.currentView || 'menu';
+      bindUi();
+      initTelegram();
+      updateProfileUI();
 
-    // Menu and auth in parallel — UI stays interactive
-    await Promise.all([loadMenu(), authenticate()]);
+      // Instant paint from cache before network
+      const cached = readMenuCache();
+      if (cached?.cocktails?.length) {
+        applyMenuData(cached.cocktails, cached.stoplist || [], {
+          fromCache: true,
+          ratings: cached.ratings || {},
+          animate: true,
+          render: true
+        });
+      }
+
+      try {
+        await waitForFirebase();
+        initFirebase();
+      } catch (err) {
+        console.error(err);
+        setAuthStatus('Не удалось загрузить SDK. Проверьте сеть.', { error: true });
+        if (!state.cocktails.length && els.menuGrid) {
+          els.menuGrid.innerHTML = '<div class="empty-state">Нет сети для загрузки меню</div>';
+        }
+        return;
+      }
+
+      // Menu and auth in parallel — UI stays interactive
+      await Promise.all([loadMenu(), authenticate()]);
+    } catch (err) {
+      console.error('boot failed', err);
+      try {
+        const grid = document.getElementById('menuGrid');
+        if (grid) {
+          grid.innerHTML = `<div class="empty-state">Не удалось открыть приложение.<br>${String(err?.message || err).slice(0, 120)}</div>`;
+        }
+        document.querySelectorAll('.view').forEach((v) => {
+          v.classList.toggle('active', v.dataset.view === 'menu');
+        });
+      } catch (_) { /* ignore */ }
+    }
   }
 
   boot();
