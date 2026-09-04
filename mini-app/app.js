@@ -200,7 +200,14 @@
     wheelSheetSub: document.getElementById('wheelSheetSub'),
     wheelResult: document.getElementById('wheelResult'),
     wheelResultTitle: document.getElementById('wheelResultTitle'),
-    wheelResultDesc: document.getElementById('wheelResultDesc')
+    wheelResultDesc: document.getElementById('wheelResultDesc'),
+    wheelMainPane: document.getElementById('wheelMainPane'),
+    wheelInsidePane: document.getElementById('wheelInsidePane'),
+    wheelInsideBtn: document.getElementById('wheelInsideBtn'),
+    wheelInsideBackBtn: document.getElementById('wheelInsideBackBtn'),
+    wheelPrizeCatalog: document.getElementById('wheelPrizeCatalog'),
+    wheelHubBtn: document.getElementById('wheelHubBtn'),
+    wheelHint: document.getElementById('wheelHint')
   };
 
   const wheelState = {
@@ -1790,18 +1797,38 @@
   function updateWheelSheetChrome() {
     if (els.wheelSheetSub) {
       if (!wheelState.active) els.wheelSheetSub.textContent = 'Колесо выключено';
-      else if (wheelState.canSpin) els.wheelSheetSub.textContent = 'Крутите раз в сутки';
+      else if (wheelState.canSpin) els.wheelSheetSub.textContent = '1 крутка = раз в сутки';
       else if (wheelState.nextSpinAt) {
         const left = wheelState.nextSpinAt - Date.now();
         els.wheelSheetSub.textContent = left > 0
-          ? `Доступно через ${formatWheelCountdown(left)}`
-          : 'Крутите раз в сутки';
-      } else els.wheelSheetSub.textContent = 'Крутите раз в сутки';
+          ? `Следующая крутка через ${formatWheelCountdown(left)}`
+          : '1 крутка = раз в сутки';
+      } else els.wheelSheetSub.textContent = '1 крутка = раз в сутки';
     }
+    const blocked = wheelState.spinning || !wheelState.canSpin || !wheelState.active;
     if (els.wheelSpinBtn) {
-      els.wheelSpinBtn.disabled = wheelState.spinning || !wheelState.canSpin || !wheelState.active;
-      els.wheelSpinBtn.textContent = wheelState.canSpin ? 'Испытать удачу' : 'Уже крутили';
+      els.wheelSpinBtn.disabled = blocked;
+      els.wheelSpinBtn.textContent = wheelState.canSpin ? 'Крутить' : 'Уже крутили сегодня';
     }
+    if (els.wheelHubBtn) els.wheelHubBtn.disabled = blocked;
+    if (els.wheelHint) {
+      if (!wheelState.active) els.wheelHint.textContent = 'Колесо временно недоступно';
+      else if (!wheelState.canSpin && wheelState.nextSpinAt) {
+        const left = wheelState.nextSpinAt - Date.now();
+        els.wheelHint.textContent = left > 0 ? `Подождите ${formatWheelCountdown(left)}` : '';
+      } else {
+        els.wheelHint.textContent = '';
+      }
+    }
+  }
+
+  function wheelShortLabel(prize) {
+    if (prize?.short) return String(prize.short);
+    if (prize?.type === 'bonus') return `+${prize.value}`;
+    if (prize?.type === 'promo') return `−${prize.value}%`;
+    if (prize?.type === 'nothing') return '—';
+    const name = String(prize?.name || '');
+    return name.length > 10 ? `${name.slice(0, 9)}…` : name;
   }
 
   function ensureWheelCtx() {
@@ -1815,10 +1842,10 @@
     const canvas = els.wheelCanvas;
     if (!ctx || !canvas) return;
     const prizes = wheelState.prizes.length ? wheelState.prizes : [
-      { name: '…', color: '#3a322c', icon: '★' }
+      { name: '…', color: '#3a322c', short: '…' }
     ];
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const size = 320;
+    const size = 360;
     if (canvas.width !== size * dpr) {
       canvas.width = size * dpr;
       canvas.height = size * dpr;
@@ -1828,9 +1855,14 @@
 
     const cx = size / 2;
     const cy = size / 2;
-    const radius = size / 2 - 8;
+    const radius = size / 2 - 10;
     const n = prizes.length;
     const slice = (Math.PI * 2) / n;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + 6, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(20, 14, 10, 0.85)';
+    ctx.fill();
 
     prizes.forEach((prize, i) => {
       const start = -Math.PI / 2 + wheelState.rotation + i * slice;
@@ -1841,7 +1873,7 @@
       ctx.closePath();
       ctx.fillStyle = prize.color || '#d4a35c';
       ctx.fill();
-      ctx.strokeStyle = 'rgba(20, 14, 10, 0.55)';
+      ctx.strokeStyle = 'rgba(10, 8, 6, 0.65)';
       ctx.lineWidth = 2;
       ctx.stroke();
 
@@ -1851,34 +1883,94 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#fff8ef';
-      ctx.shadowColor = 'rgba(0,0,0,0.35)';
-      ctx.shadowBlur = 4;
-      ctx.font = '600 15px Sora, sans-serif';
-      const label = String(prize.name || '').slice(0, 14);
-      ctx.fillText(label, radius * 0.58, 0);
+      ctx.shadowColor = 'rgba(0,0,0,0.4)';
+      ctx.shadowBlur = 3;
+      const fontSize = n > 10 ? 11 : n > 7 ? 12 : 13;
+      ctx.font = `700 ${fontSize}px Sora, sans-serif`;
+      ctx.fillText(wheelShortLabel(prize), radius * 0.62, 0);
       ctx.restore();
     });
 
-    // Outer ring
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(212, 163, 92, 0.85)';
-    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'rgba(212, 163, 92, 0.95)';
+    ctx.lineWidth = 6;
     ctx.stroke();
 
-    // Hub
+    for (let i = 0; i < n; i += 1) {
+      const a = -Math.PI / 2 + wheelState.rotation + i * slice;
+      const px = cx + Math.cos(a) * radius;
+      const py = cy + Math.sin(a) * radius;
+      ctx.beginPath();
+      ctx.arc(px, py, 3.2, 0, Math.PI * 2);
+      ctx.fillStyle = '#f0d19a';
+      ctx.fill();
+    }
+
     ctx.beginPath();
-    ctx.arc(cx, cy, 34, 0, Math.PI * 2);
-    ctx.fillStyle = '#1c1815';
+    ctx.arc(cx, cy, 40, 0, Math.PI * 2);
+    ctx.fillStyle = '#14110f';
     ctx.fill();
-    ctx.strokeStyle = '#d4a35c';
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(212, 163, 92, 0.35)';
+    ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.fillStyle = '#d4a35c';
-    ctx.font = '700 13px Fraunces, serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('SPIN', cx, cy);
+  }
+
+  function prizeTierMeta(probability) {
+    const p = Number(probability) || 0;
+    if (p >= 15) return { tier: 'C', label: 'частые призы', frequent: true };
+    if (p >= 10) return { tier: 'B', label: 'редкие призы', frequent: false };
+    return { tier: 'A', label: 'очень редкие', frequent: false };
+  }
+
+  function renderWheelCatalog() {
+    const box = els.wheelPrizeCatalog;
+    if (!box) return;
+    const prizes = [...(wheelState.prizes || [])].sort(
+      (a, b) => (Number(b.probability) || 0) - (Number(a.probability) || 0)
+    );
+    if (!prizes.length) {
+      box.innerHTML = '<div class="empty-state">Призы ещё не загружены</div>';
+      return;
+    }
+    const groups = { C: [], B: [], A: [] };
+    prizes.forEach((prize) => {
+      const meta = prizeTierMeta(prize.probability);
+      groups[meta.tier].push({ prize, meta });
+    });
+    box.innerHTML = ['C', 'B', 'A'].map((tier) => {
+      const items = groups[tier];
+      if (!items.length) return '';
+      const label = items[0].meta.label;
+      return `
+        <div class="wheel-tier">
+          <span class="wheel-tier-badge">ТИР ${tier}</span>
+          <span class="wheel-tier-label">${escapeHtml(label)}</span>
+        </div>
+        ${items.map(({ prize, meta }) => `
+          <article class="wheel-prize-card">
+            <div class="wheel-prize-ico">${escapeHtml(prize.icon || wheelShortLabel(prize))}</div>
+            <div class="wheel-prize-copy">
+              <p class="wheel-prize-name">${escapeHtml(prize.name || '')}</p>
+              <p class="wheel-prize-desc">${escapeHtml(prize.description || '')}</p>
+            </div>
+            ${meta.frequent ? '<span class="wheel-prize-freq">Часто</span>' : ''}
+          </article>
+        `).join('')}
+      `;
+    }).join('');
+  }
+
+  function showWheelMainPane() {
+    if (els.wheelMainPane) els.wheelMainPane.hidden = false;
+    if (els.wheelInsidePane) els.wheelInsidePane.hidden = true;
+  }
+
+  function showWheelInsidePane() {
+    renderWheelCatalog();
+    if (els.wheelMainPane) els.wheelMainPane.hidden = true;
+    if (els.wheelInsidePane) els.wheelInsidePane.hidden = false;
+    haptic('light');
   }
 
   function openWheelSheet() {
@@ -1888,6 +1980,7 @@
     }
     closeOrderSheet();
     closeRatingSheet({ dismiss: false });
+    showWheelMainPane();
     if (els.wheelResult) els.wheelResult.hidden = true;
     els.wheelBackdrop.hidden = false;
     els.wheelSheet.classList.add('open');
@@ -1907,6 +2000,7 @@
     els.wheelSheet?.classList.remove('open');
     els.wheelSheet?.setAttribute('aria-hidden', 'true');
     if (els.wheelBackdrop) els.wheelBackdrop.hidden = true;
+    showWheelMainPane();
     if (!els.sheet?.classList.contains('open') && !els.ratingSheet?.classList.contains('open')) {
       document.body.classList.remove('sheet-open');
     }
@@ -3289,6 +3383,9 @@
     els.wheelCloseBtn?.addEventListener('click', closeWheelSheet);
     els.wheelBackdrop?.addEventListener('click', closeWheelSheet);
     els.wheelSpinBtn?.addEventListener('click', spinWheel);
+    els.wheelHubBtn?.addEventListener('click', spinWheel);
+    els.wheelInsideBtn?.addEventListener('click', showWheelInsidePane);
+    els.wheelInsideBackBtn?.addEventListener('click', showWheelMainPane);
     els.ratingSkipBtn?.addEventListener('click', () => submitRating({ skip: true }));
     els.ratingSubmitBtn?.addEventListener('click', () => {
       if (!state.ratingValue) {

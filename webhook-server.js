@@ -198,7 +198,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'wheel1';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'wheel2';
 
 function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
@@ -3099,34 +3099,43 @@ app.post('/api/mini-app/apply-promo', async (req, res) => {
 
 // ─── Wheel of fortune ───────────────────────────────────────────────
 const DEFAULT_WHEEL_PRIZES = [
-  { id: 'bonus_50', name: '50 бонусов', description: '50 бонусов на счёт', type: 'bonus', value: 50, probability: 25, color: '#7cb89a', icon: '◆' },
-  { id: 'discount_10', name: 'Скидка 10%', description: 'Персональный промокод −10%', type: 'promo', value: 10, probability: 20, color: '#d4a35c', icon: '%' },
-  { id: 'bonus_100', name: '100 бонусов', description: '100 бонусов на счёт', type: 'bonus', value: 100, probability: 15, color: '#a56b2b', icon: '★' },
-  { id: 'bonus_20', name: '20 бонусов', description: '20 бонусов на счёт', type: 'bonus', value: 20, probability: 15, color: '#c4a574', icon: '✧' },
-  { id: 'discount_15', name: 'Скидка 15%', description: 'Персональный промокод −15%', type: 'promo', value: 15, probability: 10, color: '#e0b35c', icon: '✦' },
-  { id: 'bonus_150', name: '150 бонусов', description: '150 бонусов на счёт', type: 'bonus', value: 150, probability: 10, color: '#8f6a3a', icon: '❖' },
-  { id: 'nothing', name: 'Повезёт завтра', description: 'В этот раз без приза', type: 'nothing', value: 0, probability: 5, color: '#5a524a', icon: '·' }
+  { id: 'bonus_20', name: '20 бонусов', short: '+20', description: 'Мелкое пополнение бонусного счёта', type: 'bonus', value: 20, probability: 18, color: '#3d6b55', icon: '+20' },
+  { id: 'bonus_50', name: '50 бонусов', short: '+50', description: '50 бонусов на счёт', type: 'bonus', value: 50, probability: 16, color: '#d4a35c', icon: '+50' },
+  { id: 'discount_10', name: 'Скидка 10%', short: '−10%', description: 'Персональный промокод −10% на 7 дней', type: 'promo', value: 10, probability: 14, color: '#3a4f6a', icon: '%' },
+  { id: 'bonus_30', name: '30 бонусов', short: '+30', description: '30 бонусов на счёт', type: 'bonus', value: 30, probability: 12, color: '#8f6a3a', icon: '+30' },
+  { id: 'bonus_100', name: '100 бонусов', short: '+100', description: 'Крупное пополнение бонусов', type: 'bonus', value: 100, probability: 10, color: '#7cb89a', icon: '+100' },
+  { id: 'discount_15', name: 'Скидка 15%', short: '−15%', description: 'Персональный промокод −15% на 7 дней', type: 'promo', value: 15, probability: 8, color: '#e0b35c', icon: '15%' },
+  { id: 'bonus_10', name: '10 бонусов', short: '+10', description: 'Небольшое утешение', type: 'bonus', value: 10, probability: 8, color: '#5c4a38', icon: '+10' },
+  { id: 'bonus_150', name: '150 бонусов', short: '+150', description: 'Редкий джекпот бонусов', type: 'bonus', value: 150, probability: 6, color: '#a56b2b', icon: '★' },
+  { id: 'discount_20', name: 'Скидка 20%', short: '−20%', description: 'Редкий промокод −20% на 7 дней', type: 'promo', value: 20, probability: 4, color: '#c4a574', icon: '20%' },
+  { id: 'nothing', name: 'Повезёт завтра', short: '—', description: 'В этот раз без приза — загляните завтра', type: 'nothing', value: 0, probability: 4, color: '#4a4540', icon: '·' }
 ];
 
 async function ensureWheelPrizes() {
-  const snap = await db.collection('wheelPrizes').limit(1).get();
-  if (!snap.empty) {
-    const all = await db.collection('wheelPrizes').get();
-    return all.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((p) => p.active !== false)
-      .sort((a, b) => (Number(b.probability) || 0) - (Number(a.probability) || 0));
-  }
-  const batch = db.batch();
+  const all = await db.collection('wheelPrizes').get();
+  const existing = new Map(all.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() }]));
+  let batch = db.batch();
+  let ops = 0;
   for (const prize of DEFAULT_WHEEL_PRIZES) {
+    if (existing.has(prize.id)) continue;
     batch.set(db.collection('wheelPrizes').doc(prize.id), {
       ...prize,
       active: true,
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
+    existing.set(prize.id, { ...prize, active: true });
+    ops += 1;
+    if (ops >= 400) {
+      await batch.commit();
+      batch = db.batch();
+      ops = 0;
+    }
   }
-  await batch.commit();
-  return DEFAULT_WHEEL_PRIZES.map((p) => ({ ...p, active: true }));
+  if (ops > 0) await batch.commit();
+
+  return [...existing.values()]
+    .filter((p) => p.active !== false)
+    .sort((a, b) => (Number(b.probability) || 0) - (Number(a.probability) || 0));
 }
 
 async function getWheelConfig() {
@@ -3200,6 +3209,7 @@ function publicWheelPrize(prize) {
   return {
     id: prize.id,
     name: prize.name,
+    short: prize.short || '',
     description: prize.description || '',
     type: prize.type,
     value: Number(prize.value) || 0,
