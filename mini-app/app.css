@@ -777,6 +777,11 @@ body[data-view='admin'] #ratingBackdrop {
   margin-bottom: 12px;
 }
 
+.profile-card-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .avatar {
   width: 52px;
   height: 52px;
@@ -804,6 +809,16 @@ body[data-view='admin'] #ratingBackdrop {
   font-family: var(--font-body);
   font-size: var(--text-sm);
   font-weight: 400;
+}
+
+.profile-summary {
+  margin: 8px 0 0;
+  color: var(--accent);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-normal);
+  line-height: var(--leading-snug);
 }
 
 .stat-row {

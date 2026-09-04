@@ -139,10 +139,8 @@
     ordersList: document.getElementById('ordersList'),
     profileName: document.getElementById('profileName'),
     profileMeta: document.getElementById('profileMeta'),
-    profileBonus: document.getElementById('profileBonus'),
-    profileBill: document.getElementById('profileBill'),
-    profileEarned: document.getElementById('profileEarned'),
-    profileSpent: document.getElementById('profileSpent'),
+    profileSummary: document.getElementById('profileSummary'),
+    profileBillTitle: document.getElementById('profileBillTitle'),
     profileBillItems: document.getElementById('profileBillItems'),
     profileBillEmpty: document.getElementById('profileBillEmpty'),
     profileBillHistory: document.getElementById('profileBillHistory'),
@@ -1896,12 +1894,19 @@
         ? 'Администратор'
         : 'Telegram Mini App';
     els.avatar.textContent = (name || 'A').charAt(0).toUpperCase();
-    els.profileBonus.textContent = String(state.bonusBalance);
-    if (els.profileEarned) els.profileEarned.textContent = String(state.totalEarned || 0);
-    if (els.profileSpent) els.profileSpent.textContent = String(state.totalSpent || 0);
     els.bonusChip.textContent = formatBonusChip(state.bonusBalance);
-    els.profileBill.textContent =
-      state.openBillTotal == null ? '—' : `${state.openBillTotal} ₽`;
+
+    const billTotal = state.openBillTotal == null ? null : Number(state.openBillTotal) || 0;
+    if (els.profileSummary) {
+      els.profileSummary.textContent = billTotal != null && billTotal > 0
+        ? `${formatBonusChip(state.bonusBalance)} · счёт ${billTotal} ₽`
+        : formatBonusChip(state.bonusBalance);
+    }
+    if (els.profileBillTitle) {
+      els.profileBillTitle.textContent = billTotal != null && billTotal > 0
+        ? `Открытый счёт · ${billTotal} ₽`
+        : 'Открытый счёт';
+    }
     renderProfileBillItems();
     renderProfileBillHistory();
     syncOrdersPromoUI();

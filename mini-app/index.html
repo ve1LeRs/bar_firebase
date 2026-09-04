@@ -13,8 +13,8 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://telegram.org">
-  <link rel="preload" href="app.css?v=nojerk1" as="style">
-  <link rel="stylesheet" href="app.css?v=nojerk1">
+  <link rel="preload" href="app.css?v=profileslim1" as="style">
+  <link rel="stylesheet" href="app.css?v=profileslim1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700&display=swap">
@@ -279,30 +279,10 @@
       <h2 class="section-title">Профиль</h2>
       <div class="profile-card">
         <div class="avatar" id="avatar">A</div>
-        <div>
+        <div class="profile-card-copy">
           <p class="profile-name" id="profileName">Гость</p>
           <p class="profile-meta" id="profileMeta">Telegram Mini App</p>
-        </div>
-      </div>
-
-      <div class="stat-row">
-        <div class="stat">
-          <span class="stat-label">Бонусы</span>
-          <strong id="profileBonus">0</strong>
-        </div>
-        <div class="stat">
-          <span class="stat-label">Открытый счёт</span>
-          <strong id="profileBill">—</strong>
-        </div>
-      </div>
-      <div class="stat-row">
-        <div class="stat">
-          <span class="stat-label">Заработано</span>
-          <strong id="profileEarned">0</strong>
-        </div>
-        <div class="stat">
-          <span class="stat-label">Потрачено</span>
-          <strong id="profileSpent">0</strong>
+          <p class="profile-summary" id="profileSummary">0 бонусов</p>
         </div>
       </div>
 
@@ -327,7 +307,7 @@
       </div>
 
       <div class="bill-panel">
-        <h3 class="bill-panel-title">В открытом счёте</h3>
+        <h3 class="bill-panel-title" id="profileBillTitle">Открытый счёт</h3>
         <div id="profileBillItems" class="bill-items">
           <div class="empty-state" id="profileBillEmpty">Пока нет позиций в счёте</div>
         </div>
