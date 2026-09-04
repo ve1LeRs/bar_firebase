@@ -1896,9 +1896,10 @@
       return;
     }
     els.wheelResult.hidden = false;
+    const isPromo = Boolean(prize.promoCode) && prize.type !== 'bonus' && prize.type !== 'nothing';
     let title = prize.name || 'Готово';
     let desc = prize.description || '';
-    if (prize.promoCode) {
+    if (isPromo) {
       title = prize.name || `Скидка ${prize.value || ''}%`;
       desc = 'Сохранён в Профиле · примените во вкладке Заказы';
     } else if (prize.type === 'nothing') {
@@ -1906,7 +1907,7 @@
     }
     if (els.wheelResultTitle) els.wheelResultTitle.textContent = title;
     if (els.wheelResultCode) {
-      if (prize.promoCode) {
+      if (isPromo) {
         els.wheelResultCode.hidden = false;
         els.wheelResultCode.textContent = prize.promoCode;
       } else {
@@ -1916,10 +1917,21 @@
     }
     if (els.wheelResultDesc) els.wheelResultDesc.textContent = desc;
     if (els.wheelCopyPromoBtn) {
-      const canCopy = showCopy && Boolean(prize.promoCode);
+      const canCopy = showCopy && isPromo;
       els.wheelCopyPromoBtn.hidden = !canCopy;
-      els.wheelCopyPromoBtn.dataset.code = prize.promoCode || '';
+      els.wheelCopyPromoBtn.dataset.code = isPromo ? (prize.promoCode || '') : '';
     }
+  }
+
+  /** Show last spin result only — unused vault promos stay on the profile card. */
+  function syncWheelResultFromState() {
+    if (wheelState.spinning) return;
+    const last = wheelState.lastPrize;
+    if (!last) {
+      showWheelPrizeResult(null);
+      return;
+    }
+    showWheelPrizeResult(last);
   }
 
   async function refreshWheelStatus() {
@@ -1946,20 +1958,7 @@
       if (els.wheelSheet?.classList.contains('open')) {
         drawWheel();
         updateWheelSheetChrome();
-        if (!wheelState.spinning) {
-          const saved = getActiveWheelPromo();
-          if (saved?.code) {
-            showWheelPrizeResult({
-              ...(wheelState.lastPrize || {}),
-              name: wheelState.lastPrize?.name || `Скидка ${saved.discount || ''}%`,
-              promoCode: saved.code,
-              value: saved.discount,
-              type: 'promo'
-            });
-          } else if (wheelState.lastPrize && wheelState.lastPrize.type !== 'promo') {
-            showWheelPrizeResult(wheelState.lastPrize);
-          }
-        }
+        syncWheelResultFromState();
       }
     } catch (err) {
       console.warn('wheel status', err);
@@ -2165,17 +2164,7 @@
     closeOrderSheet();
     closeRatingSheet({ dismiss: false });
     showWheelMainPane();
-    const previewPromo = getActiveWheelPromo();
-    if (previewPromo?.code) {
-      showWheelPrizeResult({
-        name: `Скидка ${previewPromo.discount || ''}%`,
-        promoCode: previewPromo.code,
-        value: previewPromo.discount,
-        type: 'promo'
-      });
-    } else {
-      showWheelPrizeResult(null);
-    }
+    syncWheelResultFromState();
     els.wheelBackdrop.hidden = false;
     els.wheelSheet.classList.add('open');
     els.wheelSheet.setAttribute('aria-hidden', 'false');
@@ -2185,18 +2174,7 @@
     refreshWheelStatus().then(() => {
       drawWheel();
       updateWheelSheetChrome();
-      const saved = getActiveWheelPromo();
-      if (saved?.code) {
-        showWheelPrizeResult({
-          ...(wheelState.lastPrize || {}),
-          name: wheelState.lastPrize?.name || `Скидка ${saved.discount || ''}%`,
-          promoCode: saved.code,
-          value: saved.discount,
-          type: 'promo'
-        });
-      } else if (wheelState.lastPrize?.type === 'bonus' || wheelState.lastPrize?.type === 'nothing') {
-        showWheelPrizeResult(wheelState.lastPrize);
-      }
+      syncWheelResultFromState();
     });
     haptic('light');
   }
@@ -3603,7 +3581,7 @@
     els.wheelInsideBtn?.addEventListener('click', showWheelInsidePane);
     els.wheelInsideBackBtn?.addEventListener('click', showWheelMainPane);
     els.wheelCopyPromoBtn?.addEventListener('click', async () => {
-      const code = els.wheelCopyPromoBtn.dataset.code || getActiveWheelPromo()?.code;
+      const code = els.wheelCopyPromoBtn.dataset.code;
       if (!code) return;
       const ok = await copyText(code);
       showToast(ok ? `Скопировано: ${code}` : code);
