@@ -140,10 +140,6 @@
     profileName: document.getElementById('profileName'),
     profileMeta: document.getElementById('profileMeta'),
     profileSummary: document.getElementById('profileSummary'),
-    profileBillTitle: document.getElementById('profileBillTitle'),
-    profileBillItems: document.getElementById('profileBillItems'),
-    profileBillEmpty: document.getElementById('profileBillEmpty'),
-    profileBillHistory: document.getElementById('profileBillHistory'),
     ordersPromoBox: document.getElementById('ordersPromoBox'),
     ordersPromoRow: document.getElementById('ordersPromoRow'),
     ordersPromoInput: document.getElementById('ordersPromoInput'),
@@ -1904,20 +1900,9 @@
         : 'Telegram Mini App';
     els.avatar.textContent = (name || 'A').charAt(0).toUpperCase();
     els.bonusChip.textContent = formatBonusChip(state.bonusBalance);
-
-    const billTotal = state.openBillTotal == null ? null : Number(state.openBillTotal) || 0;
     if (els.profileSummary) {
-      els.profileSummary.textContent = billTotal != null && billTotal > 0
-        ? `${formatBonusChip(state.bonusBalance)} · счёт ${billTotal} ₽`
-        : formatBonusChip(state.bonusBalance);
+      els.profileSummary.textContent = formatBonusChip(state.bonusBalance);
     }
-    if (els.profileBillTitle) {
-      els.profileBillTitle.textContent = billTotal != null && billTotal > 0
-        ? `Открытый счёт · ${billTotal} ₽`
-        : 'Открытый счёт';
-    }
-    renderProfileBillItems();
-    renderProfileBillHistory();
     syncOrdersPromoUI();
     syncWheelCardUI();
   }
