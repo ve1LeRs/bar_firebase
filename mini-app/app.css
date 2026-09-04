@@ -1231,14 +1231,16 @@ button.danger {
 
 .sheet.open {
   transform: translateY(0);
-  bottom: var(--keyboard-inset, 0px);
   visibility: visible;
   pointer-events: auto;
 }
 
-/* Keyboard open: keep sheet above keyboard, collapse bulky media */
-body.keyboard-open .sheet.open {
-  max-height: calc(var(--vv-height, 100dvh) - 4px);
+/* Keyboard open: fit sheet to visible viewport; do NOT lift with bottom inset
+   (that pushes actions onto the keyboard and crushes the bonus field). */
+body.keyboard-open .sheet.open,
+.sheet.sheet-compact.open {
+  bottom: 0;
+  max-height: calc(var(--vv-height, 50dvh) - 4px);
 }
 
 .sheet.sheet-compact .sheet-media {
@@ -1265,8 +1267,33 @@ body.keyboard-open .sheet.open {
   margin-top: 10px;
 }
 
-body.keyboard-open .sheet-actions {
-  padding-bottom: 12px;
+/* While typing bonuses: hide order actions so they don't ride above the keyboard */
+body.keyboard-open .sheet.open .sheet-actions,
+.sheet.sheet-compact .sheet-actions {
+  display: none !important;
+}
+
+.sheet.sheet-compact .sheet-scroll {
+  padding-bottom: 20px;
+}
+
+.sheet.sheet-compact .bonus-row {
+  margin-top: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.sheet.sheet-compact .bonus-row label {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.sheet.sheet-compact .bonus-row input {
+  width: 112px;
+  min-height: 44px;
+  font-size: var(--text-base);
+  font-weight: 600;
 }
 
 body.sheet-open .tabbar {

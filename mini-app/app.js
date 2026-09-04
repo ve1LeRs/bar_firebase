@@ -512,14 +512,19 @@
     document.body.classList.add('field-focused', 'keyboard-open');
     els.sheet?.classList.add('sheet-compact');
     syncKeyboardLayout();
-    // Scroll bonus row into the visible sheet area above action buttons
-    requestAnimationFrame(() => {
+    // Keep bonus row visible in the compact sheet (actions are hidden while typing)
+    const pin = () => {
       try {
-        els.bonusRow?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        els.bonusRow?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       } catch (_) {
-        els.bonusRow?.scrollIntoView();
+        try { els.bonusRow?.scrollIntoView(); } catch (__) { /* ignore */ }
       }
-    });
+    };
+    requestAnimationFrame(pin);
+    clearTimeout(focusBonusField._t1);
+    clearTimeout(focusBonusField._t2);
+    focusBonusField._t1 = setTimeout(pin, 280);
+    focusBonusField._t2 = setTimeout(pin, 520);
   }
 
   function blurBonusField() {
@@ -537,7 +542,11 @@
     // Delay so we don't flicker if focus moves briefly
     setTimeout(() => {
       if (document.activeElement === els.bonusInput) return;
+      document.body.classList.remove('field-focused');
       if (!document.body.classList.contains('keyboard-open')) {
+        els.sheet?.classList.remove('sheet-compact');
+      } else {
+        // Viewport still reports keyboard — clear compact when inset settles
         els.sheet?.classList.remove('sheet-compact');
       }
       syncKeyboardLayout();
@@ -3642,6 +3651,12 @@
     els.bonusInput.addEventListener('input', updateSheetTotal);
     els.bonusInput.addEventListener('focus', focusBonusField);
     els.bonusInput.addEventListener('blur', blurBonusField);
+    els.bonusInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        dismissKeyboard();
+      }
+    });
     els.confirmOrderBtn.addEventListener('click', placeOrder);
     els.ordersPromoBtn?.addEventListener('click', applyOrdersPromo);
     els.ordersPromoInput?.addEventListener('focus', focusOrdersPromoField);
