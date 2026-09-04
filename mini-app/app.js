@@ -175,6 +175,7 @@
     sheetPrice: document.getElementById('sheetPrice'),
     sheetTotal: document.getElementById('sheetTotal'),
     bonusRow: document.getElementById('bonusRow'),
+    bonusHaveHint: document.getElementById('bonusHaveHint'),
     bonusInput: document.getElementById('bonusInput'),
     bonusEarnRow: document.getElementById('bonusEarnRow'),
     sheetBonusEarn: document.getElementById('sheetBonusEarn'),
@@ -528,29 +529,31 @@
   }
 
   function blurBonusField() {
-    // Clamp over-limit bonus and tell the user — don't silently spend "all available"
-    if (state.selected && els.bonusInput && !els.bonusRow?.hidden) {
-      const price = Number(state.selected.price) || 0;
-      const { maxBonus, raw, overLimit, message } = resolveBonusInput(price, { clampInput: true });
-      if (overLimit) {
-        showToast(message);
-        haptic('heavy');
-      }
-      state.bonusToUse = Math.min(raw, maxBonus);
-      updateSheetTotal();
-    }
+    // Only update totals — insufficient-bonus check happens on «Заказать»
+    if (state.selected) updateSheetTotal();
     // Delay so we don't flicker if focus moves briefly
     setTimeout(() => {
       if (document.activeElement === els.bonusInput) return;
       document.body.classList.remove('field-focused');
-      if (!document.body.classList.contains('keyboard-open')) {
-        els.sheet?.classList.remove('sheet-compact');
-      } else {
-        // Viewport still reports keyboard — clear compact when inset settles
-        els.sheet?.classList.remove('sheet-compact');
-      }
+      els.sheet?.classList.remove('sheet-compact');
       syncKeyboardLayout();
     }, 180);
+  }
+
+  function formatBonusCount(n) {
+    const v = Math.max(0, Number(n) || 0);
+    const mod10 = v % 10;
+    const mod100 = v % 100;
+    let word = 'бонусов';
+    if (mod10 === 1 && mod100 !== 11) word = 'бонус';
+    else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) word = 'бонуса';
+    return `${v} ${word}`;
+  }
+
+  function syncBonusHaveHint() {
+    if (!els.bonusHaveHint) return;
+    const balance = Math.max(0, Number(state.bonusBalance) || 0);
+    els.bonusHaveHint.textContent = `У вас ${formatBonusCount(balance)}`;
   }
 
   function resolveBonusInput(price, { clampInput = false } = {}) {
@@ -562,16 +565,13 @@
     let message = '';
     if (overLimit) {
       if (raw > balance) {
-        message = `Недостаточно бонусов. У вас ${balance}`;
+        message = `Недостаточно бонусов. У вас ${formatBonusCount(balance)}`;
       } else {
         message = `Можно списать не больше ${maxBonus} (до ${state.maxBonusUsage}% от суммы)`;
       }
     }
     if (clampInput && els.bonusInput) {
       els.bonusInput.value = String(Math.min(raw, maxBonus));
-    }
-    if (els.bonusInput) {
-      els.bonusInput.classList.toggle('is-invalid', overLimit && !clampInput);
     }
     return { maxBonus, balance, percentCap, raw, overLimit, message };
   }
@@ -3117,8 +3117,9 @@
     );
     if (maxBonus > 0) {
       els.bonusRow.hidden = false;
-      els.bonusInput.max = String(maxBonus);
-      els.bonusInput.placeholder = `До ${maxBonus}`;
+      els.bonusInput.max = '';
+      els.bonusInput.placeholder = '0';
+      syncBonusHaveHint();
     } else {
       els.bonusRow.hidden = true;
     }
@@ -3145,22 +3146,13 @@
   function updateSheetTotal() {
     if (!state.selected) return;
     const price = Number(state.selected.price) || 0;
-    const { maxBonus, raw, overLimit, message } = resolveBonusInput(price);
-    const bonus = Math.min(raw, maxBonus);
-    state.bonusToUse = bonus;
-    if (els.bonusInput) {
-      els.bonusInput.max = String(maxBonus);
-      els.bonusInput.classList.toggle('is-invalid', overLimit);
-    }
-    // Warn once when the typed value first exceeds the limit (not on every keystroke)
-    if (overLimit && !updateSheetTotal._overWarned) {
-      updateSheetTotal._overWarned = true;
-      showToast(message);
-      haptic('heavy');
-    } else if (!overLimit) {
-      updateSheetTotal._overWarned = false;
-    }
-    const payable = Math.max(0, price - bonus);
+    const { raw } = resolveBonusInput(price);
+    // Preview only — do not warn/clamp while typing; «Заказать» validates for real
+    const previewBonus = Math.min(raw, price);
+    state.bonusToUse = previewBonus;
+    if (els.bonusInput) els.bonusInput.classList.remove('is-invalid');
+    syncBonusHaveHint();
+    const payable = Math.max(0, price - previewBonus);
     els.sheetTotal.textContent = `${payable} ₽`;
 
     const earn = (state.bonusActive && payable >= state.bonusMinOrder)
@@ -3227,13 +3219,14 @@
     if (bonusCheck.overLimit) {
       showToast(bonusCheck.message);
       haptic('heavy');
-      // Keep sheet open — user must fix the amount
       if (els.bonusInput) {
+        els.bonusInput.classList.add('is-invalid');
         els.bonusInput.focus();
         els.bonusInput.select?.();
       }
       return;
     }
+    if (els.bonusInput) els.bonusInput.classList.remove('is-invalid');
     const bonusUsed = Math.min(bonusCheck.raw, bonusCheck.maxBonus);
     state.bonusToUse = bonusUsed;
     const finalPrice = Math.max(0, price - bonusUsed);
