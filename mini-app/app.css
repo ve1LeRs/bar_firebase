@@ -1373,11 +1373,7 @@ body.keyboard-open .sheet.open,
   margin-top: 8px;
 }
 
-.sheet.sheet-compact #bonusEarnRow {
-  display: none;
-}
-
-/* While typing bonuses: keep CTA visible, sheet hugs content — no flex gap. */
+/* Keep «Начислим бонусов» visible even while typing */
 body.keyboard-open .sheet.open .sheet-actions,
 .sheet.sheet-compact .sheet-actions {
   display: flex;
