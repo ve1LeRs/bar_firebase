@@ -1842,7 +1842,7 @@
     const canvas = els.wheelCanvas;
     if (!ctx || !canvas) return;
     const prizes = wheelState.prizes.length ? wheelState.prizes : [
-      { name: '…', color: '#3a322c', short: '…' }
+      { name: '…', short: '…' }
     ];
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const size = 360;
@@ -1855,14 +1855,20 @@
 
     const cx = size / 2;
     const cy = size / 2;
-    const radius = size / 2 - 10;
+    const radius = size / 2 - 14;
     const n = prizes.length;
     const slice = (Math.PI * 2) / n;
+    // Strict bar palette — ignore flashy Firestore colors
+    const tones = ['#241c16', '#2e251e', '#382e25', '#43362c'];
 
+    // Outer matte ring
     ctx.beginPath();
-    ctx.arc(cx, cy, radius + 6, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(20, 14, 10, 0.85)';
+    ctx.arc(cx, cy, radius + 8, 0, Math.PI * 2);
+    ctx.fillStyle = '#1a1511';
     ctx.fill();
+    ctx.strokeStyle = 'rgba(212, 163, 92, 0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
 
     prizes.forEach((prize, i) => {
       const start = -Math.PI / 2 + wheelState.rotation + i * slice;
@@ -1871,10 +1877,10 @@
       ctx.moveTo(cx, cy);
       ctx.arc(cx, cy, radius, start, end);
       ctx.closePath();
-      ctx.fillStyle = prize.color || '#d4a35c';
+      ctx.fillStyle = tones[i % tones.length];
       ctx.fill();
-      ctx.strokeStyle = 'rgba(10, 8, 6, 0.65)';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(212, 163, 92, 0.18)';
+      ctx.lineWidth = 1;
       ctx.stroke();
 
       ctx.save();
@@ -1882,37 +1888,43 @@
       ctx.rotate(start + slice / 2);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#fff8ef';
-      ctx.shadowColor = 'rgba(0,0,0,0.4)';
-      ctx.shadowBlur = 3;
-      const fontSize = n > 10 ? 11 : n > 7 ? 12 : 13;
-      ctx.font = `700 ${fontSize}px Sora, sans-serif`;
-      ctx.fillText(wheelShortLabel(prize), radius * 0.62, 0);
+      ctx.fillStyle = i % 2 === 0 ? '#e8dcc8' : '#d4a35c';
+      ctx.shadowColor = 'transparent';
+      const fontSize = n > 10 ? 11 : 12;
+      ctx.font = `600 ${fontSize}px Sora, sans-serif`;
+      ctx.fillText(wheelShortLabel(prize), radius * 0.64, 0);
       ctx.restore();
     });
 
+    // Thin gold rim
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(212, 163, 92, 0.95)';
-    ctx.lineWidth = 6;
+    ctx.strokeStyle = 'rgba(212, 163, 92, 0.55)';
+    ctx.lineWidth = 2.5;
     ctx.stroke();
 
+    // Subtle divider ticks (not carnival pegs)
     for (let i = 0; i < n; i += 1) {
       const a = -Math.PI / 2 + wheelState.rotation + i * slice;
-      const px = cx + Math.cos(a) * radius;
-      const py = cy + Math.sin(a) * radius;
+      const x1 = cx + Math.cos(a) * (radius - 2);
+      const y1 = cy + Math.sin(a) * (radius - 2);
+      const x2 = cx + Math.cos(a) * (radius + 2);
+      const y2 = cy + Math.sin(a) * (radius + 2);
       ctx.beginPath();
-      ctx.arc(px, py, 3.2, 0, Math.PI * 2);
-      ctx.fillStyle = '#f0d19a';
-      ctx.fill();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = 'rgba(212, 163, 92, 0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
     }
 
+    // Hub recess (HTML button sits on top)
     ctx.beginPath();
-    ctx.arc(cx, cy, 40, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 38, 0, Math.PI * 2);
     ctx.fillStyle = '#14110f';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(212, 163, 92, 0.35)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(212, 163, 92, 0.28)';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
   }
 
