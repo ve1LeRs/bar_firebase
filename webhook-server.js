@@ -193,7 +193,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'profbills1';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'adminwheel1';
 
 function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
@@ -2820,10 +2820,8 @@ async function ensureTelegramAdmin(telegramId) {
   return { uid, telegramId: id, role: 'admin' };
 }
 
-async function resolveMiniAppAdmin(req) {
-  const session = await resolveMiniAppUser(req);
-  if (!session.ok) return session;
-
+async function isMiniAppAdminUser(session) {
+  if (!session?.ok && session?.userId == null && !session?.telegramId) return false;
   const allowed = new Set(
     String(process.env.TELEGRAM_ADMIN_IDS || TELEGRAM_CHAT_ID || '1743362083')
       .split(',')
@@ -2832,17 +2830,24 @@ async function resolveMiniAppAdmin(req) {
   );
   allowed.add('1743362083');
 
-  if (session.telegramId && allowed.has(String(session.telegramId))) {
-    return { ...session, isAdmin: true };
-  }
+  if (session.telegramId && allowed.has(String(session.telegramId))) return true;
 
   try {
-    const userDoc = await db.collection('users').doc(session.userId).get();
-    if (userDoc.exists && userDoc.data().role === 'admin') {
-      return { ...session, isAdmin: true };
-    }
+    const uid = session.userId || (session.telegramId ? `tg_${session.telegramId}` : null);
+    if (!uid) return false;
+    const userDoc = await db.collection('users').doc(uid).get();
+    if (userDoc.exists && userDoc.data().role === 'admin') return true;
   } catch (_) { /* ignore */ }
 
+  return false;
+}
+
+async function resolveMiniAppAdmin(req) {
+  const session = await resolveMiniAppUser(req);
+  if (!session.ok) return session;
+  if (await isMiniAppAdminUser(session)) {
+    return { ...session, isAdmin: true };
+  }
   return { ok: false, reason: 'not_admin' };
 }
 
@@ -3539,6 +3544,7 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
     const session = await resolveMiniAppUser(req);
     if (!session.ok) return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
 
+    const isAdmin = await isMiniAppAdminUser(session);
     const [config, prizes, spinDoc, myPromos] = await Promise.all([
       getWheelConfig(),
       ensureWheelPrizes(),
@@ -3550,7 +3556,9 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
     let nextSpinAt = null;
     let lastPrize = null;
     const spin = spinDoc.exists ? spinDoc.data() : {};
-    if (spin.lastSpinDate) {
+    if (spin.prize) lastPrize = spin.prize;
+    // Admins can spin without cooldown
+    if (!isAdmin && spin.lastSpinDate) {
       const lastMs = spin.lastSpinDate.toMillis?.() || Date.parse(spin.lastSpinDate) || 0;
       const cooldownMs = (config.cooldownHours || 24) * 3600 * 1000;
       const unlockAt = lastMs + cooldownMs;
@@ -3558,7 +3566,6 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
         canSpin = false;
         nextSpinAt = unlockAt;
       }
-      if (spin.prize) lastPrize = spin.prize;
     }
 
     // If last prize promo is missing from list but still stored on spin — include it
@@ -3593,8 +3600,9 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
       success: true,
       active: config.active,
       canSpin: Boolean(canSpin && config.active),
+      unlimited: Boolean(isAdmin),
       cooldownHours: config.cooldownHours,
-      nextSpinAt,
+      nextSpinAt: isAdmin ? null : nextSpinAt,
       totalSpins: Number(spin.totalSpins) || 0,
       lastPrize,
       myPromos,
@@ -3610,6 +3618,7 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
     const session = await resolveMiniAppUser(req);
     if (!session.ok) return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
 
+    const isAdmin = await isMiniAppAdminUser(session);
     const config = await getWheelConfig();
     if (!config.active) {
       return res.status(400).json({ success: false, error: 'Колесо временно выключено' });
@@ -3624,11 +3633,12 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
     const cooldownMs = (config.cooldownHours || 24) * 3600 * 1000;
 
     // Atomic cooldown check + reserve spin slot before awarding
+    // Admins skip the daily limit
     let reserved = false;
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(spinRef);
       const prev = snap.exists ? snap.data() : {};
-      if (prev.lastSpinDate) {
+      if (!isAdmin && prev.lastSpinDate) {
         const lastMs = prev.lastSpinDate.toMillis?.() || 0;
         if (Date.now() < lastMs + cooldownMs) {
           const err = new Error('Колесо ещё недоступно');
@@ -3682,8 +3692,9 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
         prizeIndex,
         prize: publicPrize,
         award,
-        nextSpinAt: Date.now() + cooldownMs,
-        canSpin: false
+        unlimited: Boolean(isAdmin),
+        nextSpinAt: isAdmin ? null : Date.now() + cooldownMs,
+        canSpin: Boolean(isAdmin)
       });
     } catch (awardErr) {
       if (reserved) {

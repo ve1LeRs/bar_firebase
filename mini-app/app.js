@@ -219,6 +219,7 @@
     rotation: 0,
     spinning: false,
     canSpin: false,
+    unlimited: false,
     nextSpinAt: null,
     active: true,
     ctx: null,
@@ -1919,6 +1920,7 @@
   function syncWheelCardUI() {
     if (!els.wheelCardStatus) return;
     const saved = getActiveWheelPromo();
+    const canSpinNow = wheelState.canSpin || wheelState.unlimited || isAdminUser();
     if (!wheelState.active) {
       els.wheelCardStatus.textContent = 'Колесо временно выключено';
       if (els.wheelOpenBtn) els.wheelOpenBtn.disabled = true;
@@ -1929,11 +1931,19 @@
       els.wheelCardStatus.textContent = `Промокод ${saved.code}${disc}`;
       if (els.wheelOpenBtn) {
         els.wheelOpenBtn.disabled = false;
-        els.wheelOpenBtn.textContent = wheelState.canSpin ? 'Крутить' : 'Открыть';
+        els.wheelOpenBtn.textContent = canSpinNow ? 'Крутить' : 'Открыть';
       }
       return;
     }
-    if (wheelState.canSpin) {
+    if (wheelState.unlimited || isAdminUser()) {
+      els.wheelCardStatus.textContent = 'Админ · крутите без лимита';
+      if (els.wheelOpenBtn) {
+        els.wheelOpenBtn.disabled = false;
+        els.wheelOpenBtn.textContent = 'Крутить';
+      }
+      return;
+    }
+    if (canSpinNow) {
       els.wheelCardStatus.textContent = 'Можно крутить — бонусы и скидки';
       if (els.wheelOpenBtn) {
         els.wheelOpenBtn.disabled = false;
@@ -2107,7 +2117,13 @@
       if (!data.success) return;
       wheelState.active = data.active !== false;
       wheelState.canSpin = Boolean(data.canSpin);
-      wheelState.nextSpinAt = data.nextSpinAt || null;
+      wheelState.unlimited = Boolean(data.unlimited) || isAdminUser();
+      if (wheelState.unlimited && wheelState.active) {
+        wheelState.canSpin = true;
+        wheelState.nextSpinAt = null;
+      } else {
+        wheelState.nextSpinAt = data.nextSpinAt || null;
+      }
       wheelState.prizes = Array.isArray(data.prizes) ? data.prizes : [];
       wheelState.lastPrize = data.lastPrize || null;
       wheelState.myPromos = Array.isArray(data.myPromos) ? data.myPromos : [];
@@ -2129,6 +2145,7 @@
   function updateWheelSheetChrome() {
     if (els.wheelSheetSub) {
       if (!wheelState.active) els.wheelSheetSub.textContent = 'Колесо выключено';
+      else if (wheelState.unlimited || isAdminUser()) els.wheelSheetSub.textContent = 'Админ · без лимита';
       else if (wheelState.canSpin) els.wheelSheetSub.textContent = '1 крутка = раз в сутки';
       else if (wheelState.nextSpinAt) {
         const left = wheelState.nextSpinAt - Date.now();
@@ -2137,14 +2154,16 @@
           : '1 крутка = раз в сутки';
       } else els.wheelSheetSub.textContent = '1 крутка = раз в сутки';
     }
-    const blocked = wheelState.spinning || !wheelState.canSpin || !wheelState.active;
+    const canSpinNow = wheelState.canSpin || wheelState.unlimited || isAdminUser();
+    const blocked = wheelState.spinning || !canSpinNow || !wheelState.active;
     if (els.wheelSpinBtn) {
       els.wheelSpinBtn.disabled = blocked;
-      els.wheelSpinBtn.textContent = wheelState.canSpin ? 'Крутить' : 'Уже крутили сегодня';
+      els.wheelSpinBtn.textContent = canSpinNow ? 'Крутить' : 'Уже крутили сегодня';
     }
     if (els.wheelHubBtn) els.wheelHubBtn.disabled = blocked;
     if (els.wheelHint) {
       if (!wheelState.active) els.wheelHint.textContent = 'Колесо временно недоступно';
+      else if (wheelState.unlimited || isAdminUser()) els.wheelHint.textContent = '';
       else if (!wheelState.canSpin && wheelState.nextSpinAt) {
         const left = wheelState.nextSpinAt - Date.now();
         els.wheelHint.textContent = left > 0 ? `Подождите ${formatWheelCountdown(left)}` : '';
@@ -2379,7 +2398,8 @@
   }
 
   async function spinWheel() {
-    if (wheelState.spinning || !wheelState.canSpin || !wheelState.active) return;
+    const canSpinNow = wheelState.canSpin || wheelState.unlimited || isAdminUser();
+    if (wheelState.spinning || !canSpinNow || !wheelState.active) return;
     if (!canOrder()) {
       showToast('Подключаем сессию…');
       void authenticate().then((ok) => {
@@ -2406,8 +2426,9 @@
       await animateWheelToIndex(prizeIndex);
 
       const prize = data.prize || {};
-      wheelState.canSpin = false;
-      wheelState.nextSpinAt = data.nextSpinAt || (Date.now() + 24 * 3600 * 1000);
+      wheelState.unlimited = Boolean(data.unlimited) || isAdminUser();
+      wheelState.canSpin = Boolean(data.canSpin) || wheelState.unlimited;
+      wheelState.nextSpinAt = wheelState.unlimited ? null : (data.nextSpinAt || (Date.now() + 24 * 3600 * 1000));
 
       if (typeof data.award?.balance === 'number') {
         state.bonusBalance = data.award.balance;
