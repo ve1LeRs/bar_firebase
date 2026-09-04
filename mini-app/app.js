@@ -330,6 +330,7 @@
     document.documentElement.style.setProperty('--keyboard-inset', `${inset}px`);
     document.documentElement.style.setProperty('--vv-height', `${Math.round(vvHeight)}px`);
     const keyboardOpen = inset > 60;
+    const keyboardJustOpened = keyboardOpen && !document.body.classList.contains('keyboard-open');
     document.body.classList.toggle('keyboard-open', keyboardOpen);
 
     // Admin typing / keyboard dismiss must never reveal guest rating UI
@@ -344,6 +345,35 @@
         els.sheet.classList.remove('sheet-compact');
       }
     }
+
+    // Once when keyboard appears — scroll focused promo/bonus into view
+    if (keyboardJustOpened) {
+      const active = document.activeElement;
+      if (active?.id === 'profilePromoInput' || active?.id === 'bonusInput') {
+        ensureFieldAboveKeyboard(active);
+      }
+    }
+  }
+
+  function ensureFieldAboveKeyboard(el) {
+    if (!el || typeof el.scrollIntoView !== 'function') return;
+    const run = () => {
+      try {
+        const row = el.closest?.('.promo-row, .bonus-row, .price-row') || el;
+        row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      } catch (_) {
+        try { el.scrollIntoView(); } catch (__) { /* ignore */ }
+      }
+    };
+    requestAnimationFrame(run);
+    clearTimeout(ensureFieldAboveKeyboard._t1);
+    clearTimeout(ensureFieldAboveKeyboard._t2);
+    ensureFieldAboveKeyboard._t1 = setTimeout(run, 280);
+    ensureFieldAboveKeyboard._t2 = setTimeout(run, 520);
+  }
+
+  function focusProfilePromoField() {
+    ensureFieldAboveKeyboard(els.profilePromoInput);
   }
 
   function bindKeyboardAwareLayout() {
@@ -2897,6 +2927,13 @@
     els.bonusInput.addEventListener('blur', blurBonusField);
     els.confirmOrderBtn.addEventListener('click', placeOrder);
     els.profilePromoBtn?.addEventListener('click', applyProfilePromo);
+    els.profilePromoInput?.addEventListener('focus', focusProfilePromoField);
+    els.profilePromoInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applyProfilePromo();
+      }
+    });
     els.ratingSkipBtn?.addEventListener('click', () => submitRating({ skip: true }));
     els.ratingSubmitBtn?.addEventListener('click', () => {
       if (!state.ratingValue) {

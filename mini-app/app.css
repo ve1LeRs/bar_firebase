@@ -465,6 +465,8 @@ textarea {
   gap: 8px;
   margin-top: 12px;
   align-items: center;
+  scroll-margin-bottom: 24px;
+  scroll-margin-top: 24px;
 }
 
 .promo-row .admin-input {
@@ -1213,6 +1215,18 @@ body.sheet-open .tabbar {
   pointer-events: none;
   transform: translateY(120%);
   visibility: hidden;
+}
+
+/* Keyboard on main views: hide tabbar so promo/inputs stay visible */
+body.keyboard-open .tabbar {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(120%);
+  visibility: hidden;
+}
+
+body.keyboard-open {
+  padding-bottom: max(16px, calc(var(--keyboard-inset) + 16px));
 }
 
 .sheet-scroll {
