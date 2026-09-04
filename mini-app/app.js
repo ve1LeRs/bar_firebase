@@ -207,7 +207,14 @@
     wheelInsideBackBtn: document.getElementById('wheelInsideBackBtn'),
     wheelPrizeCatalog: document.getElementById('wheelPrizeCatalog'),
     wheelHubBtn: document.getElementById('wheelHubBtn'),
-    wheelHint: document.getElementById('wheelHint')
+    wheelHint: document.getElementById('wheelHint'),
+    wheelCopyPromoBtn: document.getElementById('wheelCopyPromoBtn'),
+    promoVault: document.getElementById('promoVault'),
+    promoVaultCode: document.getElementById('promoVaultCode'),
+    promoVaultDisc: document.getElementById('promoVaultDisc'),
+    promoVaultHint: document.getElementById('promoVaultHint'),
+    promoVaultCopyBtn: document.getElementById('promoVaultCopyBtn'),
+    promoVaultUseBtn: document.getElementById('promoVaultUseBtn')
   };
 
   const wheelState = {
@@ -217,7 +224,9 @@
     canSpin: false,
     nextSpinAt: null,
     active: true,
-    ctx: null
+    ctx: null,
+    lastPrize: null,
+    myPromos: []
   };
 
   function resolveApiBase() {
@@ -1774,6 +1783,117 @@
     }
   }
 
+  function getActiveWheelPromo() {
+    const list = Array.isArray(wheelState.myPromos) ? wheelState.myPromos : [];
+    if (list.length) return list[0];
+    const last = wheelState.lastPrize;
+    if (last?.promoCode) {
+      return {
+        code: last.promoCode,
+        discount: Number(last.value) || Number(last.discount) || 0,
+        description: last.description || ''
+      };
+    }
+    try {
+      const raw = localStorage.getItem('asafiev_wheel_promo_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.code) return parsed;
+      }
+    } catch (_) { /* ignore */ }
+    return null;
+  }
+
+  function rememberWheelPromo(promo) {
+    if (!promo?.code) return;
+    try {
+      localStorage.setItem('asafiev_wheel_promo_v1', JSON.stringify({
+        code: promo.code,
+        discount: Number(promo.discount) || 0,
+        description: promo.description || ''
+      }));
+    } catch (_) { /* ignore */ }
+  }
+
+  function clearRememberedWheelPromo(code) {
+    try {
+      const raw = localStorage.getItem('asafiev_wheel_promo_v1');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!code || parsed?.code === code) localStorage.removeItem('asafiev_wheel_promo_v1');
+    } catch (_) { /* ignore */ }
+  }
+
+  async function copyText(value) {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (_) { /* fall through */ }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function syncPromoVaultUI() {
+    const promo = getActiveWheelPromo();
+    if (!els.promoVault) return;
+    if (!promo?.code) {
+      els.promoVault.hidden = true;
+      return;
+    }
+    els.promoVault.hidden = false;
+    if (els.promoVaultCode) els.promoVaultCode.textContent = promo.code;
+    if (els.promoVaultDisc) {
+      els.promoVaultDisc.textContent = promo.discount ? `−${promo.discount}%` : '';
+    }
+    if (els.promoVaultHint) {
+      els.promoVaultHint.textContent = 'Действует 7 дней · примените во вкладке Заказы';
+    }
+    // Prefill orders field when empty
+    if (els.ordersPromoInput && !els.ordersPromoInput.value.trim()) {
+      els.ordersPromoInput.value = promo.code;
+    }
+  }
+
+  function showWheelPrizeResult(prize, { showCopy = true } = {}) {
+    if (!els.wheelResult || !prize) {
+      if (els.wheelResult) els.wheelResult.hidden = true;
+      if (els.wheelCopyPromoBtn) els.wheelCopyPromoBtn.hidden = true;
+      return;
+    }
+    els.wheelResult.hidden = false;
+    let title = prize.name || 'Готово';
+    let desc = prize.description || '';
+    if (prize.promoCode) {
+      title = prize.name || `Скидка ${prize.value || ''}%`;
+      desc = `Промокод ${prize.promoCode} — сохраните и примените в Заказах`;
+    } else if (prize.type === 'nothing') {
+      desc = 'Загляните завтра — удача любит упорных';
+    }
+    if (els.wheelResultTitle) els.wheelResultTitle.textContent = title;
+    if (els.wheelResultDesc) els.wheelResultDesc.textContent = desc;
+    if (els.wheelCopyPromoBtn) {
+      const canCopy = showCopy && Boolean(prize.promoCode);
+      els.wheelCopyPromoBtn.hidden = !canCopy;
+      els.wheelCopyPromoBtn.dataset.code = prize.promoCode || '';
+    }
+  }
+
   async function refreshWheelStatus() {
     if (!canOrder()) return;
     try {
@@ -1788,10 +1908,24 @@
       wheelState.canSpin = Boolean(data.canSpin);
       wheelState.nextSpinAt = data.nextSpinAt || null;
       wheelState.prizes = Array.isArray(data.prizes) ? data.prizes : [];
+      wheelState.lastPrize = data.lastPrize || null;
+      wheelState.myPromos = Array.isArray(data.myPromos) ? data.myPromos : [];
+      if (wheelState.myPromos[0]) rememberWheelPromo(wheelState.myPromos[0]);
+      else if (wheelState.lastPrize?.promoCode) {
+        rememberWheelPromo({
+          code: wheelState.lastPrize.promoCode,
+          discount: wheelState.lastPrize.value || wheelState.lastPrize.discount || 0,
+          description: wheelState.lastPrize.description || ''
+        });
+      }
       syncWheelCardUI();
+      syncPromoVaultUI();
       if (els.wheelSheet?.classList.contains('open')) {
         drawWheel();
         updateWheelSheetChrome();
+        if (!wheelState.spinning && wheelState.lastPrize?.promoCode) {
+          showWheelPrizeResult(wheelState.lastPrize);
+        }
       }
     } catch (err) {
       console.warn('wheel status', err);
@@ -1997,7 +2131,7 @@
     closeOrderSheet();
     closeRatingSheet({ dismiss: false });
     showWheelMainPane();
-    if (els.wheelResult) els.wheelResult.hidden = true;
+    showWheelPrizeResult(null);
     els.wheelBackdrop.hidden = false;
     els.wheelSheet.classList.add('open');
     els.wheelSheet.setAttribute('aria-hidden', 'false');
@@ -2007,6 +2141,9 @@
     refreshWheelStatus().then(() => {
       drawWheel();
       updateWheelSheetChrome();
+      if (wheelState.lastPrize?.promoCode || wheelState.lastPrize?.type === 'bonus') {
+        showWheelPrizeResult(wheelState.lastPrize);
+      }
     });
     haptic('light');
   }
@@ -2082,18 +2219,21 @@
         updateProfileUI();
       }
 
-      if (els.wheelResult) {
-        els.wheelResult.hidden = false;
-        let title = prize.name || 'Готово';
-        let desc = prize.description || '';
-        if (prize.promoCode) {
-          desc = `Промокод ${prize.promoCode} — примените во вкладке Заказы`;
-        } else if (prize.type === 'nothing') {
-          desc = 'Загляните завтра — удача любит упорных';
-        }
-        if (els.wheelResultTitle) els.wheelResultTitle.textContent = title;
-        if (els.wheelResultDesc) els.wheelResultDesc.textContent = desc;
+      wheelState.lastPrize = prize;
+      if (prize.promoCode) {
+        const promo = {
+          code: prize.promoCode,
+          discount: Number(data.award?.discount) || Number(prize.value) || 0,
+          description: prize.description || ''
+        };
+        wheelState.myPromos = [
+          promo,
+          ...(wheelState.myPromos || []).filter((p) => p.code !== promo.code)
+        ];
+        rememberWheelPromo(promo);
       }
+      showWheelPrizeResult(prize);
+      syncPromoVaultUI();
 
       if (prize.type === 'nothing') showToast('В этот раз без приза');
       else if (prize.promoCode) showToast(`Промокод: ${prize.promoCode}`);
@@ -2639,10 +2779,17 @@
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Промокод не применён');
       applyOpenBill(data);
+      const usedCode = code.toUpperCase();
+      clearRememberedWheelPromo(usedCode);
+      wheelState.myPromos = (wheelState.myPromos || []).filter(
+        (p) => String(p.code || '').toUpperCase() !== usedCode
+      );
+      syncPromoVaultUI();
       if (els.ordersPromoInput) els.ordersPromoInput.value = '';
       showToast(`Промокод −${data.promo?.discount || 0}%`);
       haptic('medium');
       refreshOrders();
+      refreshWheelStatus();
     } catch (err) {
       showToast(err.message || 'Ошибка промокода');
     }
@@ -3402,6 +3549,26 @@
     els.wheelHubBtn?.addEventListener('click', spinWheel);
     els.wheelInsideBtn?.addEventListener('click', showWheelInsidePane);
     els.wheelInsideBackBtn?.addEventListener('click', showWheelMainPane);
+    els.wheelCopyPromoBtn?.addEventListener('click', async () => {
+      const code = els.wheelCopyPromoBtn.dataset.code || getActiveWheelPromo()?.code;
+      if (!code) return;
+      const ok = await copyText(code);
+      showToast(ok ? `Скопировано: ${code}` : code);
+      haptic('light');
+    });
+    els.promoVaultCopyBtn?.addEventListener('click', async () => {
+      const promo = getActiveWheelPromo();
+      if (!promo?.code) return;
+      const ok = await copyText(promo.code);
+      showToast(ok ? `Скопировано: ${promo.code}` : promo.code);
+      haptic('light');
+    });
+    els.promoVaultUseBtn?.addEventListener('click', () => {
+      const promo = getActiveWheelPromo();
+      if (promo?.code && els.ordersPromoInput) els.ordersPromoInput.value = promo.code;
+      switchView('orders');
+      haptic('light');
+    });
     els.ratingSkipBtn?.addEventListener('click', () => submitRating({ skip: true }));
     els.ratingSubmitBtn?.addEventListener('click', () => {
       if (!state.ratingValue) {

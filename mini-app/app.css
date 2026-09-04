@@ -1504,12 +1504,59 @@ body.keyboard-open {
 
 .wheel-card-btn:disabled { opacity: 0.55; }
 
-.wheel-sheet {
-  max-height: min(92dvh, 760px);
+.promo-vault {
+  margin: -6px 0 18px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(212, 163, 92, 0.28);
+  background: #181410;
 }
 
-.wheel-sheet .sheet-scroll {
-  padding-b.wheel-sheet {
+.promo-vault-label {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.promo-vault-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.promo-vault-row strong {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.promo-vault-disc {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.promo-vault-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.promo-vault-actions .ghost {
+  width: auto;
+  flex: 1;
+  padding: 10px 12px;
+}
+
+.wheel-result .ghost {
+  width: auto;
+  margin: 10px auto 0;
+  padding: 10px 14px;
+  display: inline-block;
+}
+
+.wheel-sheet {
   max-height: min(92dvh, 760px);
   /* Brand tokens — ignore Telegram blue button theme */
   --wheel-gold: #d4a35c;

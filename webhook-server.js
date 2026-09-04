@@ -192,7 +192,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'fixblank1';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'promokeep1';
 
 function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
@@ -3204,6 +3204,7 @@ async function creditBonusPoints(userId, points, meta = {}) {
 async function createWheelPromoForUser(userId, prize) {
   const code = `WHEEL${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
   const discount = Math.max(1, Math.min(100, Number(prize.value) || 10));
+  const expiryDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   await db.collection('promocodes').doc(code).set({
     code,
     discount,
@@ -3211,12 +3212,49 @@ async function createWheelPromoForUser(userId, prize) {
     active: true,
     maxUses: 1,
     usedCount: 0,
-    expiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    expiryDate,
     createdBy: 'wheel',
     ownerUserId: userId,
     createdAt: admin.firestore.FieldValue.serverTimestamp()
   });
-  return { code, discount };
+  return { code, discount, expiryDateMs: expiryDate.getTime() };
+}
+
+async function listUserWheelPromos(userId) {
+  if (!userId) return [];
+  let docs = [];
+  try {
+    const snap = await db.collection('promocodes')
+      .where('ownerUserId', '==', userId)
+      .limit(20)
+      .get();
+    docs = snap.docs;
+  } catch (err) {
+    console.warn('listUserWheelPromos query:', err?.message || err);
+    return [];
+  }
+  const now = Date.now();
+  return docs
+    .map((doc) => {
+      const d = doc.data() || {};
+      const expiry = d.expiryDate?.toMillis?.()
+        || (d.expiryDate ? new Date(d.expiryDate).getTime() : 0);
+      const maxUses = Number(d.maxUses) || 0;
+      const usedCount = Number(d.usedCount) || 0;
+      const exhausted = maxUses > 0 && usedCount >= maxUses;
+      const expired = expiry > 0 && expiry < now;
+      return {
+        code: d.code || doc.id,
+        discount: Number(d.discount) || 0,
+        description: d.description || '',
+        expiryDateMs: expiry || null,
+        used: exhausted,
+        expired,
+        active: d.active !== false && !exhausted && !expired
+      };
+    })
+    .filter((p) => p.active)
+    .sort((a, b) => (b.expiryDateMs || 0) - (a.expiryDateMs || 0));
 }
 
 function publicWheelPrize(prize) {
@@ -3238,10 +3276,11 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
     const session = await resolveMiniAppUser(req);
     if (!session.ok) return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
 
-    const [config, prizes, spinDoc] = await Promise.all([
+    const [config, prizes, spinDoc, myPromos] = await Promise.all([
       getWheelConfig(),
       ensureWheelPrizes(),
-      db.collection('wheelSpins').doc(session.userId).get()
+      db.collection('wheelSpins').doc(session.userId).get(),
+      listUserWheelPromos(session.userId)
     ]);
 
     let canSpin = config.active;
@@ -3259,6 +3298,34 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
       if (spin.prize) lastPrize = spin.prize;
     }
 
+    // If last prize promo is missing from list but still stored on spin — include it
+    if (lastPrize?.promoCode && !myPromos.some((p) => p.code === lastPrize.promoCode)) {
+      try {
+        const promoDoc = await db.collection('promocodes').doc(String(lastPrize.promoCode)).get();
+        if (promoDoc.exists) {
+          const d = promoDoc.data() || {};
+          const expiry = d.expiryDate?.toMillis?.()
+            || (d.expiryDate ? new Date(d.expiryDate).getTime() : 0);
+          const maxUses = Number(d.maxUses) || 0;
+          const usedCount = Number(d.usedCount) || 0;
+          const ok = d.active !== false
+            && !(maxUses > 0 && usedCount >= maxUses)
+            && !(expiry > 0 && expiry < Date.now());
+          if (ok) {
+            myPromos.unshift({
+              code: d.code || promoDoc.id,
+              discount: Number(d.discount) || Number(lastPrize.value) || 0,
+              description: d.description || '',
+              expiryDateMs: expiry || null,
+              used: false,
+              expired: false,
+              active: true
+            });
+          }
+        }
+      } catch (_) { /* ignore */ }
+    }
+
     res.json({
       success: true,
       active: config.active,
@@ -3267,6 +3334,7 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
       nextSpinAt,
       totalSpins: Number(spin.totalSpins) || 0,
       lastPrize,
+      myPromos,
       prizes: prizes.map(publicWheelPrize)
     });
   } catch (error) {
