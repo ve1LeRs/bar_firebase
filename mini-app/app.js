@@ -200,6 +200,7 @@
     wheelSheetSub: document.getElementById('wheelSheetSub'),
     wheelResult: document.getElementById('wheelResult'),
     wheelResultTitle: document.getElementById('wheelResultTitle'),
+    wheelResultCode: document.getElementById('wheelResultCode'),
     wheelResultDesc: document.getElementById('wheelResultDesc'),
     wheelMainPane: document.getElementById('wheelMainPane'),
     wheelInsidePane: document.getElementById('wheelInsidePane'),
@@ -226,7 +227,8 @@
     active: true,
     ctx: null,
     lastPrize: null,
-    myPromos: []
+    myPromos: [],
+    promosLoaded: false
   };
 
   function resolveApiBase() {
@@ -249,7 +251,7 @@
     } catch (_) { /* ignore */ }
   }
 
-  function showToast(message) {
+  function showToast(message, durationMs = 2400) {
     const el = els.toast;
     if (!el) return;
     const text = String(message || '').trim();
@@ -265,6 +267,7 @@
     void el.offsetWidth;
     el.classList.add('is-on');
 
+    const hold = Math.max(1200, Number(durationMs) || 2400);
     showToast._t = setTimeout(() => {
       el.classList.remove('is-on');
       el.classList.add('is-leaving');
@@ -273,7 +276,7 @@
         el.hidden = true;
         el.textContent = '';
       }, 240);
-    }, 2400);
+    }, hold);
   }
 
   function setLoader(on) {
@@ -1754,9 +1757,19 @@
 
   function syncWheelCardUI() {
     if (!els.wheelCardStatus) return;
+    const saved = getActiveWheelPromo();
     if (!wheelState.active) {
       els.wheelCardStatus.textContent = 'Колесо временно выключено';
       if (els.wheelOpenBtn) els.wheelOpenBtn.disabled = true;
+      return;
+    }
+    if (saved?.code) {
+      const disc = saved.discount ? ` −${saved.discount}%` : '';
+      els.wheelCardStatus.textContent = `Промокод ${saved.code}${disc}`;
+      if (els.wheelOpenBtn) {
+        els.wheelOpenBtn.disabled = false;
+        els.wheelOpenBtn.textContent = wheelState.canSpin ? 'Крутить' : 'Открыть';
+      }
       return;
     }
     if (wheelState.canSpin) {
@@ -1786,6 +1799,8 @@
   function getActiveWheelPromo() {
     const list = Array.isArray(wheelState.myPromos) ? wheelState.myPromos : [];
     if (list.length) return list[0];
+    // After server status: empty myPromos means no unused promo (don't revive used lastPrize)
+    if (wheelState.promosLoaded) return null;
     const last = wheelState.lastPrize;
     if (last?.promoCode) {
       return {
@@ -1874,6 +1889,10 @@
     if (!els.wheelResult || !prize) {
       if (els.wheelResult) els.wheelResult.hidden = true;
       if (els.wheelCopyPromoBtn) els.wheelCopyPromoBtn.hidden = true;
+      if (els.wheelResultCode) {
+        els.wheelResultCode.hidden = true;
+        els.wheelResultCode.textContent = '';
+      }
       return;
     }
     els.wheelResult.hidden = false;
@@ -1881,11 +1900,20 @@
     let desc = prize.description || '';
     if (prize.promoCode) {
       title = prize.name || `Скидка ${prize.value || ''}%`;
-      desc = `Промокод ${prize.promoCode} — сохраните и примените в Заказах`;
+      desc = 'Сохранён в Профиле · примените во вкладке Заказы';
     } else if (prize.type === 'nothing') {
       desc = 'Загляните завтра — удача любит упорных';
     }
     if (els.wheelResultTitle) els.wheelResultTitle.textContent = title;
+    if (els.wheelResultCode) {
+      if (prize.promoCode) {
+        els.wheelResultCode.hidden = false;
+        els.wheelResultCode.textContent = prize.promoCode;
+      } else {
+        els.wheelResultCode.hidden = true;
+        els.wheelResultCode.textContent = '';
+      }
+    }
     if (els.wheelResultDesc) els.wheelResultDesc.textContent = desc;
     if (els.wheelCopyPromoBtn) {
       const canCopy = showCopy && Boolean(prize.promoCode);
@@ -1910,21 +1938,27 @@
       wheelState.prizes = Array.isArray(data.prizes) ? data.prizes : [];
       wheelState.lastPrize = data.lastPrize || null;
       wheelState.myPromos = Array.isArray(data.myPromos) ? data.myPromos : [];
+      wheelState.promosLoaded = true;
       if (wheelState.myPromos[0]) rememberWheelPromo(wheelState.myPromos[0]);
-      else if (wheelState.lastPrize?.promoCode) {
-        rememberWheelPromo({
-          code: wheelState.lastPrize.promoCode,
-          discount: wheelState.lastPrize.value || wheelState.lastPrize.discount || 0,
-          description: wheelState.lastPrize.description || ''
-        });
-      }
+      else clearRememberedWheelPromo();
       syncWheelCardUI();
       syncPromoVaultUI();
       if (els.wheelSheet?.classList.contains('open')) {
         drawWheel();
         updateWheelSheetChrome();
-        if (!wheelState.spinning && wheelState.lastPrize?.promoCode) {
-          showWheelPrizeResult(wheelState.lastPrize);
+        if (!wheelState.spinning) {
+          const saved = getActiveWheelPromo();
+          if (saved?.code) {
+            showWheelPrizeResult({
+              ...(wheelState.lastPrize || {}),
+              name: wheelState.lastPrize?.name || `Скидка ${saved.discount || ''}%`,
+              promoCode: saved.code,
+              value: saved.discount,
+              type: 'promo'
+            });
+          } else if (wheelState.lastPrize && wheelState.lastPrize.type !== 'promo') {
+            showWheelPrizeResult(wheelState.lastPrize);
+          }
         }
       }
     } catch (err) {
@@ -2131,7 +2165,17 @@
     closeOrderSheet();
     closeRatingSheet({ dismiss: false });
     showWheelMainPane();
-    showWheelPrizeResult(null);
+    const previewPromo = getActiveWheelPromo();
+    if (previewPromo?.code) {
+      showWheelPrizeResult({
+        name: `Скидка ${previewPromo.discount || ''}%`,
+        promoCode: previewPromo.code,
+        value: previewPromo.discount,
+        type: 'promo'
+      });
+    } else {
+      showWheelPrizeResult(null);
+    }
     els.wheelBackdrop.hidden = false;
     els.wheelSheet.classList.add('open');
     els.wheelSheet.setAttribute('aria-hidden', 'false');
@@ -2141,7 +2185,16 @@
     refreshWheelStatus().then(() => {
       drawWheel();
       updateWheelSheetChrome();
-      if (wheelState.lastPrize?.promoCode || wheelState.lastPrize?.type === 'bonus') {
+      const saved = getActiveWheelPromo();
+      if (saved?.code) {
+        showWheelPrizeResult({
+          ...(wheelState.lastPrize || {}),
+          name: wheelState.lastPrize?.name || `Скидка ${saved.discount || ''}%`,
+          promoCode: saved.code,
+          value: saved.discount,
+          type: 'promo'
+        });
+      } else if (wheelState.lastPrize?.type === 'bonus' || wheelState.lastPrize?.type === 'nothing') {
         showWheelPrizeResult(wheelState.lastPrize);
       }
     });
@@ -2236,7 +2289,7 @@
       syncPromoVaultUI();
 
       if (prize.type === 'nothing') showToast('В этот раз без приза');
-      else if (prize.promoCode) showToast(`Промокод: ${prize.promoCode}`);
+      else if (prize.promoCode) showToast(`Промокод: ${prize.promoCode}`, 7000);
       else if (data.award?.bonusAwarded) showToast(`+${data.award.bonusAwarded} бонусов`);
       else showToast(prize.name || 'Приз получен');
       haptic('heavy');
@@ -3683,6 +3736,8 @@
       document.body.dataset.view = state.currentView || 'menu';
       bindUi();
       initTelegram();
+      syncPromoVaultUI();
+      syncWheelCardUI();
       updateProfileUI();
 
       // Instant paint from cache before network

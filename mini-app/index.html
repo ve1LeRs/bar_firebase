@@ -13,8 +13,8 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://telegram.org">
-  <link rel="preload" href="app.css?v=promokeep1" as="style">
-  <link rel="stylesheet" href="app.css?v=promokeep1">
+  <link rel="preload" href="app.css?v=promokeep2" as="style">
+  <link rel="stylesheet" href="app.css?v=promokeep2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700&display=swap">
@@ -276,13 +276,6 @@
         </div>
       </div>
 
-      <div class="wheel-card" id="wheelCard">
-        <div class="wheel-card-text">
-          <h3 class="wheel-card-title">Колесо удачи</h3>
-          <p class="wheel-card-sub" id="wheelCardStatus">Раз в сутки — бонусы и скидки</p>
-        </div>
-        <button class="cta wheel-card-btn" id="wheelOpenBtn" type="button">Крутить</button>
-      </div>
       <div class="promo-vault" id="promoVault" hidden>
         <p class="promo-vault-label">Ваш промокод с колеса</p>
         <div class="promo-vault-row">
@@ -294,6 +287,13 @@
           <button class="ghost" id="promoVaultUseBtn" type="button">К заказам</button>
         </div>
         <p class="order-time" id="promoVaultHint"></p>
+      </div>
+      <div class="wheel-card" id="wheelCard">
+        <div class="wheel-card-text">
+          <h3 class="wheel-card-title">Колесо удачи</h3>
+          <p class="wheel-card-sub" id="wheelCardStatus">Раз в сутки — бонусы и скидки</p>
+        </div>
+        <button class="cta wheel-card-btn" id="wheelOpenBtn" type="button">Крутить</button>
       </div>
 
       <div class="bill-panel">
@@ -422,6 +422,7 @@
       <button class="wheel-inside-link" id="wheelInsideBtn" type="button">Что внутри колеса</button>
       <div class="wheel-result" id="wheelResult" hidden>
         <p class="wheel-result-title" id="wheelResultTitle"></p>
+        <p class="wheel-result-code" id="wheelResultCode" hidden></p>
         <p class="order-time" id="wheelResultDesc"></p>
         <button class="ghost" id="wheelCopyPromoBtn" type="button" hidden>Скопировать промокод</button>
       </div>
@@ -447,6 +448,6 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script defer src="app.js?v=promokeep1"></script>
+  <script defer src="app.js?v=promokeep2"></script>
 </body>
 </html>
