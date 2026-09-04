@@ -590,32 +590,9 @@
     }
   }
 
-  async function ensureApiAwake(onStatus) {
-    const started = Date.now();
-    const maxWait = 75000;
-    let attempt = 0;
-
-    while (Date.now() - started < maxWait) {
-      attempt += 1;
-      const waited = Math.round((Date.now() - started) / 1000);
-      onStatus?.(
-        attempt === 1
-          ? 'Будим сервер заказов…'
-          : `Сервер просыпается… ${waited}с`
-      );
-      try {
-        const res = await fetchWithTimeout(
-          `${state.apiBase}/health`,
-          { method: 'GET', cache: 'no-store', mode: 'cors' },
-          10000
-        );
-        if (res.ok) return true;
-      } catch (_) {
-        // cold start / network — keep trying
-      }
-      await sleep(Math.min(2500, 800 + attempt * 400));
-    }
-    return false;
+  // VPS API is always warm — do not block boot on Render-era wake waits.
+  async function ensureApiAwake(_onStatus) {
+    return true;
   }
 
   function setAuthStatus(text, { error = false } = {}) {
@@ -645,23 +622,9 @@
 
     setAuthRetryVisible(false);
     setAuthStatus('');
+    wakeApi();
 
-    const awake = await ensureApiAwake(() => {});
-
-    if (!awake) {
-      state.sessionOk = false;
-      state.authReady = false;
-      state.authError = 'timeout';
-      setAuthStatus(
-        'Сервер долго просыпается. Нажмите «Повторить вход» через несколько секунд.',
-        { error: true }
-      );
-      setAuthRetryVisible(true);
-      return false;
-    }
-
-    // A few auth attempts after wake (first request can still be slow)
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
       setAuthStatus('');
       try {
         const res = await fetchWithTimeout(
@@ -671,7 +634,7 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ initData })
           },
-          20000
+          12000
         );
         const data = await res.json();
         if (!res.ok || !data.success) {
@@ -696,15 +659,20 @@
         if (data.role) state.role = data.role;
         applyAdminUi();
 
+        // Firebase sign-in is only needed for live stoplist — never block auth/UI
         if (data.customToken) {
-          try {
-            initFirebase();
-            const cred = await auth.signInWithCustomToken(data.customToken);
-            state.firebaseUser = cred.user;
-          } catch (firebaseErr) {
-            console.warn('Firebase custom token skipped:', firebaseErr.message);
-            state.firebaseUser = null;
-          }
+          const token = data.customToken;
+          void (async () => {
+            try {
+              await waitForFirebase(8000);
+              initFirebase();
+              const cred = await auth.signInWithCustomToken(token);
+              state.firebaseUser = cred.user;
+            } catch (firebaseErr) {
+              console.warn('Firebase custom token skipped:', firebaseErr?.message || firebaseErr);
+              state.firebaseUser = null;
+            }
+          })();
         }
 
         setAuthStatus('');
@@ -715,8 +683,8 @@
         return true;
       } catch (err) {
         console.error('auth attempt failed', attempt, err);
-        if (attempt < 3) {
-          await sleep(1500 * attempt);
+        if (attempt < 2) {
+          await sleep(400);
           continue;
         }
         state.sessionOk = false;
@@ -724,7 +692,7 @@
         state.authError = err.name === 'AbortError' ? 'timeout' : 'auth_failed';
         const msg =
           err.name === 'AbortError'
-            ? 'Сервер ещё прогревается'
+            ? 'Сервер не ответил вовремя'
             : err.message;
         setAuthStatus(`Не удалось войти: ${msg}`, { error: true });
         setAuthRetryVisible(true);
@@ -2673,9 +2641,19 @@
         render: true
       });
 
-      // Live stoplist updates after first full paint
-      initFirebase();
-      watchStoplist();
+      // Live stoplist after paint — never fail bootstrap if Firebase SDK is still loading
+      const startStoplistWatch = () => {
+        try {
+          initFirebase();
+          watchStoplist();
+        } catch (e) {
+          console.warn('stoplist watch deferred', e?.message || e);
+        }
+      };
+      if (typeof firebase !== 'undefined') startStoplistWatch();
+      else {
+        waitForFirebase(8000).then(startStoplistWatch).catch(() => {});
+      }
     } catch (err) {
       console.warn('menu bootstrap failed, fallback Firestore', err);
       try {
@@ -3310,9 +3288,10 @@
       if (typeof data.openBillTotal === 'number' || Array.isArray(data.openBillItems)) {
         applyOpenBill(data);
       } else {
-        refreshProfile();
+        void refreshProfile();
       }
-      await refreshOrders();
+      // Don't block "заказ принят" on a second round-trip
+      void refreshOrders();
     } catch (err) {
       console.error(err);
       // Rollback optimistic bonus / bill
@@ -3822,6 +3801,7 @@
       syncPromoVaultUI();
       syncWheelCardUI();
       updateProfileUI();
+      wakeApi();
 
       // Instant paint from cache before network
       const cached = readMenuCache();
@@ -3834,19 +3814,13 @@
         });
       }
 
-      try {
-        await waitForFirebase();
-        initFirebase();
-      } catch (err) {
-        console.error(err);
-        setAuthStatus('Не удалось загрузить SDK. Проверьте сеть.', { error: true });
-        if (!state.cocktails.length && els.menuGrid) {
-          els.menuGrid.innerHTML = '<div class="empty-state">Нет сети для загрузки меню</div>';
-        }
-        return;
-      }
+      // Menu + auth immediately — Firebase SDK loads in parallel for stoplist only
+      void waitForFirebase(8000)
+        .then(() => {
+          try { initFirebase(); } catch (_) { /* ignore */ }
+        })
+        .catch(() => {});
 
-      // Menu and auth in parallel — UI stays interactive
       await Promise.all([loadMenu(), authenticate()]);
     } catch (err) {
       console.error('boot failed', err);

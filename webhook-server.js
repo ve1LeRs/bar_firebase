@@ -52,28 +52,29 @@ app.use(cors({
 
 app.use(express.json());
 
-// Telegram Mini App static files + shared brand assets
+// Versioned JS/CSS (?v=) can be cached; HTML always revalidated.
+// NEVER Clear-Site-Data — it blanks Telegram WebView loads.
+function setMiniAppStaticHeaders(res, filePath) {
+  if (/\.(?:js|css|png|jpe?g|webp|gif|svg|woff2?)$/i.test(filePath)) {
+    res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+    return;
+  }
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+}
 app.use('/mini-app', express.static(path.join(__dirname, 'mini-app'), {
   extensions: ['html'],
   etag: false,
   lastModified: false,
-  setHeaders: (res, filePath) => {
-    // Revalidate — but NEVER Clear-Site-Data: it blanks Telegram WebView loads
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-  }
+  setHeaders: setMiniAppStaticHeaders
 }));
 // Fresh alias path to bust stubborn Telegram WebView caches
 app.use('/m', express.static(path.join(__dirname, 'mini-app'), {
   extensions: ['html'],
   etag: false,
   lastModified: false,
-  setHeaders: (res, filePath) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-  }
+  setHeaders: setMiniAppStaticHeaders
 }));
 app.get('/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'logo.png')));
 app.get('/favicon.ico', (req, res) => res.sendFile(path.join(__dirname, 'favicon.ico')));
@@ -192,7 +193,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'bonusux1';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'perf1';
 
 function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
@@ -947,7 +948,25 @@ async function getNextQueuePosition() {
   }
 }
 
+function priceFromMenuBootstrapCache(cocktailId, name) {
+  const list = menuBootstrapCache?.payload?.cocktails;
+  if (!Array.isArray(list) || !list.length) return null;
+  const id = String(cocktailId || '');
+  if (id) {
+    const byId = list.find((c) => c && c.id === id);
+    const p = Number(byId?.price);
+    if (Number.isFinite(p) && p >= 0) return p;
+  }
+  const nm = String(name || '').trim().toLowerCase();
+  if (!nm) return null;
+  const byName = list.find((c) => String(c?.name || '').trim().toLowerCase() === nm);
+  const p = Number(byName?.price);
+  return Number.isFinite(p) && p >= 0 ? p : null;
+}
+
 async function resolveMenuCocktailPrice({ cocktailId, name }) {
+  const cached = priceFromMenuBootstrapCache(cocktailId, name);
+  if (cached != null) return cached;
   try {
     if (cocktailId) {
       const doc = await db.collection('cocktails').doc(String(cocktailId)).get();
@@ -1534,6 +1553,9 @@ async function resolveMiniAppUser(req) {
 
 // In-memory stoplist cache — avoids Firestore roundtrip on every order
 const stoplistCache = { names: new Set(), at: 0, loading: null };
+// Shared with menu-bootstrap + create-order price lookup
+const menuBootstrapCache = { at: 0, payload: null };
+const MENU_BOOTSTRAP_TTL_MS = 120000;
 
 function invalidateStoplistCache() {
   stoplistCache.at = 0;
@@ -2481,7 +2503,20 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       return res.status(409).json({ success: false, error: 'Коктейль в стоп-листе' });
     }
 
-    const menuPrice = await resolveMenuCocktailPrice({ cocktailId, name });
+    const bonusAmount = Math.max(0, Number(bonusUsed) || 0);
+
+    // Price, queue, and bonus docs in parallel — biggest create-order win
+    const [menuPrice, nextQueue, bonusPair] = await Promise.all([
+      resolveMenuCocktailPrice({ cocktailId, name }),
+      getNextQueuePosition(),
+      bonusAmount > 0
+        ? Promise.all([
+          db.collection('bonusAccounts').doc(userId).get(),
+          db.collection('settings').doc('bonusSystem').get()
+        ])
+        : Promise.resolve(null)
+    ]);
+
     let listedPrice = menuPrice;
     if (listedPrice == null) {
       const fallback = Number(originalPrice != null ? originalPrice : price);
@@ -2492,12 +2527,8 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       listedPrice = fallback;
     }
 
-    const bonusAmount = Math.max(0, Number(bonusUsed) || 0);
-    if (bonusAmount > 0) {
-      const [bonusDoc, settingsDoc] = await Promise.all([
-        db.collection('bonusAccounts').doc(userId).get(),
-        db.collection('settings').doc('bonusSystem').get()
-      ]);
+    if (bonusAmount > 0 && bonusPair) {
+      const [bonusDoc, settingsDoc] = bonusPair;
       const balance = bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0;
       const maxUsage = settingsDoc.exists ? (Number(settingsDoc.data().maxUsage) || 50) : 50;
       const maxByPrice = Math.floor(listedPrice * (maxUsage / 100));
@@ -2512,7 +2543,6 @@ app.post('/api/mini-app/create-order', async (req, res) => {
     const finalPrice = Math.max(0, listedPrice - bonusAmount);
     const now = new Date();
     const displayName = user || session.displayName || 'Гость Telegram';
-    const nextQueue = await getNextQueuePosition();
 
     const orderData = {
       name,
@@ -2933,16 +2963,12 @@ app.get('/api/mini-app/stoplist', async (req, res) => {
 });
 
 // One-shot menu bootstrap: cocktails + stoplist + ratings (reduces Mini App flicker)
-const menuBootstrapCache = { at: 0, payload: null };
-app.get('/api/mini-app/menu-bootstrap', async (req, res) => {
+async function warmMenuBootstrapCache() {
   try {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'public, max-age=15');
     const now = Date.now();
-    if (menuBootstrapCache.payload && now - menuBootstrapCache.at < 15000) {
-      return res.json(menuBootstrapCache.payload);
+    if (menuBootstrapCache.payload && now - menuBootstrapCache.at < MENU_BOOTSTRAP_TTL_MS) {
+      return menuBootstrapCache.payload;
     }
-
     const [cocktailsSnap, stopNames, ratingsSnap] = await Promise.all([
       db.collection('cocktails').get(),
       refreshStoplistCache(false),
@@ -2972,16 +2998,16 @@ app.get('/api/mini-app/menu-bootstrap', async (req, res) => {
       const acc = new Map();
       ratingsSnap.forEach((doc) => {
         const d = doc.data() || {};
-        const name = String(d.cocktailName || '').trim();
+        const cocktailName = String(d.cocktailName || '').trim();
         const rating = Number(d.rating) || 0;
-        if (!name || rating <= 0) return;
-        const cur = acc.get(name) || { sum: 0, count: 0 };
+        if (!cocktailName || rating <= 0) return;
+        const cur = acc.get(cocktailName) || { sum: 0, count: 0 };
         cur.sum += rating;
         cur.count += 1;
-        acc.set(name, cur);
+        acc.set(cocktailName, cur);
       });
-      acc.forEach((v, name) => {
-        averages[name] = Number((v.sum / v.count).toFixed(1));
+      acc.forEach((v, cocktailName) => {
+        averages[cocktailName] = Number((v.sum / v.count).toFixed(1));
       });
     }
 
@@ -2994,6 +3020,26 @@ app.get('/api/mini-app/menu-bootstrap', async (req, res) => {
     };
     menuBootstrapCache.at = now;
     menuBootstrapCache.payload = payload;
+    return payload;
+  } catch (err) {
+    console.warn('warmMenuBootstrapCache:', err.message);
+    return null;
+  }
+}
+
+app.get('/api/mini-app/menu-bootstrap', async (req, res) => {
+  try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    const now = Date.now();
+    if (menuBootstrapCache.payload && now - menuBootstrapCache.at < MENU_BOOTSTRAP_TTL_MS) {
+      return res.json(menuBootstrapCache.payload);
+    }
+
+    const payload = await warmMenuBootstrapCache();
+    if (!payload) {
+      return res.status(500).json({ success: false, error: 'menu bootstrap failed' });
+    }
     res.json(payload);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -4262,6 +4308,9 @@ app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
 
   ensureAlertsBotWebhook().catch((e) => console.warn('Alerts webhook ensure failed:', e.message));
   ensureMiniAppBotWebhook().catch((e) => console.warn('Mini App webhook ensure failed:', e.message));
+  warmMenuBootstrapCache()
+    .then((p) => console.log('🍹 Menu bootstrap cache warm:', p?.cocktails?.length || 0, 'cocktails'))
+    .catch((e) => console.warn('Menu bootstrap warm failed:', e.message));
 });
 
 module.exports = app;
