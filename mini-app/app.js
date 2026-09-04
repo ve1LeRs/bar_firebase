@@ -906,6 +906,8 @@
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Не удалось добавить');
       if (els.adminStopReason) els.adminStopReason.value = '';
+      if (els.adminStopSelect) els.adminStopSelect.value = '';
+      setAdminFold('adminStopFold', { open: false });
       showToast('Добавлено в стоп-лист');
       haptic('medium');
       refreshAdminStoplist();
@@ -1185,6 +1187,29 @@
     return tags;
   }
 
+  function setAdminFold(foldId, { open, label, editing } = {}) {
+    const fold = document.getElementById(foldId);
+    if (!fold) return null;
+    if (typeof open === 'boolean') fold.open = open;
+    if (label != null) {
+      const lab = fold.querySelector('.admin-fold-label');
+      if (lab) lab.textContent = label;
+    }
+    if (typeof editing === 'boolean') {
+      fold.classList.toggle('is-editing', editing);
+      fold.querySelector('.admin-add')?.classList.toggle('is-editing', editing);
+    }
+    return fold;
+  }
+
+  function openAdminFold(foldId, label, { editing = false } = {}) {
+    const fold = setAdminFold(foldId, { open: true, label, editing });
+    try {
+      fold?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (_) { /* ignore */ }
+    return fold;
+  }
+
   function fillCocktailForm(c) {
     document.getElementById('adminCocktailId').value = c?.id || '';
     document.getElementById('adminCocktailName').value = c?.name || '';
@@ -1203,7 +1228,24 @@
     if (bitter) bitter.checked = tags.includes('bitter');
     const recipeEl = document.getElementById('adminCocktailRecipe');
     if (recipeEl) recipeEl.value = formatStockRecipeText(c?.stockRecipe);
-    if (c) showToast(c?.id ? 'Редактирование: сохраните изменения' : 'Новый коктейль');
+
+    if (!c) {
+      setAdminFold('adminCocktailFold', {
+        open: false,
+        label: 'Добавить коктейль',
+        editing: false
+      });
+      return;
+    }
+
+    if (c.id) {
+      openAdminFold('adminCocktailFold', `Редактирование: ${c.name || 'коктейль'}`, { editing: true });
+      document.getElementById('adminCocktailName')?.focus();
+      showToast('Редактирование: сохраните изменения');
+    } else {
+      openAdminFold('adminCocktailFold', 'Добавить коктейль', { editing: false });
+      showToast('Новый коктейль');
+    }
   }
 
   async function saveAdminCocktail() {
@@ -1241,15 +1283,6 @@
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Ошибка сохранения');
       fillCocktailForm(null);
-      document.getElementById('adminCocktailId').value = '';
-      document.getElementById('adminCocktailName').value = '';
-      document.getElementById('adminCocktailPrice').value = '';
-      document.getElementById('adminCocktailIngredients').value = '';
-      document.getElementById('adminCocktailImage').value = '';
-      document.getElementById('adminCocktailAlcohol').value = '';
-      document.getElementById('adminCocktailMood').value = '';
-      const recipeEl = document.getElementById('adminCocktailRecipe');
-      if (recipeEl) recipeEl.value = '';
       showToast('Коктейль сохранён');
       haptic('heavy');
       refreshAdminCocktails();
@@ -1358,6 +1391,7 @@
       document.getElementById('adminPromoMaxUses').value = '';
       if (document.getElementById('adminPromoExpiry')) document.getElementById('adminPromoExpiry').value = '';
       if (document.getElementById('adminPromoActive')) document.getElementById('adminPromoActive').checked = true;
+      setAdminFold('adminPromoFold', { open: false, label: 'Создать промокод', editing: false });
       refreshAdminPromos();
     } catch (err) {
       showToast(err.message || 'Ошибка');
@@ -1433,6 +1467,7 @@
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Ошибка');
       showToast('Настройки бонусов сохранены');
+      setAdminFold('adminBonusFold', { open: false });
     } catch (err) {
       showToast(err.message || 'Ошибка');
     }
@@ -1538,6 +1573,11 @@
     if (saveBtn) saveBtn.textContent = 'Добавить ингредиент';
     if (cancelBtn) cancelBtn.hidden = true;
     box?.classList.remove('is-editing');
+    setAdminFold('adminIngFold', {
+      open: false,
+      label: 'Добавить ингредиент',
+      editing: false
+    });
   }
 
   function fillIngredientForm(item) {
@@ -1555,7 +1595,7 @@
       if (saveBtn) saveBtn.textContent = 'Сохранить изменения';
       if (cancelBtn) cancelBtn.hidden = false;
       box?.classList.add('is-editing');
-      box?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      openAdminFold('adminIngFold', `Редактирование: ${item.name || 'ингредиент'}`, { editing: true });
       document.getElementById('adminIngStock')?.focus();
     } else {
       resetIngredientForm();

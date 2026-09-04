@@ -13,8 +13,8 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://telegram.org">
-  <link rel="preload" href="app.css?v=orderbtn1" as="style">
-  <link rel="stylesheet" href="app.css?v=orderbtn1">
+  <link rel="preload" href="app.css?v=adminfold1" as="style">
+  <link rel="stylesheet" href="app.css?v=adminfold1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700&display=swap">
@@ -125,13 +125,19 @@
 
       <div class="admin-pane" id="adminStoplistPane">
         <p class="admin-section-title">Стоп-лист</p>
-        <div class="admin-add">
-          <select id="adminStopSelect" class="admin-select">
-            <option value="">Выберите коктейль</option>
-          </select>
-          <input id="adminStopReason" class="admin-input" type="text" placeholder="Причина (необязательно)" maxlength="80">
-          <button class="cta" id="adminStopAddBtn" type="button">В стоп-лист</button>
-        </div>
+        <details class="admin-fold" id="adminStopFold">
+          <summary class="admin-fold-summary">
+            <span class="admin-fold-label">Добавить в стоп-лист</span>
+            <span class="admin-fold-chevron" aria-hidden="true"></span>
+          </summary>
+          <div class="admin-add">
+            <select id="adminStopSelect" class="admin-select">
+              <option value="">Выберите коктейль</option>
+            </select>
+            <input id="adminStopReason" class="admin-input" type="text" placeholder="Причина (необязательно)" maxlength="80">
+            <button class="cta" id="adminStopAddBtn" type="button">В стоп-лист</button>
+          </div>
+        </details>
         <div id="adminStoplist" class="orders-list"></div>
       </div>
 
@@ -143,90 +149,114 @@
           <button class="filter" type="button" data-cocktail-filter="signature">Авторские</button>
           <button class="filter" type="button" data-cocktail-filter="shots">Шоты</button>
         </div>
-        <div class="admin-add">
-          <input id="adminCocktailName" class="admin-input" type="text" placeholder="Название">
-          <input id="adminCocktailPrice" class="admin-input" type="number" placeholder="Цена ₽" min="0">
-          <input id="adminCocktailIngredients" class="admin-input" type="text" placeholder="Состав">
-          <input id="adminCocktailImage" class="admin-input" type="url" placeholder="URL фото (необязательно)">
-          <select id="adminCocktailCategory" class="admin-select">
-            <option value="classic">Классика</option>
-            <option value="signature">Авторские</option>
-            <option value="shots">Шоты</option>
-          </select>
-          <input id="adminCocktailAlcohol" class="admin-input" type="number" placeholder="Крепость %" min="0" max="100">
-          <input id="adminCocktailMood" class="admin-input" type="text" placeholder="Настроение / описание">
-          <div class="taste-checks" id="adminTasteChecks">
-            <label class="order-time"><input type="checkbox" id="adminTasteSour" value="sour"> кислый</label>
-            <label class="order-time"><input type="checkbox" id="adminTasteSweet" value="sweet"> сладкий</label>
-            <label class="order-time"><input type="checkbox" id="adminTasteBitter" value="bitter"> горький</label>
+        <details class="admin-fold" id="adminCocktailFold">
+          <summary class="admin-fold-summary">
+            <span class="admin-fold-label" id="adminCocktailFoldLabel">Добавить коктейль</span>
+            <span class="admin-fold-chevron" aria-hidden="true"></span>
+          </summary>
+          <div class="admin-add" id="adminCocktailFormBox">
+            <input id="adminCocktailName" class="admin-input" type="text" placeholder="Название">
+            <input id="adminCocktailPrice" class="admin-input" type="number" placeholder="Цена ₽" min="0">
+            <input id="adminCocktailIngredients" class="admin-input" type="text" placeholder="Состав">
+            <input id="adminCocktailImage" class="admin-input" type="url" placeholder="URL фото (необязательно)">
+            <select id="adminCocktailCategory" class="admin-select">
+              <option value="classic">Классика</option>
+              <option value="signature">Авторские</option>
+              <option value="shots">Шоты</option>
+            </select>
+            <input id="adminCocktailAlcohol" class="admin-input" type="number" placeholder="Крепость %" min="0" max="100">
+            <input id="adminCocktailMood" class="admin-input" type="text" placeholder="Настроение / описание">
+            <div class="taste-checks" id="adminTasteChecks">
+              <label class="order-time"><input type="checkbox" id="adminTasteSour" value="sour"> кислый</label>
+              <label class="order-time"><input type="checkbox" id="adminTasteSweet" value="sweet"> сладкий</label>
+              <label class="order-time"><input type="checkbox" id="adminTasteBitter" value="bitter"> горький</label>
+            </div>
+            <label class="order-time" for="adminCocktailRecipe">Рецепт для склада (строка: Ингредиент = количество)</label>
+            <textarea id="adminCocktailRecipe" class="admin-input admin-textarea" rows="3" placeholder="Водка = 50&#10;Лайм = 20"></textarea>
+            <input id="adminCocktailId" type="hidden" value="">
+            <button class="cta" id="adminCocktailSaveBtn" type="button">Сохранить коктейль</button>
           </div>
-          <label class="order-time" for="adminCocktailRecipe">Рецепт для склада (строка: Ингредиент = количество)</label>
-          <textarea id="adminCocktailRecipe" class="admin-input admin-textarea" rows="3" placeholder="Водка = 50&#10;Лайм = 20"></textarea>
-          <input id="adminCocktailId" type="hidden" value="">
-          <button class="cta" id="adminCocktailSaveBtn" type="button">Сохранить коктейль</button>
-        </div>
+        </details>
         <div id="adminCocktailsList" class="orders-list"></div>
       </div>
 
       <div class="admin-pane" id="adminPromosPane">
         <p class="admin-section-title">Промокоды</p>
-        <div class="admin-add">
-          <input id="adminPromoCode" class="admin-input" type="text" placeholder="Код (SUMMER)" maxlength="20">
-          <input id="adminPromoDiscount" class="admin-input" type="number" placeholder="Скидка %" min="1" max="100">
-          <input id="adminPromoDescription" class="admin-input" type="text" placeholder="Описание">
-          <input id="adminPromoMaxUses" class="admin-input" type="number" placeholder="Макс. использований (0 = ∞)" min="0">
-          <input id="adminPromoExpiry" class="admin-input" type="date">
-          <label class="order-time"><input id="adminPromoActive" type="checkbox" checked> Активен</label>
-          <button class="cta" id="adminPromoSaveBtn" type="button">Создать промокод</button>
-        </div>
+        <details class="admin-fold" id="adminPromoFold">
+          <summary class="admin-fold-summary">
+            <span class="admin-fold-label">Создать промокод</span>
+            <span class="admin-fold-chevron" aria-hidden="true"></span>
+          </summary>
+          <div class="admin-add">
+            <input id="adminPromoCode" class="admin-input" type="text" placeholder="Код (SUMMER)" maxlength="20">
+            <input id="adminPromoDiscount" class="admin-input" type="number" placeholder="Скидка %" min="1" max="100">
+            <input id="adminPromoDescription" class="admin-input" type="text" placeholder="Описание">
+            <input id="adminPromoMaxUses" class="admin-input" type="number" placeholder="Макс. использований (0 = ∞)" min="0">
+            <input id="adminPromoExpiry" class="admin-input" type="date">
+            <label class="order-time"><input id="adminPromoActive" type="checkbox" checked> Активен</label>
+            <button class="cta" id="adminPromoSaveBtn" type="button">Создать промокод</button>
+          </div>
+        </details>
         <div id="adminPromosList" class="orders-list"></div>
       </div>
 
       <div class="admin-pane" id="adminBonusesPane">
         <p class="admin-section-title">Бонусная система</p>
         <div id="adminBonusStats" class="stat-row" style="margin-bottom:12px"></div>
-        <div class="admin-add">
-          <label class="order-time">Процент кэшбэка %</label>
-          <input id="adminBonusPct" class="admin-input" type="number" min="1" max="100">
-          <label class="order-time">Мин. сумма заказа ₽</label>
-          <input id="adminBonusMin" class="admin-input" type="number" min="0">
-          <label class="order-time">Макс. % оплаты бонусами</label>
-          <input id="adminBonusMax" class="admin-input" type="number" min="1" max="100">
-          <label class="order-time">Срок бонусов (дни, 0 = ∞)</label>
-          <input id="adminBonusExpire" class="admin-input" type="number" min="0">
-          <label class="order-time"><input id="adminBonusActive" type="checkbox" checked> Система активна</label>
-          <button class="cta" id="adminBonusSaveBtn" type="button">Сохранить бонусы</button>
-        </div>
+        <details class="admin-fold" id="adminBonusFold">
+          <summary class="admin-fold-summary">
+            <span class="admin-fold-label">Настройки бонусов</span>
+            <span class="admin-fold-chevron" aria-hidden="true"></span>
+          </summary>
+          <div class="admin-add">
+            <label class="order-time">Процент кэшбэка %</label>
+            <input id="adminBonusPct" class="admin-input" type="number" min="1" max="100">
+            <label class="order-time">Мин. сумма заказа ₽</label>
+            <input id="adminBonusMin" class="admin-input" type="number" min="0">
+            <label class="order-time">Макс. % оплаты бонусами</label>
+            <input id="adminBonusMax" class="admin-input" type="number" min="1" max="100">
+            <label class="order-time">Срок бонусов (дни, 0 = ∞)</label>
+            <input id="adminBonusExpire" class="admin-input" type="number" min="0">
+            <label class="order-time"><input id="adminBonusActive" type="checkbox" checked> Система активна</label>
+            <button class="cta" id="adminBonusSaveBtn" type="button">Сохранить бонусы</button>
+          </div>
+        </details>
         <p class="admin-section-title">Пользователи с бонусами</p>
         <div id="adminBonusUsersList" class="orders-list"></div>
       </div>
 
       <div class="admin-pane" id="adminPurchasesPane">
         <p class="admin-section-title">Ингредиенты и закупки</p>
-        <p class="section-sub" style="margin-top:-4px">Нажмите «Изменить» у позиции — поля заполнятся сверху, поправьте и сохраните.</p>
+        <p class="section-sub" style="margin-top:-4px">Список снизу. «Изменить» раскроет форму сверху.</p>
         <div id="adminPurchaseStats" class="stat-row" style="margin-bottom:12px"></div>
 
-        <div class="admin-add" id="adminIngFormBox">
-          <p class="admin-form-title" id="adminIngFormTitle">Новый ингредиент</p>
-          <label class="admin-label" for="adminIngName">Название</label>
-          <input id="adminIngName" class="admin-input" type="text" placeholder="Например: Водка" autocomplete="off">
-          <label class="admin-label" for="adminIngUnit">Единица</label>
-          <select id="adminIngUnit" class="admin-select">
-            <option value="мл">мл</option>
-            <option value="г">г</option>
-            <option value="шт">шт</option>
-            <option value="л">л</option>
-            <option value="кг">кг</option>
-          </select>
-          <label class="admin-label" for="adminIngStock">Текущий остаток</label>
-          <input id="adminIngStock" class="admin-input" type="number" placeholder="1000" min="0" step="any">
-          <label class="admin-label" for="adminIngMin">Минимум (когда пора закупать)</label>
-          <input id="adminIngMin" class="admin-input" type="number" placeholder="200" min="0" step="any">
-          <input id="adminIngId" type="hidden" value="">
-          <button class="cta" id="adminIngSaveBtn" type="button">Добавить ингредиент</button>
-          <button class="ghost" id="adminIngCancelBtn" type="button" hidden>Отменить редактирование</button>
-          <button class="ghost" id="adminPurchaseSendBtn" type="button">Отправить список закупок в Telegram</button>
-        </div>
+        <details class="admin-fold" id="adminIngFold">
+          <summary class="admin-fold-summary">
+            <span class="admin-fold-label" id="adminIngFoldLabel">Добавить ингредиент</span>
+            <span class="admin-fold-chevron" aria-hidden="true"></span>
+          </summary>
+          <div class="admin-add" id="adminIngFormBox">
+            <p class="admin-form-title" id="adminIngFormTitle" hidden>Новый ингредиент</p>
+            <label class="admin-label" for="adminIngName">Название</label>
+            <input id="adminIngName" class="admin-input" type="text" placeholder="Например: Водка" autocomplete="off">
+            <label class="admin-label" for="adminIngUnit">Единица</label>
+            <select id="adminIngUnit" class="admin-select">
+              <option value="мл">мл</option>
+              <option value="г">г</option>
+              <option value="шт">шт</option>
+              <option value="л">л</option>
+              <option value="кг">кг</option>
+            </select>
+            <label class="admin-label" for="adminIngStock">Текущий остаток</label>
+            <input id="adminIngStock" class="admin-input" type="number" placeholder="1000" min="0" step="any">
+            <label class="admin-label" for="adminIngMin">Минимум (когда пора закупать)</label>
+            <input id="adminIngMin" class="admin-input" type="number" placeholder="200" min="0" step="any">
+            <input id="adminIngId" type="hidden" value="">
+            <button class="cta" id="adminIngSaveBtn" type="button">Добавить ингредиент</button>
+            <button class="ghost" id="adminIngCancelBtn" type="button" hidden>Отменить редактирование</button>
+            <button class="ghost" id="adminPurchaseSendBtn" type="button">Отправить список закупок в Telegram</button>
+          </div>
+        </details>
 
         <p class="admin-section-title">Список ингредиентов</p>
         <div class="admin-subtabs" id="adminPurchaseFilters">
@@ -451,6 +481,6 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script defer src="app.js?v=orderbtn1"></script>
+  <script defer src="app.js?v=adminfold1"></script>
 </body>
 </html>
