@@ -52,28 +52,29 @@ app.use(cors({
 
 app.use(express.json());
 
-// Telegram Mini App static files + shared brand assets
+// Versioned JS/CSS (?v=) can be cached; HTML always revalidated.
+// NEVER Clear-Site-Data — it blanks Telegram WebView loads.
+function setMiniAppStaticHeaders(res, filePath) {
+  if (/\.(?:js|css|png|jpe?g|webp|gif|svg|woff2?)$/i.test(filePath)) {
+    res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+    return;
+  }
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+}
 app.use('/mini-app', express.static(path.join(__dirname, 'mini-app'), {
   extensions: ['html'],
   etag: false,
   lastModified: false,
-  setHeaders: (res, filePath) => {
-    // Revalidate — but NEVER Clear-Site-Data: it blanks Telegram WebView loads
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-  }
+  setHeaders: setMiniAppStaticHeaders
 }));
 // Fresh alias path to bust stubborn Telegram WebView caches
 app.use('/m', express.static(path.join(__dirname, 'mini-app'), {
   extensions: ['html'],
   etag: false,
   lastModified: false,
-  setHeaders: (res, filePath) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-  }
+  setHeaders: setMiniAppStaticHeaders
 }));
 app.get('/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'logo.png')));
 app.get('/favicon.ico', (req, res) => res.sendFile(path.join(__dirname, 'favicon.ico')));
@@ -192,7 +193,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'type1';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'wheelspin1';
 
 function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
@@ -947,7 +948,25 @@ async function getNextQueuePosition() {
   }
 }
 
+function priceFromMenuBootstrapCache(cocktailId, name) {
+  const list = menuBootstrapCache?.payload?.cocktails;
+  if (!Array.isArray(list) || !list.length) return null;
+  const id = String(cocktailId || '');
+  if (id) {
+    const byId = list.find((c) => c && c.id === id);
+    const p = Number(byId?.price);
+    if (Number.isFinite(p) && p >= 0) return p;
+  }
+  const nm = String(name || '').trim().toLowerCase();
+  if (!nm) return null;
+  const byName = list.find((c) => String(c?.name || '').trim().toLowerCase() === nm);
+  const p = Number(byName?.price);
+  return Number.isFinite(p) && p >= 0 ? p : null;
+}
+
 async function resolveMenuCocktailPrice({ cocktailId, name }) {
+  const cached = priceFromMenuBootstrapCache(cocktailId, name);
+  if (cached != null) return cached;
   try {
     if (cocktailId) {
       const doc = await db.collection('cocktails').doc(String(cocktailId)).get();
@@ -1534,6 +1553,9 @@ async function resolveMiniAppUser(req) {
 
 // In-memory stoplist cache — avoids Firestore roundtrip on every order
 const stoplistCache = { names: new Set(), at: 0, loading: null };
+// Shared with menu-bootstrap + create-order price lookup
+const menuBootstrapCache = { at: 0, payload: null };
+const MENU_BOOTSTRAP_TTL_MS = 120000;
 
 function invalidateStoplistCache() {
   stoplistCache.at = 0;
@@ -2038,79 +2060,115 @@ app.post('/api/mini-app/auth', async (req, res) => {
     );
     // Owner chat id from project defaults
     adminIds.add('1743362083');
-    const isAdmin = adminIds.has(String(tgUser.id));
+    const isAdminEnv = adminIds.has(String(tgUser.id));
 
-    try {
-      const updatePayload = { displayName };
-      if (tgUser.photo_url) updatePayload.photoURL = tgUser.photo_url;
-      await admin.auth().updateUser(uid, updatePayload);
-    } catch (error) {
-      if (error.code === 'auth/user-not-found') {
-        const createPayload = { uid, displayName };
-        if (tgUser.photo_url) createPayload.photoURL = tgUser.photo_url;
-        await admin.auth().createUser(createPayload);
-      } else {
-        console.warn('Firebase user upsert skipped:', error.message);
+    // Firebase Auth upsert is ~0.8s+ — never block login on it
+    void (async () => {
+      try {
+        const updatePayload = { displayName };
+        if (tgUser.photo_url) updatePayload.photoURL = tgUser.photo_url;
+        await admin.auth().updateUser(uid, updatePayload);
+      } catch (error) {
+        if (error.code === 'auth/user-not-found') {
+          try {
+            const createPayload = { uid, displayName };
+            if (tgUser.photo_url) createPayload.photoURL = tgUser.photo_url;
+            await admin.auth().createUser(createPayload);
+          } catch (createErr) {
+            console.warn('Firebase user create skipped:', createErr.message);
+          }
+        } else {
+          console.warn('Firebase user upsert skipped:', error.message);
+        }
       }
-    }
+    })();
 
     const userRef = db.collection('users').doc(uid);
-    const existingUser = await userRef.get();
-    const existingRole = existingUser.exists ? (existingUser.data().role || 'user') : 'user';
-    await userRef.set({
+
+    // Fast path: env admins don't need a Firestore role lookup.
+    // Bonus/bill come from /me + polling right after login — don't block session.
+    const [existingUser, customToken] = await Promise.all([
+      isAdminEnv
+        ? Promise.resolve(null)
+        : userRef.get().catch(() => null),
+      admin.auth().createCustomToken(uid, {
+        telegramId: tgUser.id,
+        provider: 'telegram-mini-app'
+      }).catch((tokenError) => {
+        console.warn('Custom token unavailable:', tokenError.message);
+        return null;
+      })
+    ]);
+
+    const existingRole = existingUser?.exists ? (existingUser.data().role || 'user') : 'user';
+    const role = isAdminEnv ? 'admin' : (existingRole || 'user');
+
+    // Profile + bonus/bill snapshot in background (client refreshes via /me)
+    void userRef.set({
       displayName,
       telegramId: tgUser.id,
       telegramUsername: tgUser.username || null,
       photoURL: tgUser.photo_url || null,
-      role: isAdmin ? 'admin' : existingRole,
+      role,
       source: 'telegram-mini-app',
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...(existingUser.exists ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
-    }, { merge: true });
+      ...(existingUser?.exists ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
+    }, { merge: true }).catch((e) => console.warn('user profile write:', e.message));
 
-    let customToken = null;
-    try {
-      customToken = await admin.auth().createCustomToken(uid, {
-        telegramId: tgUser.id,
-        provider: 'telegram-mini-app'
-      });
-    } catch (tokenError) {
-      console.warn('Custom token unavailable:', tokenError.message);
-    }
-
-    const bonusDoc = await db.collection('bonusAccounts').doc(uid).get();
-    const bonusBalance = bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0;
-
+    let bonusBalance = 0;
     let openBillTotal = 0;
     let openBillItems = [];
+
+    // Non-blocking enrich — race a short timeout so cold Firestore can't stall login
     try {
-      const billsSnap = await db.collection('bills')
-        .where('userId', '==', uid)
-        .where('status', '==', 'open')
-        .limit(1)
-        .get();
-      if (!billsSnap.empty) {
-        const billDoc = billsSnap.docs[0];
-        const bill = billDoc.data();
-        openBillItems = await hydrateBillItemsWithOrderStatus(bill.items);
-        openBillTotal = billTotalFromItems(openBillItems);
-        // Repair stale item statuses / total in Firestore (best-effort)
-        const stale = (Array.isArray(bill.items) ? bill.items : []).some((it, idx) => {
-          const live = openBillItems[idx];
-          return live && it.status !== live.status;
-        }) || Number(bill.totalAmount || 0) !== openBillTotal;
-        if (stale) {
-          billDoc.ref.update({
-            items: openBillItems.map((it, idx) => ({
-              ...(Array.isArray(bill.items) ? bill.items[idx] : {}),
-              ...it
-            })),
-            totalAmount: openBillTotal,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-          }).catch(() => {});
+      const enrich = Promise.all([
+        db.collection('bonusAccounts').doc(uid).get().catch(() => null),
+        db.collection('bills')
+          .where('userId', '==', uid)
+          .where('status', '==', 'open')
+          .limit(1)
+          .get()
+          .catch(() => null)
+      ]);
+      const timed = await Promise.race([
+        enrich.then((v) => ({ ok: true, v })),
+        new Promise((resolve) => setTimeout(() => resolve({ ok: false }), 450))
+      ]);
+      if (timed.ok) {
+        const [bonusDoc, billsSnap] = timed.v;
+        bonusBalance = bonusDoc?.exists ? Number(bonusDoc.data().balance) || 0 : 0;
+        if (billsSnap && !billsSnap.empty) {
+          const billDoc = billsSnap.docs[0];
+          const bill = billDoc.data() || {};
+          openBillItems = mapBillItemsForClient(bill.items);
+          openBillTotal = Number(bill.totalAmount);
+          if (!Number.isFinite(openBillTotal)) openBillTotal = billTotalFromItems(openBillItems);
+          void (async () => {
+            try {
+              const hydrated = await hydrateBillItemsWithOrderStatus(bill.items);
+              const total = billTotalFromItems(hydrated);
+              const stale = (Array.isArray(bill.items) ? bill.items : []).some((it, idx) => {
+                const live = hydrated[idx];
+                return live && it.status !== live.status;
+              }) || Number(bill.totalAmount || 0) !== total;
+              if (stale) {
+                await billDoc.ref.update({
+                  items: hydrated.map((it, idx) => ({
+                    ...(Array.isArray(bill.items) ? bill.items[idx] : {}),
+                    ...it
+                  })),
+                  totalAmount: total,
+                  updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+              }
+            } catch (_) { /* ignore */ }
+          })();
         }
+      } else {
+        // Still load in background; client /me will pick it up
+        enrich.catch(() => {});
       }
-    } catch (_) { /* index optional */ }
+    } catch (_) { /* ignore */ }
 
     res.json({
       success: true,
@@ -2120,7 +2178,7 @@ app.post('/api/mini-app/auth', async (req, res) => {
       bonusBalance,
       openBillTotal,
       openBillItems,
-      role: isAdmin ? 'admin' : (existingRole || 'user'),
+      role,
       user: {
         id: tgUser.id,
         first_name: tgUser.first_name,
@@ -2481,7 +2539,20 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       return res.status(409).json({ success: false, error: 'Коктейль в стоп-листе' });
     }
 
-    const menuPrice = await resolveMenuCocktailPrice({ cocktailId, name });
+    const bonusAmount = Math.max(0, Number(bonusUsed) || 0);
+
+    // Price, queue, and bonus docs in parallel — biggest create-order win
+    const [menuPrice, nextQueue, bonusPair] = await Promise.all([
+      resolveMenuCocktailPrice({ cocktailId, name }),
+      getNextQueuePosition(),
+      bonusAmount > 0
+        ? Promise.all([
+          db.collection('bonusAccounts').doc(userId).get(),
+          db.collection('settings').doc('bonusSystem').get()
+        ])
+        : Promise.resolve(null)
+    ]);
+
     let listedPrice = menuPrice;
     if (listedPrice == null) {
       const fallback = Number(originalPrice != null ? originalPrice : price);
@@ -2492,12 +2563,8 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       listedPrice = fallback;
     }
 
-    const bonusAmount = Math.max(0, Number(bonusUsed) || 0);
-    if (bonusAmount > 0) {
-      const [bonusDoc, settingsDoc] = await Promise.all([
-        db.collection('bonusAccounts').doc(userId).get(),
-        db.collection('settings').doc('bonusSystem').get()
-      ]);
+    if (bonusAmount > 0 && bonusPair) {
+      const [bonusDoc, settingsDoc] = bonusPair;
       const balance = bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0;
       const maxUsage = settingsDoc.exists ? (Number(settingsDoc.data().maxUsage) || 50) : 50;
       const maxByPrice = Math.floor(listedPrice * (maxUsage / 100));
@@ -2512,7 +2579,6 @@ app.post('/api/mini-app/create-order', async (req, res) => {
     const finalPrice = Math.max(0, listedPrice - bonusAmount);
     const now = new Date();
     const displayName = user || session.displayName || 'Гость Telegram';
-    const nextQueue = await getNextQueuePosition();
 
     const orderData = {
       name,
@@ -2754,10 +2820,8 @@ async function ensureTelegramAdmin(telegramId) {
   return { uid, telegramId: id, role: 'admin' };
 }
 
-async function resolveMiniAppAdmin(req) {
-  const session = await resolveMiniAppUser(req);
-  if (!session.ok) return session;
-
+async function isMiniAppAdminUser(session) {
+  if (!session?.ok && session?.userId == null && !session?.telegramId) return false;
   const allowed = new Set(
     String(process.env.TELEGRAM_ADMIN_IDS || TELEGRAM_CHAT_ID || '1743362083')
       .split(',')
@@ -2766,17 +2830,24 @@ async function resolveMiniAppAdmin(req) {
   );
   allowed.add('1743362083');
 
-  if (session.telegramId && allowed.has(String(session.telegramId))) {
-    return { ...session, isAdmin: true };
-  }
+  if (session.telegramId && allowed.has(String(session.telegramId))) return true;
 
   try {
-    const userDoc = await db.collection('users').doc(session.userId).get();
-    if (userDoc.exists && userDoc.data().role === 'admin') {
-      return { ...session, isAdmin: true };
-    }
+    const uid = session.userId || (session.telegramId ? `tg_${session.telegramId}` : null);
+    if (!uid) return false;
+    const userDoc = await db.collection('users').doc(uid).get();
+    if (userDoc.exists && userDoc.data().role === 'admin') return true;
   } catch (_) { /* ignore */ }
 
+  return false;
+}
+
+async function resolveMiniAppAdmin(req) {
+  const session = await resolveMiniAppUser(req);
+  if (!session.ok) return session;
+  if (await isMiniAppAdminUser(session)) {
+    return { ...session, isAdmin: true };
+  }
   return { ok: false, reason: 'not_admin' };
 }
 
@@ -2933,16 +3004,12 @@ app.get('/api/mini-app/stoplist', async (req, res) => {
 });
 
 // One-shot menu bootstrap: cocktails + stoplist + ratings (reduces Mini App flicker)
-const menuBootstrapCache = { at: 0, payload: null };
-app.get('/api/mini-app/menu-bootstrap', async (req, res) => {
+async function warmMenuBootstrapCache() {
   try {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'public, max-age=15');
     const now = Date.now();
-    if (menuBootstrapCache.payload && now - menuBootstrapCache.at < 15000) {
-      return res.json(menuBootstrapCache.payload);
+    if (menuBootstrapCache.payload && now - menuBootstrapCache.at < MENU_BOOTSTRAP_TTL_MS) {
+      return menuBootstrapCache.payload;
     }
-
     const [cocktailsSnap, stopNames, ratingsSnap] = await Promise.all([
       db.collection('cocktails').get(),
       refreshStoplistCache(false),
@@ -2972,16 +3039,16 @@ app.get('/api/mini-app/menu-bootstrap', async (req, res) => {
       const acc = new Map();
       ratingsSnap.forEach((doc) => {
         const d = doc.data() || {};
-        const name = String(d.cocktailName || '').trim();
+        const cocktailName = String(d.cocktailName || '').trim();
         const rating = Number(d.rating) || 0;
-        if (!name || rating <= 0) return;
-        const cur = acc.get(name) || { sum: 0, count: 0 };
+        if (!cocktailName || rating <= 0) return;
+        const cur = acc.get(cocktailName) || { sum: 0, count: 0 };
         cur.sum += rating;
         cur.count += 1;
-        acc.set(name, cur);
+        acc.set(cocktailName, cur);
       });
-      acc.forEach((v, name) => {
-        averages[name] = Number((v.sum / v.count).toFixed(1));
+      acc.forEach((v, cocktailName) => {
+        averages[cocktailName] = Number((v.sum / v.count).toFixed(1));
       });
     }
 
@@ -2994,6 +3061,26 @@ app.get('/api/mini-app/menu-bootstrap', async (req, res) => {
     };
     menuBootstrapCache.at = now;
     menuBootstrapCache.payload = payload;
+    return payload;
+  } catch (err) {
+    console.warn('warmMenuBootstrapCache:', err.message);
+    return null;
+  }
+}
+
+app.get('/api/mini-app/menu-bootstrap', async (req, res) => {
+  try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    const now = Date.now();
+    if (menuBootstrapCache.payload && now - menuBootstrapCache.at < MENU_BOOTSTRAP_TTL_MS) {
+      return res.json(menuBootstrapCache.payload);
+    }
+
+    const payload = await warmMenuBootstrapCache();
+    if (!payload) {
+      return res.status(500).json({ success: false, error: 'menu bootstrap failed' });
+    }
     res.json(payload);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -3243,60 +3330,103 @@ const DEFAULT_WHEEL_PRIZES = [
   { id: 'nothing', name: 'Повезёт завтра', short: '—', description: 'В этот раз без приза — загляните завтра', type: 'nothing', value: 0, probability: 4, color: '#1f1a16', icon: '—' }
 ];
 
+const wheelRuntimeCache = {
+  prizesAt: 0,
+  prizes: null,
+  configAt: 0,
+  config: null,
+  seeding: null
+};
+
 async function ensureWheelPrizes() {
-  const all = await db.collection('wheelPrizes').get();
-  const existing = new Map(all.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() }]));
-  const defaultIds = new Set(DEFAULT_WHEEL_PRIZES.map((p) => p.id));
-  let batch = db.batch();
-  let ops = 0;
+  const now = Date.now();
+  if (wheelRuntimeCache.prizes && now - wheelRuntimeCache.prizesAt < 300000) {
+    return wheelRuntimeCache.prizes;
+  }
+  if (wheelRuntimeCache.seeding) return wheelRuntimeCache.seeding;
 
-  const commitIfNeeded = async (force = false) => {
-    if (ops >= 400 || (force && ops > 0)) {
-      await batch.commit();
-      batch = db.batch();
-      ops = 0;
+  wheelRuntimeCache.seeding = (async () => {
+    const all = await db.collection('wheelPrizes').get();
+    const existing = new Map(all.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() }]));
+    const defaultIds = new Set(DEFAULT_WHEEL_PRIZES.map((p) => p.id));
+    let batch = db.batch();
+    let ops = 0;
+    let changed = false;
+
+    const commitIfNeeded = async (force = false) => {
+      if (ops >= 400 || (force && ops > 0)) {
+        await batch.commit();
+        batch = db.batch();
+        ops = 0;
+      }
+    };
+
+    // Upsert canonical prizes only when missing or outdated labels/colors
+    for (const prize of DEFAULT_WHEEL_PRIZES) {
+      const prev = existing.get(prize.id);
+      const needsWrite = !prev
+        || prev.active === false
+        || prev.short !== prize.short
+        || prev.color !== prize.color
+        || Number(prev.probability) !== Number(prize.probability);
+      if (needsWrite) {
+        batch.set(db.collection('wheelPrizes').doc(prize.id), {
+          ...prize,
+          active: true,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...(prev ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
+        }, { merge: true });
+        ops += 1;
+        changed = true;
+        await commitIfNeeded();
+      }
+      existing.set(prize.id, { ...prev, ...prize, active: true });
     }
-  };
 
-  // Upsert canonical prizes (fixes rainbow legacy colors / short labels)
-  for (const prize of DEFAULT_WHEEL_PRIZES) {
-    batch.set(db.collection('wheelPrizes').doc(prize.id), {
-      ...prize,
-      active: true,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...(existing.has(prize.id) ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
-    }, { merge: true });
-    existing.set(prize.id, { ...existing.get(prize.id), ...prize, active: true });
-    ops += 1;
-    await commitIfNeeded();
+    // Disable legacy prizes (e.g. free_shot / −100%) that make the wheel look childish
+    for (const [id, data] of existing.entries()) {
+      if (defaultIds.has(id)) continue;
+      if (data.active === false) continue;
+      batch.set(db.collection('wheelPrizes').doc(id), {
+        active: false,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      data.active = false;
+      ops += 1;
+      changed = true;
+      await commitIfNeeded();
+    }
+    if (changed) await commitIfNeeded(true);
+
+    const list = [...existing.values()]
+      .filter((p) => p.active !== false)
+      .sort((a, b) => (Number(b.probability) || 0) - (Number(a.probability) || 0));
+    wheelRuntimeCache.prizes = list;
+    wheelRuntimeCache.prizesAt = Date.now();
+    return list;
+  })();
+
+  try {
+    return await wheelRuntimeCache.seeding;
+  } finally {
+    wheelRuntimeCache.seeding = null;
   }
-
-  // Disable legacy prizes (e.g. free_shot / −100%) that make the wheel look childish
-  for (const [id, data] of existing.entries()) {
-    if (defaultIds.has(id)) continue;
-    if (data.active === false) continue;
-    batch.set(db.collection('wheelPrizes').doc(id), {
-      active: false,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-    data.active = false;
-    ops += 1;
-    await commitIfNeeded();
-  }
-  await commitIfNeeded(true);
-
-  return [...existing.values()]
-    .filter((p) => p.active !== false)
-    .sort((a, b) => (Number(b.probability) || 0) - (Number(a.probability) || 0));
 }
 
 async function getWheelConfig() {
+  const now = Date.now();
+  if (wheelRuntimeCache.config && now - wheelRuntimeCache.configAt < 120000) {
+    return wheelRuntimeCache.config;
+  }
   const doc = await db.collection('wheelConfig').doc('settings').get();
   const data = doc.exists ? doc.data() : {};
-  return {
+  const config = {
     active: data.active !== false,
     cooldownHours: Number(data.cooldownHours) || 24
   };
+  wheelRuntimeCache.config = config;
+  wheelRuntimeCache.configAt = now;
+  return config;
 }
 
 function pickWheelPrize(prizes) {
@@ -3414,6 +3544,7 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
     const session = await resolveMiniAppUser(req);
     if (!session.ok) return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
 
+    const isAdmin = await isMiniAppAdminUser(session);
     const [config, prizes, spinDoc, myPromos] = await Promise.all([
       getWheelConfig(),
       ensureWheelPrizes(),
@@ -3425,7 +3556,9 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
     let nextSpinAt = null;
     let lastPrize = null;
     const spin = spinDoc.exists ? spinDoc.data() : {};
-    if (spin.lastSpinDate) {
+    if (spin.prize) lastPrize = spin.prize;
+    // Admins can spin without cooldown
+    if (!isAdmin && spin.lastSpinDate) {
       const lastMs = spin.lastSpinDate.toMillis?.() || Date.parse(spin.lastSpinDate) || 0;
       const cooldownMs = (config.cooldownHours || 24) * 3600 * 1000;
       const unlockAt = lastMs + cooldownMs;
@@ -3433,7 +3566,6 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
         canSpin = false;
         nextSpinAt = unlockAt;
       }
-      if (spin.prize) lastPrize = spin.prize;
     }
 
     // If last prize promo is missing from list but still stored on spin — include it
@@ -3468,8 +3600,9 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
       success: true,
       active: config.active,
       canSpin: Boolean(canSpin && config.active),
+      unlimited: Boolean(isAdmin),
       cooldownHours: config.cooldownHours,
-      nextSpinAt,
+      nextSpinAt: isAdmin ? null : nextSpinAt,
       totalSpins: Number(spin.totalSpins) || 0,
       lastPrize,
       myPromos,
@@ -3485,12 +3618,14 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
     const session = await resolveMiniAppUser(req);
     if (!session.ok) return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
 
-    const config = await getWheelConfig();
+    const [isAdmin, config, prizes] = await Promise.all([
+      isMiniAppAdminUser(session),
+      getWheelConfig(),
+      ensureWheelPrizes()
+    ]);
     if (!config.active) {
       return res.status(400).json({ success: false, error: 'Колесо временно выключено' });
     }
-
-    const prizes = await ensureWheelPrizes();
     if (!prizes.length) {
       return res.status(500).json({ success: false, error: 'Призы не настроены' });
     }
@@ -3499,11 +3634,13 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
     const cooldownMs = (config.cooldownHours || 24) * 3600 * 1000;
 
     // Atomic cooldown check + reserve spin slot before awarding
+    // Admins skip the daily limit
     let reserved = false;
+    let prize = null;
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(spinRef);
       const prev = snap.exists ? snap.data() : {};
-      if (prev.lastSpinDate) {
+      if (!isAdmin && prev.lastSpinDate) {
         const lastMs = prev.lastSpinDate.toMillis?.() || 0;
         if (Date.now() < lastMs + cooldownMs) {
           const err = new Error('Колесо ещё недоступно');
@@ -3512,17 +3649,20 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
           throw err;
         }
       }
+      // Pick inside tx so we can persist pending prize id atomically
+      prize = pickWheelPrize(prizes);
       tx.set(spinRef, {
         userId: session.userId,
         lastSpinDate: admin.firestore.FieldValue.serverTimestamp(),
         totalSpins: (Number(prev.totalSpins) || 0) + 1,
         pending: true,
+        pendingPrizeId: prize?.id || null,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
       reserved = true;
     });
 
-    const prize = pickWheelPrize(prizes);
+    if (!prize) prize = pickWheelPrize(prizes);
     const prizeIndex = Math.max(0, prizes.findIndex((p) => p.id === prize.id));
     let award = { type: prize.type, promoCode: null, bonusAwarded: 0, balance: null };
 
@@ -3546,8 +3686,10 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
         claimed: true
       };
 
+      // Don't block the response on the final write for "nothing" — still await for consistency
       await spinRef.set({
         pending: false,
+        pendingPrizeId: admin.firestore.FieldValue.delete(),
         prize: publicPrize,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
@@ -3557,8 +3699,9 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
         prizeIndex,
         prize: publicPrize,
         award,
-        nextSpinAt: Date.now() + cooldownMs,
-        canSpin: false
+        unlimited: Boolean(isAdmin),
+        nextSpinAt: isAdmin ? null : Date.now() + cooldownMs,
+        canSpin: Boolean(isAdmin)
       });
     } catch (awardErr) {
       if (reserved) {
@@ -4262,6 +4405,13 @@ app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
 
   ensureAlertsBotWebhook().catch((e) => console.warn('Alerts webhook ensure failed:', e.message));
   ensureMiniAppBotWebhook().catch((e) => console.warn('Mini App webhook ensure failed:', e.message));
+  warmMenuBootstrapCache()
+    .then((p) => console.log('🍹 Menu bootstrap cache warm:', p?.cocktails?.length || 0, 'cocktails'))
+    .catch((e) => console.warn('Menu bootstrap warm failed:', e.message));
+  ensureWheelPrizes()
+    .then((p) => console.log('🎡 Wheel prizes cache warm:', p?.length || 0))
+    .catch((e) => console.warn('Wheel prizes warm failed:', e.message));
+  getWheelConfig().catch(() => {});
 });
 
 module.exports = app;

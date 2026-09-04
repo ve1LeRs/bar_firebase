@@ -12,6 +12,7 @@
 
   const DEFAULT_API = 'https://asafievbar.duckdns.org';
   const MENU_CACHE_KEY = 'asafiev_mini_menu_v4';
+  const AUTH_CACHE_KEY = 'asafiev_mini_auth_v1';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
   const STATUS_LABELS = {
     pending: 'Ожидание',
@@ -138,13 +139,7 @@
     ordersList: document.getElementById('ordersList'),
     profileName: document.getElementById('profileName'),
     profileMeta: document.getElementById('profileMeta'),
-    profileBonus: document.getElementById('profileBonus'),
-    profileBill: document.getElementById('profileBill'),
-    profileEarned: document.getElementById('profileEarned'),
-    profileSpent: document.getElementById('profileSpent'),
-    profileBillItems: document.getElementById('profileBillItems'),
-    profileBillEmpty: document.getElementById('profileBillEmpty'),
-    profileBillHistory: document.getElementById('profileBillHistory'),
+    profileSummary: document.getElementById('profileSummary'),
     ordersPromoBox: document.getElementById('ordersPromoBox'),
     ordersPromoRow: document.getElementById('ordersPromoRow'),
     ordersPromoInput: document.getElementById('ordersPromoInput'),
@@ -175,6 +170,7 @@
     sheetPrice: document.getElementById('sheetPrice'),
     sheetTotal: document.getElementById('sheetTotal'),
     bonusRow: document.getElementById('bonusRow'),
+    bonusHaveHint: document.getElementById('bonusHaveHint'),
     bonusInput: document.getElementById('bonusInput'),
     bonusEarnRow: document.getElementById('bonusEarnRow'),
     sheetBonusEarn: document.getElementById('sheetBonusEarn'),
@@ -223,6 +219,7 @@
     rotation: 0,
     spinning: false,
     canSpin: false,
+    unlimited: false,
     nextSpinAt: null,
     active: true,
     ctx: null,
@@ -293,26 +290,22 @@
     }
 
     tg.ready();
-    tg.expand();
+    try { tg.expand(); } catch (_) { /* ignore */ }
 
-    // Fullscreen (Bot API 8.0+) + max height fallback
     try {
       tg.disableVerticalSwipes?.();
     } catch (_) { /* older clients */ }
 
-    try {
-      if (typeof tg.requestFullscreen === 'function') {
-        tg.requestFullscreen();
-      }
-    } catch (_) { /* not supported / needs user gesture on some clients */ }
-
-    // Retry fullscreen shortly after open (iOS sometimes ignores first call)
-    setTimeout(() => {
+    // Fullscreen immediately once — no delayed second call (that caused the boot jerk)
+    const requestFs = () => {
       try {
-        tg.expand();
-        tg.requestFullscreen?.();
-      } catch (_) { /* ignore */ }
-    }, 300);
+        if (typeof tg.requestFullscreen === 'function' && !tg.isFullscreen) {
+          tg.requestFullscreen();
+        }
+      } catch (_) { /* needs gesture on some clients */ }
+    };
+    requestFs();
+    requestAnimationFrame(requestFs);
 
     try {
       tg.setHeaderColor('#14110f');
@@ -327,6 +320,7 @@
       document.documentElement.style.setProperty('--tg-safe-left', `${(sa.left || 0) + (csa.left || 0)}px`);
       document.documentElement.style.setProperty('--tg-safe-right', `${(sa.right || 0) + (csa.right || 0)}px`);
       document.body.classList.toggle('is-fullscreen', Boolean(tg.isFullscreen));
+      captureViewportBaseline();
     };
 
     applySafeArea();
@@ -344,9 +338,9 @@
 
     bindKeyboardAwareLayout();
 
-    // Tap anywhere early to request fullscreen if first call was blocked
+    // Fallback if auto-FS was blocked — first tap only
     const askFsOnce = () => {
-      try { tg.requestFullscreen?.(); } catch (_) { /* ignore */ }
+      requestFs();
       document.body.removeEventListener('touchstart', askFsOnce);
       document.body.removeEventListener('click', askFsOnce);
     };
@@ -372,24 +366,33 @@
     let vvHeight = layoutHeight;
     if (vv) {
       vvHeight = vv.height;
-      // Prefer layout viewport vs visual viewport; also compare to cold baseline
-      // (on iOS Telegram innerHeight often shrinks with the keyboard → inset≈0)
       const baseline = syncKeyboardLayout._baseline || layoutHeight;
       const fromInner = Math.max(0, Math.round(layoutHeight - vv.height - (vv.offsetTop || 0)));
       const fromBaseline = Math.max(0, Math.round(baseline - vv.height - (vv.offsetTop || 0)));
       inset = Math.max(fromInner, fromBaseline);
     }
+
+    const fieldFocused = isTextField(document.activeElement);
+    const keyboardOpen = inset > 60 || fieldFocused;
+
+    // Only invent a keyboard height when VV still looks full-screen (Telegram quirk).
+    // If VV already shrank, trust it — double-subtracting stretches/crushes the sheet.
+    if (fieldFocused && inset < 80) {
+      const baseline = syncKeyboardLayout._baseline || layoutHeight;
+      if (baseline > 320 && vvHeight > baseline * 0.82) {
+        const assumed = Math.round(Math.min(320, Math.max(250, baseline * 0.36)));
+        vvHeight = Math.max(260, baseline - assumed);
+        inset = Math.max(inset, baseline - vvHeight);
+      }
+    }
+
     document.documentElement.style.setProperty('--keyboard-inset', `${inset}px`);
     document.documentElement.style.setProperty('--vv-height', `${Math.round(vvHeight)}px`);
 
-    const fieldFocused = isTextField(document.activeElement);
-    // iOS WebView: visualViewport inset is unreliable — treat focused text fields as keyboard open
-    const keyboardOpen = inset > 60 || fieldFocused;
     const keyboardJustOpened = keyboardOpen && !document.body.classList.contains('keyboard-open');
     document.body.classList.toggle('keyboard-open', keyboardOpen);
     document.body.classList.toggle('field-focused', fieldFocused);
 
-    // Admin typing / keyboard dismiss must never reveal guest rating UI
     if (state.currentView === 'admin' || keyboardOpen) {
       closeRatingSheet({ dismiss: false });
     }
@@ -402,12 +405,12 @@
       }
     }
 
-    // Once when keyboard appears — scroll focused promo/bonus into view
     if (keyboardJustOpened) {
       const active = document.activeElement;
-      if (active?.id === 'ordersPromoInput' || active?.id === 'bonusInput') {
+      if (active?.id === 'ordersPromoInput') {
         ensureFieldAboveKeyboard(active);
       }
+      // Bonus field: do NOT scrollIntoView — it stretches/gaps the compact sheet
     }
   }
 
@@ -492,9 +495,10 @@
       if (!isTextField(e.target)) return;
       document.body.classList.add('field-focused', 'keyboard-open');
       syncKeyboardLayout();
-      if (e.target.id === 'ordersPromoInput' || e.target.id === 'bonusInput') {
+      if (e.target.id === 'ordersPromoInput') {
         ensureFieldAboveKeyboard(e.target);
       }
+      // bonusInput: compact sheet only — no scrollIntoView
     });
     document.addEventListener('focusout', () => {
       clearTimeout(bindKeyboardAwareLayout._blurT);
@@ -512,57 +516,69 @@
     document.body.classList.add('field-focused', 'keyboard-open');
     els.sheet?.classList.add('sheet-compact');
     syncKeyboardLayout();
-    // Scroll bonus row into the visible sheet area above action buttons
-    requestAnimationFrame(() => {
-      try {
-        els.bonusRow?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      } catch (_) {
-        els.bonusRow?.scrollIntoView();
-      }
-    });
+    // Reset scroll inside sheet — never scrollIntoView (creates empty gaps on iOS)
+    const scroller = els.sheet?.querySelector('.sheet-scroll');
+    if (scroller) {
+      try { scroller.scrollTop = 0; } catch (_) { /* ignore */ }
+    }
   }
 
   function blurBonusField() {
-    // Clamp over-limit bonus and tell the user — don't silently spend "all available"
-    if (state.selected && els.bonusInput && !els.bonusRow?.hidden) {
-      const price = Number(state.selected.price) || 0;
-      const { maxBonus, raw, overLimit, message } = resolveBonusInput(price, { clampInput: true });
-      if (overLimit) {
-        showToast(message);
-        haptic('heavy');
-      }
-      state.bonusToUse = Math.min(raw, maxBonus);
-      updateSheetTotal();
-    }
+    // Only update totals — insufficient-bonus check happens on «Заказать»
+    if (state.selected) updateSheetTotal();
     // Delay so we don't flicker if focus moves briefly
     setTimeout(() => {
       if (document.activeElement === els.bonusInput) return;
-      if (!document.body.classList.contains('keyboard-open')) {
-        els.sheet?.classList.remove('sheet-compact');
-      }
+      document.body.classList.remove('field-focused');
+      els.sheet?.classList.remove('sheet-compact');
       syncKeyboardLayout();
     }, 180);
+  }
+
+  function formatBonusCount(n) {
+    const v = Math.max(0, Number(n) || 0);
+    const mod10 = v % 10;
+    const mod100 = v % 100;
+    let word = 'бонусов';
+    if (mod10 === 1 && mod100 !== 11) word = 'бонус';
+    else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) word = 'бонуса';
+    return `${v} ${word}`;
+  }
+
+  function syncBonusHaveHint() {
+    if (!els.bonusHaveHint) return;
+    const balance = Math.max(0, Number(state.bonusBalance) || 0);
+    els.bonusHaveHint.textContent = `У вас ${formatBonusCount(balance)}`;
+  }
+
+  function sanitizeBonusInputValue() {
+    const el = els.bonusInput;
+    if (!el) return 0;
+    const digits = String(el.value || '').replace(/\D+/g, '');
+    const next = digits.replace(/^0+(?=\d)/, '') || '0';
+    if (el.value !== next) {
+      // Preserve caret near end after sanitize
+      el.value = next;
+    }
+    return Math.max(0, Number(next) || 0);
   }
 
   function resolveBonusInput(price, { clampInput = false } = {}) {
     const balance = Math.max(0, Number(state.bonusBalance) || 0);
     const percentCap = Math.floor(price * (state.maxBonusUsage / 100));
     const maxBonus = Math.min(balance, percentCap);
-    const raw = Math.max(0, Number(els.bonusInput?.value) || 0);
+    const raw = sanitizeBonusInputValue();
     const overLimit = raw > maxBonus;
     let message = '';
     if (overLimit) {
       if (raw > balance) {
-        message = `Недостаточно бонусов. У вас ${balance}`;
+        message = `Недостаточно бонусов. У вас ${formatBonusCount(balance)}`;
       } else {
         message = `Можно списать не больше ${maxBonus} (до ${state.maxBonusUsage}% от суммы)`;
       }
     }
     if (clampInput && els.bonusInput) {
       els.bonusInput.value = String(Math.min(raw, maxBonus));
-    }
-    if (els.bonusInput) {
-      els.bonusInput.classList.toggle('is-invalid', overLimit && !clampInput);
     }
     return { maxBonus, balance, percentCap, raw, overLimit, message };
   }
@@ -581,32 +597,9 @@
     }
   }
 
-  async function ensureApiAwake(onStatus) {
-    const started = Date.now();
-    const maxWait = 75000;
-    let attempt = 0;
-
-    while (Date.now() - started < maxWait) {
-      attempt += 1;
-      const waited = Math.round((Date.now() - started) / 1000);
-      onStatus?.(
-        attempt === 1
-          ? 'Будим сервер заказов…'
-          : `Сервер просыпается… ${waited}с`
-      );
-      try {
-        const res = await fetchWithTimeout(
-          `${state.apiBase}/health`,
-          { method: 'GET', cache: 'no-store', mode: 'cors' },
-          10000
-        );
-        if (res.ok) return true;
-      } catch (_) {
-        // cold start / network — keep trying
-      }
-      await sleep(Math.min(2500, 800 + attempt * 400));
-    }
-    return false;
+  // VPS API is always warm — do not block boot on Render-era wake waits.
+  async function ensureApiAwake(_onStatus) {
+    return true;
   }
 
   function setAuthStatus(text, { error = false } = {}) {
@@ -636,23 +629,9 @@
 
     setAuthRetryVisible(false);
     setAuthStatus('');
+    wakeApi();
 
-    const awake = await ensureApiAwake(() => {});
-
-    if (!awake) {
-      state.sessionOk = false;
-      state.authReady = false;
-      state.authError = 'timeout';
-      setAuthStatus(
-        'Сервер долго просыпается. Нажмите «Повторить вход» через несколько секунд.',
-        { error: true }
-      );
-      setAuthRetryVisible(true);
-      return false;
-    }
-
-    // A few auth attempts after wake (first request can still be slow)
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
       setAuthStatus('');
       try {
         const res = await fetchWithTimeout(
@@ -662,7 +641,7 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ initData })
           },
-          20000
+          12000
         );
         const data = await res.json();
         if (!res.ok || !data.success) {
@@ -686,16 +665,27 @@
         }
         if (data.role) state.role = data.role;
         applyAdminUi();
+        writeAuthCache({
+          tgId: data.user?.id || state.user?.id,
+          role: state.role,
+          uid: state.uid,
+          bonusBalance: state.bonusBalance
+        });
 
+        // Firebase sign-in is only needed for live stoplist — never block auth/UI
         if (data.customToken) {
-          try {
-            initFirebase();
-            const cred = await auth.signInWithCustomToken(data.customToken);
-            state.firebaseUser = cred.user;
-          } catch (firebaseErr) {
-            console.warn('Firebase custom token skipped:', firebaseErr.message);
-            state.firebaseUser = null;
-          }
+          const token = data.customToken;
+          void (async () => {
+            try {
+              await waitForFirebase(8000);
+              initFirebase();
+              const cred = await auth.signInWithCustomToken(token);
+              state.firebaseUser = cred.user;
+            } catch (firebaseErr) {
+              console.warn('Firebase custom token skipped:', firebaseErr?.message || firebaseErr);
+              state.firebaseUser = null;
+            }
+          })();
         }
 
         setAuthStatus('');
@@ -706,8 +696,8 @@
         return true;
       } catch (err) {
         console.error('auth attempt failed', attempt, err);
-        if (attempt < 3) {
-          await sleep(1500 * attempt);
+        if (attempt < 2) {
+          await sleep(400);
           continue;
         }
         state.sessionOk = false;
@@ -715,7 +705,7 @@
         state.authError = err.name === 'AbortError' ? 'timeout' : 'auth_failed';
         const msg =
           err.name === 'AbortError'
-            ? 'Сервер ещё прогревается'
+            ? 'Сервер не ответил вовремя'
             : err.message;
         setAuthStatus(`Не удалось войти: ${msg}`, { error: true });
         setAuthRetryVisible(true);
@@ -725,8 +715,50 @@
     return false;
   }
 
+  function readAuthCache(tgId) {
+    try {
+      const raw = localStorage.getItem(AUTH_CACHE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (!parsed || String(parsed.tgId) !== String(tgId)) return null;
+      return parsed;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeAuthCache(payload) {
+    try {
+      localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify({
+        tgId: payload.tgId,
+        role: payload.role || 'user',
+        uid: payload.uid || null,
+        bonusBalance: typeof payload.bonusBalance === 'number' ? payload.bonusBalance : undefined,
+        at: Date.now()
+      }));
+    } catch (_) { /* ignore */ }
+  }
+
+  function applyCachedAuthHint() {
+    const tgUser = tg?.initDataUnsafe?.user;
+    if (!tgUser?.id) return;
+    const cached = readAuthCache(tgUser.id);
+    if (!cached) return;
+    if (cached.role === 'admin') {
+      state.role = 'admin';
+      applyAdminUi();
+    }
+    if (typeof cached.bonusBalance === 'number') {
+      state.bonusBalance = cached.bonusBalance;
+      updateProfileUI();
+    }
+  }
+
   function canOrder() {
     return Boolean(state.sessionOk && tg?.initData);
+  }
+
+  function hasTelegramSession() {
+    return Boolean(tg?.initData);
   }
 
   function isAdminUser() {
@@ -918,6 +950,8 @@
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Не удалось добавить');
       if (els.adminStopReason) els.adminStopReason.value = '';
+      if (els.adminStopSelect) els.adminStopSelect.value = '';
+      setAdminFold('adminStopFold', { open: false });
       showToast('Добавлено в стоп-лист');
       haptic('medium');
       refreshAdminStoplist();
@@ -1197,6 +1231,29 @@
     return tags;
   }
 
+  function setAdminFold(foldId, { open, label, editing } = {}) {
+    const fold = document.getElementById(foldId);
+    if (!fold) return null;
+    if (typeof open === 'boolean') fold.open = open;
+    if (label != null) {
+      const lab = fold.querySelector('.admin-fold-label');
+      if (lab) lab.textContent = label;
+    }
+    if (typeof editing === 'boolean') {
+      fold.classList.toggle('is-editing', editing);
+      fold.querySelector('.admin-add')?.classList.toggle('is-editing', editing);
+    }
+    return fold;
+  }
+
+  function openAdminFold(foldId, label, { editing = false } = {}) {
+    const fold = setAdminFold(foldId, { open: true, label, editing });
+    try {
+      fold?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (_) { /* ignore */ }
+    return fold;
+  }
+
   function fillCocktailForm(c) {
     document.getElementById('adminCocktailId').value = c?.id || '';
     document.getElementById('adminCocktailName').value = c?.name || '';
@@ -1215,10 +1272,28 @@
     if (bitter) bitter.checked = tags.includes('bitter');
     const recipeEl = document.getElementById('adminCocktailRecipe');
     if (recipeEl) recipeEl.value = formatStockRecipeText(c?.stockRecipe);
-    if (c) showToast(c?.id ? 'Редактирование: сохраните изменения' : 'Новый коктейль');
+
+    if (!c) {
+      setAdminFold('adminCocktailFold', {
+        open: false,
+        label: 'Добавить коктейль',
+        editing: false
+      });
+      return;
+    }
+
+    if (c.id) {
+      openAdminFold('adminCocktailFold', `Редактирование: ${c.name || 'коктейль'}`, { editing: true });
+      document.getElementById('adminCocktailName')?.focus();
+      showToast('Редактирование: сохраните изменения');
+    } else {
+      openAdminFold('adminCocktailFold', 'Добавить коктейль', { editing: false });
+      showToast('Новый коктейль');
+    }
   }
 
   async function saveAdminCocktail() {
+    const btn = document.getElementById('adminCocktailSaveBtn');
     const cocktail = {
       id: document.getElementById('adminCocktailId').value || undefined,
       name: document.getElementById('adminCocktailName').value.trim(),
@@ -1234,28 +1309,36 @@
     };
     if (!cocktail.name || !Number.isFinite(cocktail.price)) {
       showToast('Название и цена обязательны');
+      haptic('heavy');
       return;
     }
+    if (btn?.disabled) return;
+    const prevLabel = btn?.textContent || '';
     try {
+      haptic('medium');
+      if (btn) {
+        btn.classList.add('is-pressed', 'is-busy');
+        btn.disabled = true;
+        btn.textContent = 'Сохраняю…';
+      }
       const res = await fetch(`${state.apiBase}/api/mini-app/admin/cocktails`, {
         method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'upsert', cocktail })
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Ошибка сохранения');
       fillCocktailForm(null);
-      document.getElementById('adminCocktailId').value = '';
-      document.getElementById('adminCocktailName').value = '';
-      document.getElementById('adminCocktailPrice').value = '';
-      document.getElementById('adminCocktailIngredients').value = '';
-      document.getElementById('adminCocktailImage').value = '';
-      document.getElementById('adminCocktailAlcohol').value = '';
-      document.getElementById('adminCocktailMood').value = '';
-      const recipeEl = document.getElementById('adminCocktailRecipe');
-      if (recipeEl) recipeEl.value = '';
       showToast('Коктейль сохранён');
+      haptic('heavy');
       refreshAdminCocktails();
     } catch (err) {
       showToast(err.message || 'Ошибка');
+      haptic('heavy');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove('is-pressed', 'is-busy');
+        btn.textContent = prevLabel || 'Сохранить коктейль';
+      }
     }
   }
 
@@ -1352,6 +1435,7 @@
       document.getElementById('adminPromoMaxUses').value = '';
       if (document.getElementById('adminPromoExpiry')) document.getElementById('adminPromoExpiry').value = '';
       if (document.getElementById('adminPromoActive')) document.getElementById('adminPromoActive').checked = true;
+      setAdminFold('adminPromoFold', { open: false, label: 'Создать промокод', editing: false });
       refreshAdminPromos();
     } catch (err) {
       showToast(err.message || 'Ошибка');
@@ -1427,6 +1511,7 @@
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Ошибка');
       showToast('Настройки бонусов сохранены');
+      setAdminFold('adminBonusFold', { open: false });
     } catch (err) {
       showToast(err.message || 'Ошибка');
     }
@@ -1532,6 +1617,11 @@
     if (saveBtn) saveBtn.textContent = 'Добавить ингредиент';
     if (cancelBtn) cancelBtn.hidden = true;
     box?.classList.remove('is-editing');
+    setAdminFold('adminIngFold', {
+      open: false,
+      label: 'Добавить ингредиент',
+      editing: false
+    });
   }
 
   function fillIngredientForm(item) {
@@ -1549,7 +1639,7 @@
       if (saveBtn) saveBtn.textContent = 'Сохранить изменения';
       if (cancelBtn) cancelBtn.hidden = false;
       box?.classList.add('is-editing');
-      box?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      openAdminFold('adminIngFold', `Редактирование: ${item.name || 'ингредиент'}`, { editing: true });
       document.getElementById('adminIngStock')?.focus();
     } else {
       resetIngredientForm();
@@ -1810,14 +1900,10 @@
         ? 'Администратор'
         : 'Telegram Mini App';
     els.avatar.textContent = (name || 'A').charAt(0).toUpperCase();
-    els.profileBonus.textContent = String(state.bonusBalance);
-    if (els.profileEarned) els.profileEarned.textContent = String(state.totalEarned || 0);
-    if (els.profileSpent) els.profileSpent.textContent = String(state.totalSpent || 0);
     els.bonusChip.textContent = formatBonusChip(state.bonusBalance);
-    els.profileBill.textContent =
-      state.openBillTotal == null ? '—' : `${state.openBillTotal} ₽`;
-    renderProfileBillItems();
-    renderProfileBillHistory();
+    if (els.profileSummary) {
+      els.profileSummary.textContent = formatBonusChip(state.bonusBalance);
+    }
     syncOrdersPromoUI();
     syncWheelCardUI();
   }
@@ -1834,6 +1920,7 @@
   function syncWheelCardUI() {
     if (!els.wheelCardStatus) return;
     const saved = getActiveWheelPromo();
+    const canSpinNow = wheelState.canSpin || wheelState.unlimited || isAdminUser();
     if (!wheelState.active) {
       els.wheelCardStatus.textContent = 'Колесо временно выключено';
       if (els.wheelOpenBtn) els.wheelOpenBtn.disabled = true;
@@ -1844,11 +1931,19 @@
       els.wheelCardStatus.textContent = `Промокод ${saved.code}${disc}`;
       if (els.wheelOpenBtn) {
         els.wheelOpenBtn.disabled = false;
-        els.wheelOpenBtn.textContent = wheelState.canSpin ? 'Крутить' : 'Открыть';
+        els.wheelOpenBtn.textContent = canSpinNow ? 'Крутить' : 'Открыть';
       }
       return;
     }
-    if (wheelState.canSpin) {
+    if (wheelState.unlimited || isAdminUser()) {
+      els.wheelCardStatus.textContent = 'Админ · крутите без лимита';
+      if (els.wheelOpenBtn) {
+        els.wheelOpenBtn.disabled = false;
+        els.wheelOpenBtn.textContent = 'Крутить';
+      }
+      return;
+    }
+    if (canSpinNow) {
       els.wheelCardStatus.textContent = 'Можно крутить — бонусы и скидки';
       if (els.wheelOpenBtn) {
         els.wheelOpenBtn.disabled = false;
@@ -1972,7 +2067,7 @@
       return;
     }
     els.wheelResult.hidden = false;
-    const isPromo = Boolean(prize.promoCode) && prize.type !== 'bonus' && prize.type !== 'nothing';
+    const isPromo = prize.type === 'promo' && Boolean(prize.promoCode);
     let title = prize.name || 'Готово';
     let desc = prize.description || '';
     if (isPromo) {
@@ -2011,7 +2106,7 @@
   }
 
   async function refreshWheelStatus() {
-    if (!canOrder()) return;
+    if (!hasTelegramSession()) return;
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/wheel/status`, {
         method: 'POST',
@@ -2022,7 +2117,13 @@
       if (!data.success) return;
       wheelState.active = data.active !== false;
       wheelState.canSpin = Boolean(data.canSpin);
-      wheelState.nextSpinAt = data.nextSpinAt || null;
+      wheelState.unlimited = Boolean(data.unlimited) || isAdminUser();
+      if (wheelState.unlimited && wheelState.active) {
+        wheelState.canSpin = true;
+        wheelState.nextSpinAt = null;
+      } else {
+        wheelState.nextSpinAt = data.nextSpinAt || null;
+      }
       wheelState.prizes = Array.isArray(data.prizes) ? data.prizes : [];
       wheelState.lastPrize = data.lastPrize || null;
       wheelState.myPromos = Array.isArray(data.myPromos) ? data.myPromos : [];
@@ -2044,6 +2145,7 @@
   function updateWheelSheetChrome() {
     if (els.wheelSheetSub) {
       if (!wheelState.active) els.wheelSheetSub.textContent = 'Колесо выключено';
+      else if (wheelState.unlimited || isAdminUser()) els.wheelSheetSub.textContent = 'Админ · без лимита';
       else if (wheelState.canSpin) els.wheelSheetSub.textContent = '1 крутка = раз в сутки';
       else if (wheelState.nextSpinAt) {
         const left = wheelState.nextSpinAt - Date.now();
@@ -2052,14 +2154,16 @@
           : '1 крутка = раз в сутки';
       } else els.wheelSheetSub.textContent = '1 крутка = раз в сутки';
     }
-    const blocked = wheelState.spinning || !wheelState.canSpin || !wheelState.active;
+    const canSpinNow = wheelState.canSpin || wheelState.unlimited || isAdminUser();
+    const blocked = wheelState.spinning || !canSpinNow || !wheelState.active;
     if (els.wheelSpinBtn) {
       els.wheelSpinBtn.disabled = blocked;
-      els.wheelSpinBtn.textContent = wheelState.canSpin ? 'Крутить' : 'Уже крутили сегодня';
+      els.wheelSpinBtn.textContent = canSpinNow ? 'Крутить' : 'Уже крутили сегодня';
     }
     if (els.wheelHubBtn) els.wheelHubBtn.disabled = blocked;
     if (els.wheelHint) {
       if (!wheelState.active) els.wheelHint.textContent = 'Колесо временно недоступно';
+      else if (wheelState.unlimited || isAdminUser()) els.wheelHint.textContent = '';
       else if (!wheelState.canSpin && wheelState.nextSpinAt) {
         const left = wheelState.nextSpinAt - Date.now();
         els.wheelHint.textContent = left > 0 ? `Подождите ${formatWheelCountdown(left)}` : '';
@@ -2266,7 +2370,30 @@
     }
   }
 
-  function animateWheelToIndex(prizeIndex) {
+  function stopWheelSpinLoop() {
+    if (wheelState._spinRaf) {
+      cancelAnimationFrame(wheelState._spinRaf);
+      wheelState._spinRaf = 0;
+    }
+  }
+
+  function startWheelSpinLoop() {
+    stopWheelSpinLoop();
+    let last = performance.now();
+    let speed = 0.018; // rad per ms — ramps up quickly
+    const loop = (now) => {
+      const dt = Math.min(34, now - last);
+      last = now;
+      speed = Math.min(0.055, speed + dt * 0.00035);
+      wheelState.rotation += speed * dt;
+      drawWheel();
+      wheelState._spinRaf = requestAnimationFrame(loop);
+    };
+    wheelState._spinRaf = requestAnimationFrame(loop);
+  }
+
+  function animateWheelToIndex(prizeIndex, { duration = 2600, extraTurns = 3 } = {}) {
+    stopWheelSpinLoop();
     return new Promise((resolve) => {
       const n = Math.max(1, wheelState.prizes.length);
       const slice = (Math.PI * 2) / n;
@@ -2275,14 +2402,14 @@
       const currentMod = ((wheelState.rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
       let delta = targetMod - currentMod;
       if (delta <= 0) delta += Math.PI * 2;
-      const extraTurns = 5 + Math.floor(Math.random() * 3);
-      const totalDelta = delta + extraTurns * Math.PI * 2;
+      const turns = Math.max(2, Number(extraTurns) || 3);
+      const totalDelta = delta + turns * Math.PI * 2;
       const start = wheelState.rotation;
-      const duration = 4200;
       const t0 = performance.now();
 
       const tick = (now) => {
         const p = Math.min(1, (now - t0) / duration);
+        // ease-out cubic — already spinning, so settle smoothly
         const ease = 1 - Math.pow(1 - p, 3);
         wheelState.rotation = start + totalDelta * ease;
         drawWheel();
@@ -2294,12 +2421,25 @@
   }
 
   async function spinWheel() {
-    if (wheelState.spinning || !wheelState.canSpin || !canOrder()) return;
+    const canSpinNow = wheelState.canSpin || wheelState.unlimited || isAdminUser();
+    if (wheelState.spinning || !canSpinNow || !wheelState.active) return;
+    if (!canOrder()) {
+      showToast('Подключаем сессию…');
+      void authenticate().then((ok) => {
+        if (ok) spinWheel();
+      });
+      return;
+    }
     wheelState.spinning = true;
     if (els.wheelResult) els.wheelResult.hidden = true;
     updateWheelSheetChrome();
-    if (els.wheelSpinBtn) els.wheelSpinBtn.disabled = true;
+    if (els.wheelSpinBtn) {
+      els.wheelSpinBtn.disabled = true;
+      els.wheelSpinBtn.textContent = 'Крутим…';
+    }
     haptic('medium');
+    // Visual spin starts immediately — don't wait for the API
+    startWheelSpinLoop();
 
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/wheel/spin`, {
@@ -2311,11 +2451,13 @@
       if (!data.success) throw new Error(data.error || 'Не удалось крутить');
 
       const prizeIndex = Number(data.prizeIndex) || 0;
-      await animateWheelToIndex(prizeIndex);
+      // Shorter landing — coast already covered the wait
+      await animateWheelToIndex(prizeIndex, { duration: 2400, extraTurns: 2 + Math.floor(Math.random() * 2) });
 
       const prize = data.prize || {};
-      wheelState.canSpin = false;
-      wheelState.nextSpinAt = data.nextSpinAt || (Date.now() + 24 * 3600 * 1000);
+      wheelState.unlimited = Boolean(data.unlimited) || isAdminUser();
+      wheelState.canSpin = Boolean(data.canSpin) || wheelState.unlimited;
+      wheelState.nextSpinAt = wheelState.unlimited ? null : (data.nextSpinAt || (Date.now() + 24 * 3600 * 1000));
 
       if (typeof data.award?.balance === 'number') {
         state.bonusBalance = data.award.balance;
@@ -2350,11 +2492,13 @@
       syncWheelCardUI();
       updateWheelSheetChrome();
     } catch (err) {
+      stopWheelSpinLoop();
       showToast(err.message || 'Ошибка колеса');
       if (err.message?.includes('недоступно') || String(err).includes('429')) {
         await refreshWheelStatus();
       }
     } finally {
+      stopWheelSpinLoop();
       wheelState.spinning = false;
       updateWheelSheetChrome();
     }
@@ -2618,11 +2762,12 @@
 
   async function loadMenu() {
     const cached = readMenuCache();
-    if (cached?.cocktails?.length) {
+    // Boot may already have painted cache — don't re-animate / re-render it
+    if (cached?.cocktails?.length && !state.cocktails.length) {
       applyMenuData(cached.cocktails, cached.stoplist || [], {
         fromCache: true,
         ratings: cached.ratings || {},
-        animate: true,
+        animate: false,
         render: true
       });
     }
@@ -2642,13 +2787,23 @@
       applyMenuData(data.cocktails, data.stoplist || [], {
         fromCache: false,
         ratings: data.ratings || {},
-        animate: !cached?.cocktails?.length,
+        animate: false,
         render: true
       });
 
-      // Live stoplist updates after first full paint
-      initFirebase();
-      watchStoplist();
+      // Live stoplist after paint — never fail bootstrap if Firebase SDK is still loading
+      const startStoplistWatch = () => {
+        try {
+          initFirebase();
+          watchStoplist();
+        } catch (e) {
+          console.warn('stoplist watch deferred', e?.message || e);
+        }
+      };
+      if (typeof firebase !== 'undefined') startStoplistWatch();
+      else {
+        waitForFirebase(8000).then(startStoplistWatch).catch(() => {});
+      }
     } catch (err) {
       console.warn('menu bootstrap failed, fallback Firestore', err);
       try {
@@ -3084,14 +3239,11 @@
     const price = Number(cocktail.price) || 0;
     els.sheetPrice.textContent = `${price} ₽`;
 
-    const maxBonus = Math.min(
-      state.bonusBalance,
-      Math.floor(price * (state.maxBonusUsage / 100))
-    );
-    if (maxBonus > 0) {
+    if (state.bonusActive !== false) {
       els.bonusRow.hidden = false;
-      els.bonusInput.max = String(maxBonus);
-      els.bonusInput.placeholder = `До ${maxBonus}`;
+      els.bonusInput.placeholder = '0';
+      els.bonusInput.value = '0';
+      syncBonusHaveHint();
     } else {
       els.bonusRow.hidden = true;
     }
@@ -3118,22 +3270,13 @@
   function updateSheetTotal() {
     if (!state.selected) return;
     const price = Number(state.selected.price) || 0;
-    const { maxBonus, raw, overLimit, message } = resolveBonusInput(price);
-    const bonus = Math.min(raw, maxBonus);
-    state.bonusToUse = bonus;
-    if (els.bonusInput) {
-      els.bonusInput.max = String(maxBonus);
-      els.bonusInput.classList.toggle('is-invalid', overLimit);
-    }
-    // Warn once when the typed value first exceeds the limit (not on every keystroke)
-    if (overLimit && !updateSheetTotal._overWarned) {
-      updateSheetTotal._overWarned = true;
-      showToast(message);
-      haptic('heavy');
-    } else if (!overLimit) {
-      updateSheetTotal._overWarned = false;
-    }
-    const payable = Math.max(0, price - bonus);
+    const { raw, maxBonus, overLimit } = resolveBonusInput(price);
+    // Preview with real cap so «К оплате» doesn't lie while typing over-limit
+    const previewBonus = Math.min(raw, maxBonus, price);
+    state.bonusToUse = previewBonus;
+    if (els.bonusInput) els.bonusInput.classList.toggle('is-invalid', Boolean(overLimit && raw > 0));
+    syncBonusHaveHint();
+    const payable = Math.max(0, price - previewBonus);
     els.sheetTotal.textContent = `${payable} ₽`;
 
     const earn = (state.bonusActive && payable >= state.bonusMinOrder)
@@ -3200,13 +3343,14 @@
     if (bonusCheck.overLimit) {
       showToast(bonusCheck.message);
       haptic('heavy');
-      // Keep sheet open — user must fix the amount
       if (els.bonusInput) {
+        els.bonusInput.classList.add('is-invalid');
         els.bonusInput.focus();
         els.bonusInput.select?.();
       }
       return;
     }
+    if (els.bonusInput) els.bonusInput.classList.remove('is-invalid');
     const bonusUsed = Math.min(bonusCheck.raw, bonusCheck.maxBonus);
     state.bonusToUse = bonusUsed;
     const finalPrice = Math.max(0, price - bonusUsed);
@@ -3290,9 +3434,10 @@
       if (typeof data.openBillTotal === 'number' || Array.isArray(data.openBillItems)) {
         applyOpenBill(data);
       } else {
-        refreshProfile();
+        void refreshProfile();
       }
-      await refreshOrders();
+      // Don't block "заказ принят" on a second round-trip
+      void refreshOrders();
     } catch (err) {
       console.error(err);
       // Rollback optimistic bonus / bill
@@ -3562,6 +3707,7 @@
       return;
     }
     dismissKeyboard();
+    const prev = state.currentView;
     state.currentView = name;
     document.body.dataset.view = name;
     // Never interrupt admin with guest rating UI
@@ -3571,7 +3717,14 @@
       clearTimeout(flushPendingRating._t);
     }
     document.querySelectorAll('.view').forEach((v) => {
-      v.classList.toggle('active', v.dataset.view === name);
+      const on = v.dataset.view === name;
+      v.classList.toggle('active', on);
+      v.classList.remove('view-enter');
+      if (on && prev && prev !== name) {
+        // Force reflow so enter animation can replay
+        void v.offsetWidth;
+        v.classList.add('view-enter');
+      }
     });
     document.querySelectorAll('.tab').forEach((t) => {
       t.classList.toggle('active', t.dataset.nav === name);
@@ -3642,6 +3795,12 @@
     els.bonusInput.addEventListener('input', updateSheetTotal);
     els.bonusInput.addEventListener('focus', focusBonusField);
     els.bonusInput.addEventListener('blur', blurBonusField);
+    els.bonusInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        dismissKeyboard();
+      }
+    });
     els.confirmOrderBtn.addEventListener('click', placeOrder);
     els.ordersPromoBtn?.addEventListener('click', applyOrdersPromo);
     els.ordersPromoInput?.addEventListener('focus', focusOrdersPromoField);
@@ -3792,38 +3951,40 @@
     try {
       document.body.dataset.view = state.currentView || 'menu';
       bindUi();
-      initTelegram();
+      // Admin tab + cached menu BEFORE expand/fullscreen — less visible jump
+      applyCachedAuthHint();
       syncPromoVaultUI();
       syncWheelCardUI();
       updateProfileUI();
 
-      // Instant paint from cache before network
       const cached = readMenuCache();
       if (cached?.cocktails?.length) {
         applyMenuData(cached.cocktails, cached.stoplist || [], {
           fromCache: true,
           ratings: cached.ratings || {},
-          animate: true,
-          render: true
+          animate: false,
+          render: false
         });
+        lastMenuSignature = '';
+        renderMenu({ animate: false });
       }
 
-      try {
-        await waitForFirebase();
-        initFirebase();
-      } catch (err) {
-        console.error(err);
-        setAuthStatus('Не удалось загрузить SDK. Проверьте сеть.', { error: true });
-        if (!state.cocktails.length && els.menuGrid) {
-          els.menuGrid.innerHTML = '<div class="empty-state">Нет сети для загрузки меню</div>';
-        }
-        return;
-      }
+      initTelegram();
+      wakeApi();
 
-      // Menu and auth in parallel — UI stays interactive
+      void waitForFirebase(8000)
+        .then(() => {
+          try { initFirebase(); } catch (_) { /* ignore */ }
+        })
+        .catch(() => {});
+
+      if (tg?.initData) void refreshWheelStatus();
+
       await Promise.all([loadMenu(), authenticate()]);
+      document.body.classList.add('is-ready');
     } catch (err) {
       console.error('boot failed', err);
+      document.body.classList.add('is-ready');
       try {
         const grid = document.getElementById('menuGrid');
         if (grid) {
