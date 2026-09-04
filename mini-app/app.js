@@ -423,6 +423,41 @@
     ensureFieldAboveKeyboard(els.ordersPromoInput);
   }
 
+  function isTextField(el) {
+    if (!el || el === document.body || el === document.documentElement) return false;
+    const tag = el.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (el.isContentEditable) return true;
+    return false;
+  }
+
+  function dismissKeyboard() {
+    const active = document.activeElement;
+    if (!isTextField(active)) return false;
+    try { active.blur(); } catch (_) { /* ignore */ }
+    syncKeyboardLayout();
+    return true;
+  }
+
+  function shouldKeepKeyboard(target) {
+    if (!target || typeof target.closest !== 'function') return false;
+    if (isTextField(target)) return true;
+    // Keep focus when interacting with the focused field's controls
+    if (target.closest('input, textarea, select, [contenteditable="true"]')) return true;
+    if (target.closest('label[for]')) return true;
+    return false;
+  }
+
+  function bindDismissKeyboardOnOutsideTap() {
+    const onPointer = (e) => {
+      if (!isTextField(document.activeElement)) return;
+      if (shouldKeepKeyboard(e.target)) return;
+      dismissKeyboard();
+    };
+    // pointerdown covers touch + mouse; capture so empty areas still receive it
+    document.addEventListener('pointerdown', onPointer, { capture: true, passive: true });
+  }
+
   function bindKeyboardAwareLayout() {
     const onViewport = () => syncKeyboardLayout();
     if (window.visualViewport) {
@@ -430,6 +465,7 @@
       window.visualViewport.addEventListener('scroll', onViewport);
     }
     window.addEventListener('resize', onViewport);
+    bindDismissKeyboardOnOutsideTap();
     syncKeyboardLayout();
   }
 
@@ -2817,6 +2853,7 @@
       );
       syncPromoVaultUI();
       if (els.ordersPromoInput) els.ordersPromoInput.value = '';
+      dismissKeyboard();
       showToast(`Промокод −${data.promo?.discount || 0}%`);
       haptic('medium');
       refreshOrders();
@@ -3484,6 +3521,7 @@
       showToast('Нет прав админа');
       return;
     }
+    dismissKeyboard();
     state.currentView = name;
     document.body.dataset.view = name;
     // Never interrupt admin with guest rating UI
@@ -3570,6 +3608,7 @@
     els.ordersPromoInput?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
+        dismissKeyboard();
         applyOrdersPromo();
       }
     });

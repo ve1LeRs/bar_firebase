@@ -192,7 +192,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'wheelcopy1';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'kbblur1';
 
 function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
