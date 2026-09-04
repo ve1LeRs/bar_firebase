@@ -469,6 +469,22 @@ textarea {
   scroll-margin-top: 24px;
 }
 
+.orders-promo {
+  margin: 0 0 14px;
+  padding: 12px 12px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+
+.orders-promo .promo-row {
+  margin-top: 0;
+}
+
+.orders-promo .order-time {
+  margin: 8px 2px 0;
+}
+
 .promo-row .admin-input {
   flex: 1;
   margin: 0;

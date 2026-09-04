@@ -145,9 +145,11 @@
     profileBillItems: document.getElementById('profileBillItems'),
     profileBillEmpty: document.getElementById('profileBillEmpty'),
     profileBillHistory: document.getElementById('profileBillHistory'),
-    profilePromoInput: document.getElementById('profilePromoInput'),
-    profilePromoBtn: document.getElementById('profilePromoBtn'),
-    profilePromoHint: document.getElementById('profilePromoHint'),
+    ordersPromoBox: document.getElementById('ordersPromoBox'),
+    ordersPromoRow: document.getElementById('ordersPromoRow'),
+    ordersPromoInput: document.getElementById('ordersPromoInput'),
+    ordersPromoBtn: document.getElementById('ordersPromoBtn'),
+    ordersPromoHint: document.getElementById('ordersPromoHint'),
     authRetryBtn: document.getElementById('authRetryBtn'),
     avatar: document.getElementById('avatar'),
     adminTabBtn: document.getElementById('adminTabBtn'),
@@ -349,7 +351,7 @@
     // Once when keyboard appears — scroll focused promo/bonus into view
     if (keyboardJustOpened) {
       const active = document.activeElement;
-      if (active?.id === 'profilePromoInput' || active?.id === 'bonusInput') {
+      if (active?.id === 'ordersPromoInput' || active?.id === 'bonusInput') {
         ensureFieldAboveKeyboard(active);
       }
     }
@@ -372,8 +374,8 @@
     ensureFieldAboveKeyboard._t2 = setTimeout(run, 520);
   }
 
-  function focusProfilePromoField() {
-    ensureFieldAboveKeyboard(els.profilePromoInput);
+  function focusOrdersPromoField() {
+    ensureFieldAboveKeyboard(els.ordersPromoInput);
   }
 
   function bindKeyboardAwareLayout() {
@@ -1695,14 +1697,27 @@
       state.openBillTotal == null ? '—' : `${state.openBillTotal} ₽`;
     renderProfileBillItems();
     renderProfileBillHistory();
-    if (els.profilePromoHint) {
-      if (state.openBillPromo?.code) {
-        els.profilePromoHint.hidden = false;
-        els.profilePromoHint.textContent =
+    syncOrdersPromoUI();
+  }
+
+  function syncOrdersPromoUI() {
+    const box = els.ordersPromoBox;
+    const hint = els.ordersPromoHint;
+    if (!box) return;
+    const hasOpenBill = (Array.isArray(state.openBillItems) && state.openBillItems.length > 0)
+      || (Number(state.openBillTotal) || 0) > 0;
+    const promoApplied = Boolean(state.openBillPromo?.code);
+    box.hidden = !hasOpenBill;
+    if (hint) {
+      if (promoApplied) {
+        hint.hidden = false;
+        hint.textContent =
           `Промокод ${state.openBillPromo.code} (−${state.openBillPromo.discount || 0}%)`;
+        if (els.ordersPromoRow) els.ordersPromoRow.hidden = true;
       } else {
-        els.profilePromoHint.hidden = true;
-        els.profilePromoHint.textContent = '';
+        hint.hidden = true;
+        hint.textContent = '';
+        if (els.ordersPromoRow) els.ordersPromoRow.hidden = false;
       }
     }
   }
@@ -2195,9 +2210,9 @@
     }
   }
 
-  async function applyProfilePromo() {
+  async function applyOrdersPromo() {
     if (!canOrder()) return;
-    const code = els.profilePromoInput?.value?.trim();
+    const code = els.ordersPromoInput?.value?.trim();
     if (!code) {
       showToast('Введите промокод');
       return;
@@ -2211,9 +2226,10 @@
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Промокод не применён');
       applyOpenBill(data);
-      if (els.profilePromoInput) els.profilePromoInput.value = '';
+      if (els.ordersPromoInput) els.ordersPromoInput.value = '';
       showToast(`Промокод −${data.promo?.discount || 0}%`);
       haptic('medium');
+      refreshOrders();
     } catch (err) {
       showToast(err.message || 'Ошибка промокода');
     }
@@ -2769,6 +2785,29 @@
     return card;
   }
 
+  function syncOpenBillFromOrders(bills) {
+    const list = Array.isArray(bills) ? bills : [];
+    const open = list.find((b) => b && b.status === 'open' && String(b.id) !== 'orphan');
+    if (!open) {
+      state.openBillPromo = null;
+      state.openBillTotal = 0;
+      state.openBillItems = [];
+      return;
+    }
+    if (typeof open.totalAmount === 'number') state.openBillTotal = open.totalAmount;
+    if (Array.isArray(open.items)) {
+      state.openBillItems = open.items.map((item) => ({
+        orderId: item.orderId,
+        cocktailName: item.cocktailName,
+        price: item.price,
+        status: item.status
+      }));
+    }
+    state.openBillPromo = open.promoCode
+      ? { code: open.promoCode, discount: open.discount || 0 }
+      : null;
+  }
+
   async function refreshOrders() {
     if (!canOrder()) return;
     try {
@@ -2780,8 +2819,11 @@
       const data = await res.json();
       if (data.success) {
         const orders = data.orders || [];
+        const bills = data.bills || [];
         noteOrderStatusChanges(orders);
-        renderOrders(orders, data.bills || []);
+        syncOpenBillFromOrders(bills);
+        renderOrders(orders, bills);
+        syncOrdersPromoUI();
       }
     } catch (err) {
       console.warn('orders refresh failed', err);
@@ -2928,12 +2970,12 @@
     els.bonusInput.addEventListener('focus', focusBonusField);
     els.bonusInput.addEventListener('blur', blurBonusField);
     els.confirmOrderBtn.addEventListener('click', placeOrder);
-    els.profilePromoBtn?.addEventListener('click', applyProfilePromo);
-    els.profilePromoInput?.addEventListener('focus', focusProfilePromoField);
-    els.profilePromoInput?.addEventListener('keydown', (e) => {
+    els.ordersPromoBtn?.addEventListener('click', applyOrdersPromo);
+    els.ordersPromoInput?.addEventListener('focus', focusOrdersPromoField);
+    els.ordersPromoInput?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        applyProfilePromo();
+        applyOrdersPromo();
       }
     });
     els.ratingSkipBtn?.addEventListener('click', () => submitRating({ skip: true }));

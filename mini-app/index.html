@@ -13,8 +13,8 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://telegram.org">
-  <link rel="preload" href="app.css?v=bill-del1" as="style">
-  <link rel="stylesheet" href="app.css?v=bill-del1">
+  <link rel="preload" href="app.css?v=promo-ord1" as="style">
+  <link rel="stylesheet" href="app.css?v=promo-ord1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700&display=swap">
@@ -78,6 +78,13 @@
     <section class="view" id="view-orders" data-view="orders">
       <h2 class="section-title">Мои заказы</h2>
       <p class="section-sub">Сгруппированы по счетам — нажмите, чтобы раскрыть.</p>
+      <div class="orders-promo" id="ordersPromoBox" hidden>
+        <div class="promo-row" id="ordersPromoRow">
+          <input id="ordersPromoInput" class="admin-input" type="text" placeholder="Промокод к счёту" maxlength="20" autocomplete="off" enterkeyhint="done" inputmode="text">
+          <button class="ghost" id="ordersPromoBtn" type="button">Применить</button>
+        </div>
+        <p class="order-time" id="ordersPromoHint" hidden></p>
+      </div>
       <div id="ordersList" class="orders-list">
         <div class="empty-state">Пока нет заказов</div>
       </div>
@@ -274,11 +281,6 @@
         <div id="profileBillItems" class="bill-items">
           <div class="empty-state" id="profileBillEmpty">Пока нет позиций в счёте</div>
         </div>
-        <div class="promo-row" id="profilePromoRow">
-          <input id="profilePromoInput" class="admin-input" type="text" placeholder="Промокод" maxlength="20" autocomplete="off" enterkeyhint="done" inputmode="text">
-          <button class="ghost" id="profilePromoBtn" type="button">Применить</button>
-        </div>
-        <p class="order-time" id="profilePromoHint" hidden></p>
       </div>
 
       <div class="bill-panel">
@@ -383,6 +385,6 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script defer src="app.js?v=bill-del1"></script>
+  <script defer src="app.js?v=promo-ord1"></script>
 </body>
 </html>
