@@ -198,7 +198,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'ratefix3';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'stopfix1';
 
 function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
@@ -1596,7 +1596,7 @@ async function stoplistCocktailsForIngredient(ingredientName) {
     const cocktailName = String(data.name || '').trim();
     if (!cocktailName) continue;
     const recipe = Array.isArray(data.stockRecipe) ? data.stockRecipe : [];
-    const uses = recipe.some((r) => String(r.ingredientName || '').trim() === ing);
+    const uses = recipe.some((r) => String(r.ingredientName || '').trim().toLowerCase() === ing.toLowerCase());
     if (!uses) continue;
     const didAdd = await ensureCocktailInStoplist(
       cocktailName,
@@ -1606,6 +1606,88 @@ async function stoplistCocktailsForIngredient(ingredientName) {
   }
   if (addedNames.length) invalidateStoplistCache();
   return { added: addedNames.length, names: addedNames };
+}
+
+function isAutoStockStoplistEntry(data) {
+  const reason = String(data?.reason || '');
+  const by = String(data?.addedBy || '');
+  return by === 'system' || /недостаточно ингредиент/i.test(reason);
+}
+
+async function loadIngredientStockMap() {
+  const snap = await db.collection('ingredients').get();
+  const byName = new Map();
+  snap.forEach((doc) => {
+    const d = doc.data() || {};
+    const name = String(d.name || '').trim();
+    if (!name) return;
+    byName.set(name.toLowerCase(), Number(d.stock) || 0);
+  });
+  return byName;
+}
+
+function cocktailHasEnoughStock(cocktailData, stockByName) {
+  const recipe = Array.isArray(cocktailData?.stockRecipe) ? cocktailData.stockRecipe : [];
+  if (!recipe.length) return false;
+  for (const item of recipe) {
+    const ingName = String(item.ingredientName || '').trim().toLowerCase();
+    const needed = Number(item.amount) || 0;
+    if (!ingName || needed <= 0) continue;
+    const have = stockByName.has(ingName) ? stockByName.get(ingName) : 0;
+    if (have < needed) return false;
+  }
+  return true;
+}
+
+/**
+ * After restocking an ingredient, remove auto-stoplist entries for cocktails
+ * that now have enough of every stockRecipe ingredient.
+ */
+async function unstoplistCocktailsAfterRestock(ingredientName) {
+  const ing = String(ingredientName || '').trim();
+  if (!ing) return { removed: 0, names: [] };
+
+  const [cocktailsSnap, stopSnap, stockByName] = await Promise.all([
+    db.collection('cocktails').get(),
+    db.collection('stoplist').get(),
+    loadIngredientStockMap()
+  ]);
+
+  const stopByCocktail = new Map();
+  stopSnap.docs.forEach((doc) => {
+    const d = doc.data() || {};
+    const name = String(d.cocktailName || '').trim();
+    if (!name) return;
+    if (!isAutoStockStoplistEntry(d)) return;
+    const list = stopByCocktail.get(name) || [];
+    list.push(doc.id);
+    stopByCocktail.set(name, list);
+  });
+
+  if (!stopByCocktail.size) return { removed: 0, names: [] };
+
+  const removedNames = [];
+  for (const doc of cocktailsSnap.docs) {
+    const data = doc.data() || {};
+    const cocktailName = String(data.name || '').trim();
+    if (!cocktailName || !stopByCocktail.has(cocktailName)) continue;
+
+    const recipe = Array.isArray(data.stockRecipe) ? data.stockRecipe : [];
+    const usesIng = recipe.some(
+      (r) => String(r.ingredientName || '').trim().toLowerCase() === ing.toLowerCase()
+    );
+    if (!usesIng) continue;
+    if (!cocktailHasEnoughStock(data, stockByName)) continue;
+
+    const ids = stopByCocktail.get(cocktailName) || [];
+    for (const id of ids) {
+      await db.collection('stoplist').doc(id).delete();
+    }
+    removedNames.push(cocktailName);
+  }
+
+  if (removedNames.length) invalidateStoplistCache();
+  return { removed: removedNames.length, names: removedNames };
 }
 
 async function createOrUpdateBillAdmin(userId, userName, orderData, orderId) {
@@ -3231,9 +3313,18 @@ app.post('/api/mini-app/admin/purchases', async (req, res) => {
       };
       if (ing.id) {
         await db.collection('ingredients').doc(String(ing.id)).set(payload, { merge: true });
-        let stoplist = { added: 0, names: [] };
+        let stoplist = { added: 0, removed: 0, names: [], restored: [] };
         if (stock <= 0) {
-          stoplist = await stoplistCocktailsForIngredient(name);
+          const stopped = await stoplistCocktailsForIngredient(name);
+          stoplist = { ...stoplist, ...stopped, restored: [] };
+        } else {
+          const restored = await unstoplistCocktailsAfterRestock(name);
+          stoplist = {
+            added: 0,
+            names: [],
+            removed: restored.removed,
+            restored: restored.names
+          };
         }
         return res.json({ success: true, id: String(ing.id), stoplist });
       }
@@ -3243,9 +3334,18 @@ app.post('/api/mini-app/admin/purchases', async (req, res) => {
       }
       payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
       const ref = await db.collection('ingredients').add(payload);
-      let stoplist = { added: 0, names: [] };
+      let stoplist = { added: 0, removed: 0, names: [], restored: [] };
       if (stock <= 0) {
-        stoplist = await stoplistCocktailsForIngredient(name);
+        const stopped = await stoplistCocktailsForIngredient(name);
+        stoplist = { ...stoplist, ...stopped, restored: [] };
+      } else {
+        const restored = await unstoplistCocktailsAfterRestock(name);
+        stoplist = {
+          added: 0,
+          names: [],
+          removed: restored.removed,
+          restored: restored.names
+        };
       }
       return res.json({ success: true, id: ref.id, stoplist });
     }

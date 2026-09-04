@@ -1388,9 +1388,12 @@
       const stopped = data.stoplist?.added
         ? ` · в стоп: ${data.stoplist.names.slice(0, 3).join(', ')}${data.stoplist.added > 3 ? '…' : ''}`
         : '';
-      showToast(`${item.name}: ${stock}${item.unit ? ' ' + item.unit : ''}${stopped}`);
+      const restored = data.stoplist?.removed
+        ? ` · из стопа: ${data.stoplist.restored.slice(0, 3).join(', ')}${data.stoplist.removed > 3 ? '…' : ''}`
+        : '';
+      showToast(`${item.name}: ${stock}${item.unit ? ' ' + item.unit : ''}${stopped}${restored}`);
       await refreshAdminPurchases();
-      if (data.stoplist?.added) {
+      if (data.stoplist?.added || data.stoplist?.removed) {
         refreshAdminStoplist().catch(() => {});
         refreshStoplistFromApi().catch(() => {});
       }
@@ -1425,9 +1428,21 @@
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Ошибка');
-      showToast(ingredient.id ? 'Изменения сохранены' : 'Ингредиент добавлен');
+      const stopped = data.stoplist?.added
+        ? ` · в стоп: ${(data.stoplist.names || []).slice(0, 3).join(', ')}`
+        : '';
+      const restored = data.stoplist?.removed
+        ? ` · из стопа: ${(data.stoplist.restored || []).slice(0, 3).join(', ')}`
+        : '';
+      showToast(
+        (ingredient.id ? 'Изменения сохранены' : 'Ингредиент добавлен') + stopped + restored
+      );
       resetIngredientForm();
       refreshAdminPurchases();
+      if (data.stoplist?.added || data.stoplist?.removed) {
+        refreshAdminStoplist().catch(() => {});
+        refreshStoplistFromApi().catch(() => {});
+      }
     } catch (err) {
       showToast(err.message || 'Ошибка');
     }
