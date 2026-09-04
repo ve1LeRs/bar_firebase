@@ -374,8 +374,6 @@
     let vvHeight = layoutHeight;
     if (vv) {
       vvHeight = vv.height;
-      // Prefer layout viewport vs visual viewport; also compare to cold baseline
-      // (on iOS Telegram innerHeight often shrinks with the keyboard → inset≈0)
       const baseline = syncKeyboardLayout._baseline || layoutHeight;
       const fromInner = Math.max(0, Math.round(layoutHeight - vv.height - (vv.offsetTop || 0)));
       const fromBaseline = Math.max(0, Math.round(baseline - vv.height - (vv.offsetTop || 0)));
@@ -383,15 +381,17 @@
     }
 
     const fieldFocused = isTextField(document.activeElement);
-    // iOS WebView: visualViewport inset is unreliable — treat focused text fields as keyboard open
     const keyboardOpen = inset > 60 || fieldFocused;
 
-    // When focused but inset is still ~0, assume a phone keyboard so the sheet
-    // (and «Заказать») stays in the visible area above the keys.
-    if (fieldFocused && inset < 80 && layoutHeight > 320) {
-      const assumed = Math.round(Math.min(360, Math.max(240, layoutHeight * 0.42)));
-      inset = Math.max(inset, assumed);
-      vvHeight = Math.max(220, layoutHeight - inset);
+    // Only invent a keyboard height when VV still looks full-screen (Telegram quirk).
+    // If VV already shrank, trust it — double-subtracting stretches/crushes the sheet.
+    if (fieldFocused && inset < 80) {
+      const baseline = syncKeyboardLayout._baseline || layoutHeight;
+      if (baseline > 320 && vvHeight > baseline * 0.82) {
+        const assumed = Math.round(Math.min(320, Math.max(250, baseline * 0.36)));
+        vvHeight = Math.max(260, baseline - assumed);
+        inset = Math.max(inset, baseline - vvHeight);
+      }
     }
 
     document.documentElement.style.setProperty('--keyboard-inset', `${inset}px`);
@@ -401,7 +401,6 @@
     document.body.classList.toggle('keyboard-open', keyboardOpen);
     document.body.classList.toggle('field-focused', fieldFocused);
 
-    // Admin typing / keyboard dismiss must never reveal guest rating UI
     if (state.currentView === 'admin' || keyboardOpen) {
       closeRatingSheet({ dismiss: false });
     }
@@ -414,12 +413,12 @@
       }
     }
 
-    // Once when keyboard appears — keep bonus field + order CTA in view
     if (keyboardJustOpened) {
       const active = document.activeElement;
-      if (active?.id === 'ordersPromoInput' || active?.id === 'bonusInput') {
+      if (active?.id === 'ordersPromoInput') {
         ensureFieldAboveKeyboard(active);
       }
+      // Bonus field: do NOT scrollIntoView — it stretches/gaps the compact sheet
     }
   }
 
@@ -504,9 +503,10 @@
       if (!isTextField(e.target)) return;
       document.body.classList.add('field-focused', 'keyboard-open');
       syncKeyboardLayout();
-      if (e.target.id === 'ordersPromoInput' || e.target.id === 'bonusInput') {
+      if (e.target.id === 'ordersPromoInput') {
         ensureFieldAboveKeyboard(e.target);
       }
+      // bonusInput: compact sheet only — no scrollIntoView
     });
     document.addEventListener('focusout', () => {
       clearTimeout(bindKeyboardAwareLayout._blurT);
@@ -524,20 +524,11 @@
     document.body.classList.add('field-focused', 'keyboard-open');
     els.sheet?.classList.add('sheet-compact');
     syncKeyboardLayout();
-    // Keep bonus row + «Заказать» visible in the compact sheet above the keyboard
-    const pin = () => {
-      try {
-        els.confirmOrderBtn?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        els.bonusRow?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      } catch (_) {
-        try { els.bonusRow?.scrollIntoView(); } catch (__) { /* ignore */ }
-      }
-    };
-    requestAnimationFrame(pin);
-    clearTimeout(focusBonusField._t1);
-    clearTimeout(focusBonusField._t2);
-    focusBonusField._t1 = setTimeout(pin, 280);
-    focusBonusField._t2 = setTimeout(pin, 520);
+    // Reset scroll inside sheet — never scrollIntoView (creates empty gaps on iOS)
+    const scroller = els.sheet?.querySelector('.sheet-scroll');
+    if (scroller) {
+      try { scroller.scrollTop = 0; } catch (_) { /* ignore */ }
+    }
   }
 
   function blurBonusField() {

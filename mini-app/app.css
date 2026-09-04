@@ -1321,12 +1321,12 @@ button.danger {
   pointer-events: auto;
 }
 
-/* Keyboard open: fit sheet to visible viewport; do NOT lift with bottom inset
-   (that pushes actions onto the keyboard and crushes the bonus field). */
+/* Keyboard open: keep sheet ABOVE keyboard, sized to content (no empty stretch). */
 body.keyboard-open .sheet.open,
 .sheet.sheet-compact.open {
   bottom: 0;
-  max-height: calc(var(--vv-height, 50dvh) - 4px);
+  height: auto;
+  max-height: min(72dvh, calc(var(--vv-height, 55dvh) - 8px));
 }
 
 .sheet.sheet-compact .sheet-media {
@@ -1338,7 +1338,7 @@ body.keyboard-open .sheet.open,
 }
 
 .sheet.sheet-compact .sheet-ingredients {
-  margin-top: 4px;
+  margin-top: 2px;
   font-size: var(--text-sm);
   white-space: nowrap;
   overflow: hidden;
@@ -1347,35 +1347,40 @@ body.keyboard-open .sheet.open,
 
 .sheet.sheet-compact h3 {
   font-size: var(--text-lg);
+  margin-bottom: 2px;
 }
 
 .sheet.sheet-compact .price-block {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
-/* While typing bonuses: keep CTA visible above the keyboard.
-   Sheet is flex column — actions stay pinned to the sheet bottom (inside vv height). */
+.sheet.sheet-compact #bonusEarnRow {
+  display: none;
+}
+
+/* While typing bonuses: keep CTA visible, sheet hugs content — no flex gap. */
 body.keyboard-open .sheet.open .sheet-actions,
 .sheet.sheet-compact .sheet-actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  /* Keyboard replaces home indicator — don't waste space on large safe-area padding */
-  padding: 8px 16px 12px;
+  gap: 6px;
+  padding: 8px 16px 10px;
 }
 
 .sheet.sheet-compact .sheet-actions .ghost {
-  padding: 10px 16px;
-  min-height: 40px;
+  display: none;
 }
 
 .sheet.sheet-compact .sheet-scroll {
-  padding-bottom: 20px;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 16px 6px;
 }
 
 .sheet.sheet-compact .bonus-row {
-  margin-top: 8px;
-  padding: 12px 0;
+  margin-top: 6px;
+  padding: 10px 0;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
@@ -1390,6 +1395,11 @@ body.keyboard-open .sheet.open .sheet-actions,
   min-height: 44px;
   font-size: var(--text-base);
   font-weight: 600;
+}
+
+.sheet.sheet-compact .total-row {
+  margin-top: 2px;
+  padding-top: 8px;
 }
 
 body.sheet-open .tabbar {
@@ -1412,6 +1422,12 @@ body.field-focused .tabbar {
 body.keyboard-open,
 body.field-focused {
   padding-bottom: max(16px, calc(var(--keyboard-inset, 0px) + 16px));
+}
+
+/* Order/rating sheets manage their own keyboard layout — don't pad the page */
+body.sheet-open.keyboard-open,
+body.sheet-open.field-focused {
+  padding-bottom: 0;
 }
 
 .sheet-scroll {
