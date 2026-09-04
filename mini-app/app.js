@@ -332,6 +332,11 @@
     const keyboardOpen = inset > 60;
     document.body.classList.toggle('keyboard-open', keyboardOpen);
 
+    // Admin typing / keyboard dismiss must never reveal guest rating UI
+    if (state.currentView === 'admin' || keyboardOpen) {
+      closeRatingSheet({ dismiss: false });
+    }
+
     if (els.sheet?.classList.contains('open')) {
       if (keyboardOpen || document.activeElement === els.bonusInput) {
         els.sheet.classList.add('sheet-compact');
@@ -2036,6 +2041,7 @@
   }
 
   function openRatingSheet(order) {
+    if (state.currentView === 'admin') return false;
     if (!canShowRatingNow()) return false;
     if (!order?.id || order.rated) return false;
     if (wasRatingPrompted(order.id)) return false;
@@ -2136,7 +2142,7 @@
     return (
       state.currentView === 'orders' &&
       !state.placingOrder &&
-      state.currentView !== 'admin' &&
+      !document.body.classList.contains('keyboard-open') &&
       Date.now() >= (state.ratingQuietUntil || 0) &&
       !els.sheet?.classList.contains('open') &&
       !els.ratingSheet?.classList.contains('open')
@@ -2144,6 +2150,8 @@
   }
 
   function queueRatingCandidate(order) {
+    // Never queue while admin is working — avoids surprise popups later in-session
+    if (state.currentView === 'admin') return;
     if (!order?.id || order.rated || wasRatingPrompted(order.id)) return;
     if ((order.status || '') !== 'ready') return;
     state.pendingRatingOrders.set(String(order.id), {
@@ -2738,8 +2746,13 @@
       return;
     }
     state.currentView = name;
+    document.body.dataset.view = name;
     // Never interrupt admin with guest rating UI
-    if (name === 'admin') closeRatingSheet({ dismiss: false });
+    if (name === 'admin') {
+      closeRatingSheet({ dismiss: false });
+      state.pendingRatingOrders.clear();
+      clearTimeout(flushPendingRating._t);
+    }
     document.querySelectorAll('.view').forEach((v) => {
       v.classList.toggle('active', v.dataset.view === name);
     });
@@ -2892,6 +2905,18 @@
       if (els.sheet.classList.contains('open')) closeOrderSheet();
       else switchView('menu');
     });
+
+    // Admin form fields: never let guest rating UI surface while typing
+    document.getElementById('view-admin')?.addEventListener('focusin', () => {
+      if (state.currentView === 'admin') closeRatingSheet({ dismiss: false });
+    });
+    document.getElementById('view-admin')?.addEventListener('focusout', () => {
+      if (state.currentView === 'admin') {
+        setTimeout(() => {
+          if (state.currentView === 'admin') closeRatingSheet({ dismiss: false });
+        }, 50);
+      }
+    });
   }
 
   async function waitForFirebase(timeoutMs = 8000) {
@@ -2911,6 +2936,7 @@
   }
 
   async function boot() {
+    document.body.dataset.view = state.currentView || 'menu';
     bindUi();
     initTelegram();
     updateProfileUI();

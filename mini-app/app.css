@@ -482,6 +482,19 @@ textarea {
   z-index: 45;
 }
 
+.rating-sheet:not(.open),
+.rating-sheet[aria-hidden='true'] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transform: translateY(120%) !important;
+  bottom: 0 !important;
+}
+
+body[data-view='admin'] .rating-sheet,
+body[data-view='admin'] #ratingBackdrop {
+  display: none !important;
+}
+
 .rating-stars {
   display: flex;
   justify-content: center;
@@ -1138,7 +1151,7 @@ button.danger {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: var(--keyboard-inset, 0px);
+  bottom: 0;
   z-index: 40;
   max-height: min(92dvh, 860px, calc(var(--vv-height, 100dvh) - 8px));
   overflow: hidden;
@@ -1151,10 +1164,15 @@ button.danger {
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), max-height 0.2s ease, bottom 0.2s ease;
   display: flex;
   flex-direction: column;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .sheet.open {
   transform: translateY(0);
+  bottom: var(--keyboard-inset, 0px);
+  visibility: visible;
+  pointer-events: auto;
 }
 
 /* Keyboard open: keep sheet above keyboard, collapse bulky media */
