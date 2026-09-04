@@ -1228,6 +1228,7 @@
   }
 
   async function saveAdminCocktail() {
+    const btn = document.getElementById('adminCocktailSaveBtn');
     const cocktail = {
       id: document.getElementById('adminCocktailId').value || undefined,
       name: document.getElementById('adminCocktailName').value.trim(),
@@ -1243,9 +1244,18 @@
     };
     if (!cocktail.name || !Number.isFinite(cocktail.price)) {
       showToast('Название и цена обязательны');
+      haptic('heavy');
       return;
     }
+    if (btn?.disabled) return;
+    const prevLabel = btn?.textContent || '';
     try {
+      haptic('medium');
+      if (btn) {
+        btn.classList.add('is-pressed', 'is-busy');
+        btn.disabled = true;
+        btn.textContent = 'Сохраняю…';
+      }
       const res = await fetch(`${state.apiBase}/api/mini-app/admin/cocktails`, {
         method: 'POST', headers: adminHeaders(), body: adminBody({ action: 'upsert', cocktail })
       });
@@ -1262,9 +1272,17 @@
       const recipeEl = document.getElementById('adminCocktailRecipe');
       if (recipeEl) recipeEl.value = '';
       showToast('Коктейль сохранён');
+      haptic('heavy');
       refreshAdminCocktails();
     } catch (err) {
       showToast(err.message || 'Ошибка');
+      haptic('heavy');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove('is-pressed', 'is-busy');
+        btn.textContent = prevLabel || 'Сохранить коктейль';
+      }
     }
   }
 
