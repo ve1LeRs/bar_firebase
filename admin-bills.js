@@ -308,9 +308,44 @@ window.deleteBill = async function(billId) {
     '🗑️',
     async () => {
       try {
-        await db.collection('bills').doc(billId).delete();
-        
-        showSuccess('✅ Счет удален');
+        const billRef = db.collection('bills').doc(billId);
+        const billDoc = await billRef.get();
+        if (!billDoc.exists) {
+          showError('❌ Счет не найден');
+          return;
+        }
+        const bill = billDoc.data() || {};
+        const items = Array.isArray(bill.items) ? bill.items : [];
+
+        for (const item of items) {
+          const orderId = String(item.orderId || '').trim();
+          if (!orderId) continue;
+          const orderRef = db.collection('orders').doc(orderId);
+          const orderDoc = await orderRef.get();
+          const prev = orderDoc.exists ? (orderDoc.data() || {}) : {};
+          const prevStatus = String(prev.status || item.status || '');
+
+          await orderRef.set({
+            status: 'cancelled',
+            cancelledReason: 'bill-deleted',
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedBy: 'admin-bills-web'
+          }, { merge: true });
+
+          if (
+            prevStatus !== 'cancelled'
+            && prevStatus !== 'completed'
+            && !prev.ingredientsRestored
+            && typeof restoreIngredientsForCocktail === 'function'
+          ) {
+            const cocktailName = prev.name || prev.cocktailName || item.cocktailName || item.name;
+            await restoreIngredientsForCocktail(cocktailName, orderId);
+          }
+        }
+
+        await billRef.delete();
+
+        showSuccess('✅ Счет удален, связанные заказы отменены, ингредиенты возвращены');
         loadAdminBills(currentBillFilter);
         
       } catch (error) {

@@ -58,13 +58,10 @@ app.use('/mini-app', express.static(path.join(__dirname, 'mini-app'), {
   etag: false,
   lastModified: false,
   setHeaders: (res, filePath) => {
-    // Always revalidate — Telegram WebView caches aggressively
+    // Revalidate — but NEVER Clear-Site-Data: it blanks Telegram WebView loads
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
-    if (String(filePath).endsWith('.html')) {
-      res.setHeader('Clear-Site-Data', '"cache"');
-    }
   }
 }));
 // Fresh alias path to bust stubborn Telegram WebView caches
@@ -72,9 +69,10 @@ app.use('/m', express.static(path.join(__dirname, 'mini-app'), {
   extensions: ['html'],
   etag: false,
   lastModified: false,
-  setHeaders: (res) => {
+  setHeaders: (res, filePath) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
   }
 }));
 app.get('/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'logo.png')));
@@ -194,10 +192,15 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'type1';
+
+function alertsBotToken() {
+  return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
+}
 
 /** Outbound Telegram helper — logs + blocks junk keep-alive dots */
 async function sendTelegramAlert(text, options = {}) {
-  const token = options.token || TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
+  const token = options.token || alertsBotToken();
   const chatId = options.chatId || TELEGRAM_CHAT_ID;
   const trimmed = String(text ?? '').trim();
   if (!token || !chatId) {
@@ -551,8 +554,7 @@ app.post('/notify-telegram', async (req, res) => {
 
     const telegramResult = await sendTelegramAlert(message, {
       parse_mode: 'HTML',
-      reply_markup: inlineKeyboard,
-      token: TELEGRAM_BOT_TOKEN
+      reply_markup: inlineKeyboard
     });
     
     if (telegramResult.ok) {
@@ -703,8 +705,7 @@ app.post('/send-purchase-list', async (req, res) => {
     
     // Отправляем сообщение в Telegram
     const telegramResult = await sendTelegramAlert(message, {
-      parse_mode: 'Markdown',
-      token: TELEGRAM_BOT_TOKEN
+      parse_mode: 'Markdown'
     });
     
     if (telegramResult.ok) {
@@ -734,7 +735,7 @@ app.post('/send-purchase-list', async (req, res) => {
 function getMiniAppPublicUrl() {
   const base = (process.env.PUBLIC_BASE_URL || 'https://asafievbar.duckdns.org').replace(/\/$/, '');
   // /m/ is a fresh alias — Telegram WebView often keeps a stale /mini-app/ shell
-  return `${base}/m/?v=r0904`;
+  return `${base}/m/?v=${MINI_APP_ASSET_VERSION}`;
 }
 
 const MINIAPP_BOT_DESCRIPTION =
@@ -920,26 +921,53 @@ async function handleCallbackQuery(callbackQuery) {
 
 // Получение следующей позиции в очереди
 async function getNextQueuePosition() {
+  const active = ['pending', 'confirmed', 'preparing', 'ready'];
   try {
-    const activeOrdersSnapshot = await db.collection('orders')
-      .where('status', 'in', ['confirmed', 'preparing', 'ready'])
+    const snap = await db.collection('orders')
+      .where('status', 'in', active)
       .orderBy('queuePosition', 'desc')
       .limit(1)
       .get();
-    
-    if (activeOrdersSnapshot.empty) {
-      return 1; // Первый заказ в очереди
-    }
-    
-    const lastOrder = activeOrdersSnapshot.docs[0];
-    const lastPosition = lastOrder.data().queuePosition || 0;
-    return lastPosition + 1;
-    
+
+    if (snap.empty) return 1;
+    const lastPosition = Number(snap.docs[0].data().queuePosition) || 0;
+    return Math.max(1, lastPosition + 1);
   } catch (error) {
-    console.error('❌ Ошибка получения позиции в очереди:', error);
-    // Fallback: используем timestamp как позицию
-    return Date.now();
+    console.warn('queuePosition orderBy failed, counting active:', error.message);
+    try {
+      const snap = await db.collection('orders')
+        .where('status', 'in', active)
+        .limit(200)
+        .get();
+      return snap.size + 1;
+    } catch (err2) {
+      console.error('❌ Ошибка получения позиции в очереди:', err2.message);
+      return Math.floor(Date.now() / 1000) % 100000;
+    }
   }
+}
+
+async function resolveMenuCocktailPrice({ cocktailId, name }) {
+  try {
+    if (cocktailId) {
+      const doc = await db.collection('cocktails').doc(String(cocktailId)).get();
+      if (doc.exists) {
+        const p = Number(doc.data()?.price);
+        if (Number.isFinite(p) && p >= 0) return p;
+      }
+    }
+    const nm = String(name || '').trim();
+    if (nm) {
+      const snap = await db.collection('cocktails').where('name', '==', nm).limit(1).get();
+      if (!snap.empty) {
+        const p = Number(snap.docs[0].data()?.price);
+        if (Number.isFinite(p) && p >= 0) return p;
+      }
+    }
+  } catch (err) {
+    console.warn('resolveMenuCocktailPrice:', err.message);
+  }
+  return null;
 }
 
 // Обновление позиций в очереди после завершения заказа
@@ -1038,6 +1066,7 @@ async function updateOrderStatus(orderId, newStatus) {
     }
 
     const orderData = orderDoc.data();
+    const prevStatus = String(orderData.status || '');
 
     try {
       await orderRef.set({
@@ -1055,6 +1084,20 @@ async function updateOrderStatus(orderId, newStatus) {
       await syncBillItemStatusForOrder(orderIdTrimmed, newStatus, orderData);
     } catch (billSyncErr) {
       console.warn('⚠️ bill item sync failed:', billSyncErr?.message || billSyncErr);
+    }
+
+    // Return ingredients when admin cancels (not for already-served completed drinks)
+    if (
+      newStatus === 'cancelled'
+      && prevStatus !== 'cancelled'
+      && prevStatus !== 'completed'
+      && !orderData.ingredientsRestored
+    ) {
+      try {
+        await restoreIngredientsAdmin(orderData.name || orderData.cocktailName, orderIdTrimmed);
+      } catch (restoreErr) {
+        console.warn('⚠️ ingredient restore on cancel:', restoreErr?.message || restoreErr);
+      }
     }
 
     if (newStatus === 'completed' && orderData.queuePosition) {
@@ -1179,11 +1222,12 @@ function billTotalFromItems(items) {
 // Ответ на callback query (обязательно вызвать, иначе у пользователя крутится загрузка на кнопке)
 async function answerCallbackQuery(callbackQueryId, text, showAlert = false) {
   try {
-    if (!TELEGRAM_BOT_TOKEN) {
-      console.error('❌ TELEGRAM_BOT_TOKEN не задан');
+    const token = alertsBotToken();
+    if (!token) {
+      console.error('❌ Alerts bot token не задан');
       return;
     }
-    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+    const response = await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1219,11 +1263,12 @@ async function updateTelegramMessage(messageId, orderId, newStatus, orderData, c
     });
     const inlineKeyboard = buildOrderActionKeyboard(orderId, newStatus);
 
-    if (!TELEGRAM_BOT_TOKEN || !chatId) {
-      console.error('❌ TELEGRAM_BOT_TOKEN или chat_id не заданы');
+    const token = alertsBotToken();
+    if (!token || !chatId) {
+      console.error('❌ Alerts bot token или chat_id не заданы');
       return;
     }
-    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`, {
+    const response = await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1494,7 +1539,14 @@ function invalidateStoplistCache() {
   stoplistCache.at = 0;
   stoplistCache.names = new Set();
   stoplistCache.loading = null;
-  try { menuBootstrapCache.at = 0; menuBootstrapCache.payload = null; } catch (_) { /* defined later */ }
+  invalidateMenuBootstrapCache();
+}
+
+function invalidateMenuBootstrapCache() {
+  try {
+    menuBootstrapCache.at = 0;
+    menuBootstrapCache.payload = null;
+  } catch (_) { /* defined later */ }
 }
 
 async function refreshStoplistCache(force = false) {
@@ -1553,7 +1605,7 @@ async function stoplistCocktailsForIngredient(ingredientName) {
     const cocktailName = String(data.name || '').trim();
     if (!cocktailName) continue;
     const recipe = Array.isArray(data.stockRecipe) ? data.stockRecipe : [];
-    const uses = recipe.some((r) => String(r.ingredientName || '').trim() === ing);
+    const uses = recipe.some((r) => String(r.ingredientName || '').trim().toLowerCase() === ing.toLowerCase());
     if (!uses) continue;
     const didAdd = await ensureCocktailInStoplist(
       cocktailName,
@@ -1563,6 +1615,88 @@ async function stoplistCocktailsForIngredient(ingredientName) {
   }
   if (addedNames.length) invalidateStoplistCache();
   return { added: addedNames.length, names: addedNames };
+}
+
+function isAutoStockStoplistEntry(data) {
+  const reason = String(data?.reason || '');
+  const by = String(data?.addedBy || '');
+  return by === 'system' || /недостаточно ингредиент/i.test(reason);
+}
+
+async function loadIngredientStockMap() {
+  const snap = await db.collection('ingredients').get();
+  const byName = new Map();
+  snap.forEach((doc) => {
+    const d = doc.data() || {};
+    const name = String(d.name || '').trim();
+    if (!name) return;
+    byName.set(name.toLowerCase(), Number(d.stock) || 0);
+  });
+  return byName;
+}
+
+function cocktailHasEnoughStock(cocktailData, stockByName) {
+  const recipe = Array.isArray(cocktailData?.stockRecipe) ? cocktailData.stockRecipe : [];
+  if (!recipe.length) return false;
+  for (const item of recipe) {
+    const ingName = String(item.ingredientName || '').trim().toLowerCase();
+    const needed = Number(item.amount) || 0;
+    if (!ingName || needed <= 0) continue;
+    const have = stockByName.has(ingName) ? stockByName.get(ingName) : 0;
+    if (have < needed) return false;
+  }
+  return true;
+}
+
+/**
+ * After restocking an ingredient, remove auto-stoplist entries for cocktails
+ * that now have enough of every stockRecipe ingredient.
+ */
+async function unstoplistCocktailsAfterRestock(ingredientName) {
+  const ing = String(ingredientName || '').trim();
+  if (!ing) return { removed: 0, names: [] };
+
+  const [cocktailsSnap, stopSnap, stockByName] = await Promise.all([
+    db.collection('cocktails').get(),
+    db.collection('stoplist').get(),
+    loadIngredientStockMap()
+  ]);
+
+  const stopByCocktail = new Map();
+  stopSnap.docs.forEach((doc) => {
+    const d = doc.data() || {};
+    const name = String(d.cocktailName || '').trim();
+    if (!name) return;
+    if (!isAutoStockStoplistEntry(d)) return;
+    const list = stopByCocktail.get(name) || [];
+    list.push(doc.id);
+    stopByCocktail.set(name, list);
+  });
+
+  if (!stopByCocktail.size) return { removed: 0, names: [] };
+
+  const removedNames = [];
+  for (const doc of cocktailsSnap.docs) {
+    const data = doc.data() || {};
+    const cocktailName = String(data.name || '').trim();
+    if (!cocktailName || !stopByCocktail.has(cocktailName)) continue;
+
+    const recipe = Array.isArray(data.stockRecipe) ? data.stockRecipe : [];
+    const usesIng = recipe.some(
+      (r) => String(r.ingredientName || '').trim().toLowerCase() === ing.toLowerCase()
+    );
+    if (!usesIng) continue;
+    if (!cocktailHasEnoughStock(data, stockByName)) continue;
+
+    const ids = stopByCocktail.get(cocktailName) || [];
+    for (const id of ids) {
+      await db.collection('stoplist').doc(id).delete();
+    }
+    removedNames.push(cocktailName);
+  }
+
+  if (removedNames.length) invalidateStoplistCache();
+  return { removed: removedNames.length, names: removedNames };
 }
 
 async function createOrUpdateBillAdmin(userId, userName, orderData, orderId) {
@@ -1714,49 +1848,167 @@ async function spendBonusPointsAdmin(userId, amount, orderId) {
   });
 }
 
-async function deductIngredientsAdmin(cocktailName) {
+async function deductIngredientsAdmin(cocktailName, orderId = null) {
   try {
+    if (orderId) {
+      const orderSnap = await db.collection('orders').doc(String(orderId)).get();
+      if (!orderSnap.exists) return;
+      const od = orderSnap.data() || {};
+      if (od.status === 'cancelled' || od.ingredientsRestored || od.ingredientsDeducted === true) {
+        return;
+      }
+    }
+
     const cocktailsSnap = await db.collection('cocktails')
       .where('name', '==', cocktailName)
       .limit(1)
       .get();
-    if (cocktailsSnap.empty) return;
+    if (cocktailsSnap.empty) {
+      if (orderId) {
+        await db.collection('orders').doc(String(orderId)).set({
+          ingredientsDeducted: false
+        }, { merge: true });
+      }
+      return;
+    }
 
     const cocktail = cocktailsSnap.docs[0].data();
-    if (!Array.isArray(cocktail.stockRecipe) || cocktail.stockRecipe.length === 0) return;
+    if (!Array.isArray(cocktail.stockRecipe) || cocktail.stockRecipe.length === 0) {
+      if (orderId) {
+        await db.collection('orders').doc(String(orderId)).set({
+          ingredientsDeducted: false
+        }, { merge: true });
+      }
+      return;
+    }
 
     const ingredientsSnapshot = await db.collection('ingredients').get();
     const byName = new Map();
     ingredientsSnapshot.forEach((doc) => {
       const d = doc.data();
       const name = (d.name || '').trim();
-      if (name) byName.set(name, { id: doc.id, stock: Number(d.stock) || 0 });
+      if (name) byName.set(name.toLowerCase(), { id: doc.id, stock: Number(d.stock) || 0, name });
     });
 
     const batch = db.batch();
     let needsStoplist = false;
+    let changed = false;
 
     for (const item of cocktail.stockRecipe) {
       const ingName = (item.ingredientName || '').trim();
       const needed = Number(item.amount) || 0;
       if (!ingName || needed <= 0) continue;
-      const entry = byName.get(ingName);
+      const entry = byName.get(ingName.toLowerCase());
       if (!entry) continue;
       const next = Math.max(0, entry.stock - needed);
       batch.update(db.collection('ingredients').doc(entry.id), {
         stock: next,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });
+      entry.stock = next;
+      changed = true;
       if (next <= 0) needsStoplist = true;
     }
 
-    await batch.commit();
+    if (changed) await batch.commit();
+
+    if (orderId) {
+      await db.collection('orders').doc(String(orderId)).set({
+        ingredientsDeducted: changed
+      }, { merge: true });
+    }
 
     if (needsStoplist) {
       await ensureCocktailInStoplist(cocktailName, 'Недостаточно ингредиентов');
     }
   } catch (error) {
     console.error('⚠️ Mini App: не удалось списать ингредиенты:', error.message);
+  }
+}
+
+/** Return stockRecipe amounts after an order is cancelled (idempotent per order). */
+async function restoreIngredientsAdmin(cocktailName, orderId = null) {
+  const orderRef = orderId ? db.collection('orders').doc(String(orderId)) : null;
+  try {
+    if (orderRef) {
+      let shouldRestore = false;
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(orderRef);
+        if (!snap.exists) return;
+        const od = snap.data() || {};
+        if (od.ingredientsRestored) return;
+        // Back-compat: older orders have no flag but were deducted on create
+        if (od.ingredientsDeducted === false) return;
+        shouldRestore = true;
+        tx.set(orderRef, {
+          ingredientsRestored: true,
+          ingredientsRestoredAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
+      if (!shouldRestore) return { restored: false, reason: 'skip' };
+    }
+
+    const name = String(cocktailName || '').trim();
+    if (!name) return { restored: false, reason: 'no-name' };
+
+    const cocktailsSnap = await db.collection('cocktails')
+      .where('name', '==', name)
+      .limit(1)
+      .get();
+    if (cocktailsSnap.empty) return { restored: false, reason: 'cocktail-missing' };
+
+    const cocktail = cocktailsSnap.docs[0].data() || {};
+    const recipe = Array.isArray(cocktail.stockRecipe) ? cocktail.stockRecipe : [];
+    if (!recipe.length) return { restored: false, reason: 'no-recipe' };
+
+    const ingredientsSnapshot = await db.collection('ingredients').get();
+    const byName = new Map();
+    ingredientsSnapshot.forEach((doc) => {
+      const d = doc.data() || {};
+      const ingName = String(d.name || '').trim();
+      if (!ingName) return;
+      byName.set(ingName.toLowerCase(), { id: doc.id, stock: Number(d.stock) || 0, name: ingName });
+    });
+
+    const batch = db.batch();
+    const touched = [];
+    for (const item of recipe) {
+      const ingName = String(item.ingredientName || '').trim();
+      const amount = Number(item.amount) || 0;
+      if (!ingName || amount <= 0) continue;
+      const entry = byName.get(ingName.toLowerCase());
+      if (!entry) continue;
+      const next = entry.stock + amount;
+      batch.update(db.collection('ingredients').doc(entry.id), {
+        stock: next,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      entry.stock = next;
+      touched.push(entry.name);
+    }
+
+    if (touched.length) await batch.commit();
+
+    const uniqueIngs = [...new Set(touched)];
+    for (const ing of uniqueIngs) {
+      try {
+        await unstoplistCocktailsAfterRestock(ing);
+      } catch (err) {
+        console.warn('unstoplist after cancel restore:', err?.message || err);
+      }
+    }
+
+    console.log(`↩️ Ингредиенты возвращены после отмены «${name}»:`, uniqueIngs.join(', ') || '—');
+    return { restored: true, ingredients: uniqueIngs };
+  } catch (error) {
+    // Allow a later retry if stock write failed after the claim
+    if (orderRef) {
+      try {
+        await orderRef.set({ ingredientsRestored: false }, { merge: true });
+      } catch (_) { /* ignore */ }
+    }
+    console.error('⚠️ Mini App: не удалось вернуть ингредиенты:', error.message);
+    return { restored: false, reason: error.message };
   }
 }
 
@@ -2121,23 +2373,62 @@ app.post('/api/mini-app/my-orders', async (req, res) => {
       console.warn('my-orders bills:', billErr?.message || billErr);
     }
 
-    // Orders that somehow are not attached to a bill
+    // Orders that somehow are not attached to a bill (e.g. bill was deleted).
+    // Active orphans must not appear as a fake open "Без счёта" bill — cancel them.
     const linked = new Set();
     bills.forEach((b) => b.items.forEach((i) => { if (i.orderId) linked.add(i.orderId); }));
-    const orphanOrders = orders.filter((o) => !linked.has(o.id));
-    if (orphanOrders.length) {
+    let orphanOrders = orders.filter((o) => !linked.has(o.id));
+    const activeOrphanStatuses = new Set(['pending', 'confirmed', 'preparing', 'ready']);
+    const orphansToCancel = orphanOrders.filter((o) =>
+      activeOrphanStatuses.has(String(o.status || 'pending'))
+    );
+    if (orphansToCancel.length) {
+      try {
+        let batch = db.batch();
+        let ops = 0;
+        for (const o of orphansToCancel) {
+          batch.set(db.collection('orders').doc(o.id), {
+            status: 'cancelled',
+            cancelledReason: 'orphan-no-bill',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedBy: 'reconcile-orphan'
+          }, { merge: true });
+          ops += 1;
+          if (ops >= 400) {
+            await batch.commit();
+            batch = db.batch();
+            ops = 0;
+          }
+        }
+        if (ops > 0) await batch.commit();
+        console.log('🔧 cancelled orphan orders without bill:', orphansToCancel.length);
+      } catch (orphanErr) {
+        console.warn('my-orders orphan cancel:', orphanErr?.message || orphanErr);
+      }
+      const cancelledIds = new Set(orphansToCancel.map((o) => o.id));
+      orphanOrders = orphanOrders.map((o) =>
+        cancelledIds.has(o.id) ? { ...o, status: 'cancelled' } : o
+      );
+      orders = orders.map((o) =>
+        cancelledIds.has(o.id) ? { ...o, status: 'cancelled' } : o
+      );
+    }
+    // Do not invent a synthetic open bill for leftovers (cancelled/completed only)
+    const visibleOrphans = orphanOrders.filter((o) =>
+      !['cancelled', 'completed'].includes(String(o.status || ''))
+    );
+    if (visibleOrphans.length) {
       bills.push({
         id: 'orphan',
         status: 'open',
-        totalAmount: orphanOrders
-          .filter((o) => o.status !== 'cancelled')
+        totalAmount: visibleOrphans
           .reduce((s, o) => s + (Number(o.price) || 0), 0),
         paymentMethod: null,
         promoCode: null,
         discount: 0,
         createdAtMs: Date.now(),
         paidAtMs: 0,
-        items: orphanOrders.map((o) => ({
+        items: visibleOrphans.map((o) => ({
           orderId: o.id,
           cocktailName: o.name,
           price: o.price,
@@ -2181,8 +2472,8 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       source = 'telegram-mini-app'
     } = req.body || {};
 
-    if (!name || price == null) {
-      return res.status(400).json({ success: false, error: 'Не указан коктейль или цена' });
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Не указан коктейль' });
     }
 
     // Fast stoplist via memory cache (refreshed every ~20s)
@@ -2190,12 +2481,38 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       return res.status(409).json({ success: false, error: 'Коктейль в стоп-листе' });
     }
 
+    const menuPrice = await resolveMenuCocktailPrice({ cocktailId, name });
+    let listedPrice = menuPrice;
+    if (listedPrice == null) {
+      const fallback = Number(originalPrice != null ? originalPrice : price);
+      if (!Number.isFinite(fallback) || fallback < 0) {
+        return res.status(400).json({ success: false, error: 'Коктейль не найден в меню' });
+      }
+      console.warn('create-order: menu price missing for', name, '— fallback', fallback);
+      listedPrice = fallback;
+    }
+
     const bonusAmount = Math.max(0, Number(bonusUsed) || 0);
-    const finalPrice = Math.max(0, Number(price) || 0);
+    if (bonusAmount > 0) {
+      const [bonusDoc, settingsDoc] = await Promise.all([
+        db.collection('bonusAccounts').doc(userId).get(),
+        db.collection('settings').doc('bonusSystem').get()
+      ]);
+      const balance = bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0;
+      const maxUsage = settingsDoc.exists ? (Number(settingsDoc.data().maxUsage) || 50) : 50;
+      const maxByPrice = Math.floor(listedPrice * (maxUsage / 100));
+      const maxBonus = Math.min(balance, maxByPrice);
+      if (bonusAmount > maxBonus) {
+        const error = bonusAmount > balance
+          ? `Недостаточно бонусов. У вас ${balance}`
+          : `Можно списать не больше ${maxBonus} бонусов`;
+        return res.status(400).json({ success: false, error, maxBonus, balance });
+      }
+    }
+    const finalPrice = Math.max(0, listedPrice - bonusAmount);
     const now = new Date();
     const displayName = user || session.displayName || 'Гость Telegram';
-    // Skip Firestore queue scan — position is approximate and non-blocking for UX
-    const nextQueue = Math.max(1, Number(queuePosition) || 1);
+    const nextQueue = await getNextQueuePosition();
 
     const orderData = {
       name,
@@ -2205,7 +2522,7 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       image: image || '',
       status: 'pending',
       price: finalPrice,
-      originalPrice: Number(originalPrice) != null ? Number(originalPrice) : finalPrice + bonusAmount,
+      originalPrice: listedPrice,
       discount: bonusAmount,
       bonusUsed: bonusAmount,
       promoCode: null,
@@ -2249,7 +2566,7 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       }))
     });
 
-    deductIngredientsAdmin(name).catch((e) => console.warn('deduct ingredients:', e.message));
+    deductIngredientsAdmin(name, orderRef.id).catch((e) => console.warn('deduct ingredients:', e.message));
 
     const message = formatOrderAlertHtml({
       mode: 'new',
@@ -2284,8 +2601,7 @@ app.post('/api/mini-app/create-order', async (req, res) => {
 // Helper: configure Telegram Menu Button to open Mini App
 app.post('/api/mini-app/setup-menu-button', async (req, res) => {
   try {
-    const miniAppUrl = (req.body?.url || '').trim() ||
-      `${req.protocol}://${req.get('host')}/mini-app/`;
+    const miniAppUrl = (req.body?.url || '').trim() || getMiniAppPublicUrl();
 
     const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_MINIAPP_BOT_TOKEN}/setChatMenuButton`, {
       method: 'POST',
@@ -2323,8 +2639,7 @@ app.post('/api/mini-app/setup-menu-button', async (req, res) => {
 app.post('/api/mini-app/setup-bot-profile', async (req, res) => {
   try {
     const token = TELEGRAM_MINIAPP_BOT_TOKEN;
-    const miniAppUrl = (req.body?.url || '').trim() ||
-      'https://asafievbar.duckdns.org/mini-app/?v=domain1';
+    const miniAppUrl = (req.body?.url || '').trim() || getMiniAppPublicUrl();
     const name = req.body?.name || 'AsafievBar';
     const shortDescription = req.body?.shortDescription ||
       'Коктейли AsafievBar — нажмите «Открыть»';
@@ -2773,8 +3088,48 @@ app.post('/api/mini-app/admin/bills', async (req, res) => {
     if (action === 'delete') {
       const billId = String(req.body?.billId || '');
       if (!billId) return res.status(400).json({ success: false, error: 'billId required' });
-      await db.collection('bills').doc(billId).delete();
-      return res.json({ success: true });
+      const billRef = db.collection('bills').doc(billId);
+      const billDoc = await billRef.get();
+      if (!billDoc.exists) {
+        return res.status(404).json({ success: false, error: 'Счёт не найден' });
+      }
+      const bill = billDoc.data() || {};
+      const items = Array.isArray(bill.items) ? bill.items : [];
+
+      // Cancel linked kitchen orders — otherwise they resurface as "Без счёта"
+      let cancelledOrders = 0;
+      try {
+        for (const item of items) {
+          const orderId = String(item.orderId || '').trim();
+          if (!orderId) continue;
+          const orderRef = db.collection('orders').doc(orderId);
+          const orderDoc = await orderRef.get();
+          const prev = orderDoc.exists ? (orderDoc.data() || {}) : {};
+          const prevStatus = String(prev.status || item.status || '');
+
+          await orderRef.set({
+            status: 'cancelled',
+            cancelledReason: 'bill-deleted',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedBy: `bill-delete:${session.userId}`
+          }, { merge: true });
+          cancelledOrders += 1;
+
+          if (
+            prevStatus !== 'cancelled'
+            && prevStatus !== 'completed'
+            && !prev.ingredientsRestored
+          ) {
+            const cocktailName = prev.name || prev.cocktailName || item.cocktailName || item.name;
+            await restoreIngredientsAdmin(cocktailName, orderId);
+          }
+        }
+      } catch (orderSyncErr) {
+        console.warn('⚠️ delete-bill order sync:', orderSyncErr?.message || orderSyncErr);
+      }
+
+      await billRef.delete();
+      return res.json({ success: true, cancelledOrders });
     }
 
     let query = db.collection('bills').limit(40);
@@ -2874,6 +3229,359 @@ app.post('/api/mini-app/apply-promo', async (req, res) => {
   }
 });
 
+// ─── Wheel of fortune ───────────────────────────────────────────────
+const DEFAULT_WHEEL_PRIZES = [
+  { id: 'bonus_20', name: '20 бонусов', short: '+20', description: 'Небольшое пополнение бонусного счёта', type: 'bonus', value: 20, probability: 18, color: '#2a221c', icon: '20' },
+  { id: 'bonus_50', name: '50 бонусов', short: '+50', description: '50 бонусов на счёт', type: 'bonus', value: 50, probability: 16, color: '#352c24', icon: '50' },
+  { id: 'discount_10', name: 'Скидка 10%', short: '−10%', description: 'Персональный промокод −10% на 7 дней', type: 'promo', value: 10, probability: 14, color: '#3f342a', icon: '10%' },
+  { id: 'bonus_30', name: '30 бонусов', short: '+30', description: '30 бонусов на счёт', type: 'bonus', value: 30, probability: 12, color: '#4a3c30', icon: '30' },
+  { id: 'bonus_100', name: '100 бонусов', short: '+100', description: 'Крупное пополнение бонусов', type: 'bonus', value: 100, probability: 10, color: '#5a4a38', icon: '100' },
+  { id: 'discount_15', name: 'Скидка 15%', short: '−15%', description: 'Персональный промокод −15% на 7 дней', type: 'promo', value: 15, probability: 8, color: '#6b563f', icon: '15%' },
+  { id: 'bonus_10', name: '10 бонусов', short: '+10', description: 'Небольшое утешение', type: 'bonus', value: 10, probability: 8, color: '#2f2822', icon: '10' },
+  { id: 'bonus_150', name: '150 бонусов', short: '+150', description: 'Редкий джекпот бонусов', type: 'bonus', value: 150, probability: 6, color: '#7a6048', icon: '150' },
+  { id: 'discount_20', name: 'Скидка 20%', short: '−20%', description: 'Редкий промокод −20% на 7 дней', type: 'promo', value: 20, probability: 4, color: '#8a6a45', icon: '20%' },
+  { id: 'nothing', name: 'Повезёт завтра', short: '—', description: 'В этот раз без приза — загляните завтра', type: 'nothing', value: 0, probability: 4, color: '#1f1a16', icon: '—' }
+];
+
+async function ensureWheelPrizes() {
+  const all = await db.collection('wheelPrizes').get();
+  const existing = new Map(all.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() }]));
+  const defaultIds = new Set(DEFAULT_WHEEL_PRIZES.map((p) => p.id));
+  let batch = db.batch();
+  let ops = 0;
+
+  const commitIfNeeded = async (force = false) => {
+    if (ops >= 400 || (force && ops > 0)) {
+      await batch.commit();
+      batch = db.batch();
+      ops = 0;
+    }
+  };
+
+  // Upsert canonical prizes (fixes rainbow legacy colors / short labels)
+  for (const prize of DEFAULT_WHEEL_PRIZES) {
+    batch.set(db.collection('wheelPrizes').doc(prize.id), {
+      ...prize,
+      active: true,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(existing.has(prize.id) ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
+    }, { merge: true });
+    existing.set(prize.id, { ...existing.get(prize.id), ...prize, active: true });
+    ops += 1;
+    await commitIfNeeded();
+  }
+
+  // Disable legacy prizes (e.g. free_shot / −100%) that make the wheel look childish
+  for (const [id, data] of existing.entries()) {
+    if (defaultIds.has(id)) continue;
+    if (data.active === false) continue;
+    batch.set(db.collection('wheelPrizes').doc(id), {
+      active: false,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    data.active = false;
+    ops += 1;
+    await commitIfNeeded();
+  }
+  await commitIfNeeded(true);
+
+  return [...existing.values()]
+    .filter((p) => p.active !== false)
+    .sort((a, b) => (Number(b.probability) || 0) - (Number(a.probability) || 0));
+}
+
+async function getWheelConfig() {
+  const doc = await db.collection('wheelConfig').doc('settings').get();
+  const data = doc.exists ? doc.data() : {};
+  return {
+    active: data.active !== false,
+    cooldownHours: Number(data.cooldownHours) || 24
+  };
+}
+
+function pickWheelPrize(prizes) {
+  const list = Array.isArray(prizes) ? prizes : [];
+  if (!list.length) return null;
+  const total = list.reduce((s, p) => s + (Number(p.probability) || 0), 0) || list.length;
+  let roll = Math.random() * total;
+  for (const prize of list) {
+    roll -= Number(prize.probability) || (total / list.length);
+    if (roll <= 0) return prize;
+  }
+  return list[list.length - 1];
+}
+
+async function creditBonusPoints(userId, points, meta = {}) {
+  const amount = Math.max(0, Math.floor(Number(points) || 0));
+  if (!userId || amount <= 0) return { awarded: 0 };
+  const bonusRef = db.collection('bonusAccounts').doc(userId);
+  let newBalance = amount;
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(bonusRef);
+    const prev = snap.exists ? snap.data() : {};
+    newBalance = (Number(prev.balance) || 0) + amount;
+    tx.set(bonusRef, {
+      userId,
+      balance: newBalance,
+      totalEarned: (Number(prev.totalEarned) || 0) + amount,
+      lastEarned: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+  await db.collection('bonusTransactions').add({
+    userId,
+    type: 'earn',
+    amount,
+    source: meta.source || 'wheel',
+    prizeId: meta.prizeId || null,
+    createdAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+  return { awarded: amount, balance: newBalance };
+}
+
+async function createWheelPromoForUser(userId, prize) {
+  const code = `WHEEL${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+  const discount = Math.max(1, Math.min(100, Number(prize.value) || 10));
+  const expiryDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  await db.collection('promocodes').doc(code).set({
+    code,
+    discount,
+    description: prize.description || `Приз колеса: −${discount}%`,
+    active: true,
+    maxUses: 1,
+    usedCount: 0,
+    expiryDate,
+    createdBy: 'wheel',
+    ownerUserId: userId,
+    createdAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+  return { code, discount, expiryDateMs: expiryDate.getTime() };
+}
+
+async function listUserWheelPromos(userId) {
+  if (!userId) return [];
+  let docs = [];
+  try {
+    const snap = await db.collection('promocodes')
+      .where('ownerUserId', '==', userId)
+      .limit(20)
+      .get();
+    docs = snap.docs;
+  } catch (err) {
+    console.warn('listUserWheelPromos query:', err?.message || err);
+    return [];
+  }
+  const now = Date.now();
+  return docs
+    .map((doc) => {
+      const d = doc.data() || {};
+      const expiry = d.expiryDate?.toMillis?.()
+        || (d.expiryDate ? new Date(d.expiryDate).getTime() : 0);
+      const maxUses = Number(d.maxUses) || 0;
+      const usedCount = Number(d.usedCount) || 0;
+      const exhausted = maxUses > 0 && usedCount >= maxUses;
+      const expired = expiry > 0 && expiry < now;
+      return {
+        code: d.code || doc.id,
+        discount: Number(d.discount) || 0,
+        description: d.description || '',
+        expiryDateMs: expiry || null,
+        used: exhausted,
+        expired,
+        active: d.active !== false && !exhausted && !expired
+      };
+    })
+    .filter((p) => p.active)
+    .sort((a, b) => (b.expiryDateMs || 0) - (a.expiryDateMs || 0));
+}
+
+function publicWheelPrize(prize) {
+  return {
+    id: prize.id,
+    name: prize.name,
+    short: prize.short || '',
+    description: prize.description || '',
+    type: prize.type,
+    value: Number(prize.value) || 0,
+    color: prize.color || '#d4a35c',
+    icon: prize.icon || '★',
+    probability: Number(prize.probability) || 0
+  };
+}
+
+app.post('/api/mini-app/wheel/status', async (req, res) => {
+  try {
+    const session = await resolveMiniAppUser(req);
+    if (!session.ok) return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
+
+    const [config, prizes, spinDoc, myPromos] = await Promise.all([
+      getWheelConfig(),
+      ensureWheelPrizes(),
+      db.collection('wheelSpins').doc(session.userId).get(),
+      listUserWheelPromos(session.userId)
+    ]);
+
+    let canSpin = config.active;
+    let nextSpinAt = null;
+    let lastPrize = null;
+    const spin = spinDoc.exists ? spinDoc.data() : {};
+    if (spin.lastSpinDate) {
+      const lastMs = spin.lastSpinDate.toMillis?.() || Date.parse(spin.lastSpinDate) || 0;
+      const cooldownMs = (config.cooldownHours || 24) * 3600 * 1000;
+      const unlockAt = lastMs + cooldownMs;
+      if (Date.now() < unlockAt) {
+        canSpin = false;
+        nextSpinAt = unlockAt;
+      }
+      if (spin.prize) lastPrize = spin.prize;
+    }
+
+    // If last prize promo is missing from list but still stored on spin — include it
+    if (lastPrize?.promoCode && !myPromos.some((p) => p.code === lastPrize.promoCode)) {
+      try {
+        const promoDoc = await db.collection('promocodes').doc(String(lastPrize.promoCode)).get();
+        if (promoDoc.exists) {
+          const d = promoDoc.data() || {};
+          const expiry = d.expiryDate?.toMillis?.()
+            || (d.expiryDate ? new Date(d.expiryDate).getTime() : 0);
+          const maxUses = Number(d.maxUses) || 0;
+          const usedCount = Number(d.usedCount) || 0;
+          const ok = d.active !== false
+            && !(maxUses > 0 && usedCount >= maxUses)
+            && !(expiry > 0 && expiry < Date.now());
+          if (ok) {
+            myPromos.unshift({
+              code: d.code || promoDoc.id,
+              discount: Number(d.discount) || Number(lastPrize.value) || 0,
+              description: d.description || '',
+              expiryDateMs: expiry || null,
+              used: false,
+              expired: false,
+              active: true
+            });
+          }
+        }
+      } catch (_) { /* ignore */ }
+    }
+
+    res.json({
+      success: true,
+      active: config.active,
+      canSpin: Boolean(canSpin && config.active),
+      cooldownHours: config.cooldownHours,
+      nextSpinAt,
+      totalSpins: Number(spin.totalSpins) || 0,
+      lastPrize,
+      myPromos,
+      prizes: prizes.map(publicWheelPrize)
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/mini-app/wheel/spin', async (req, res) => {
+  try {
+    const session = await resolveMiniAppUser(req);
+    if (!session.ok) return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
+
+    const config = await getWheelConfig();
+    if (!config.active) {
+      return res.status(400).json({ success: false, error: 'Колесо временно выключено' });
+    }
+
+    const prizes = await ensureWheelPrizes();
+    if (!prizes.length) {
+      return res.status(500).json({ success: false, error: 'Призы не настроены' });
+    }
+
+    const spinRef = db.collection('wheelSpins').doc(session.userId);
+    const cooldownMs = (config.cooldownHours || 24) * 3600 * 1000;
+
+    // Atomic cooldown check + reserve spin slot before awarding
+    let reserved = false;
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(spinRef);
+      const prev = snap.exists ? snap.data() : {};
+      if (prev.lastSpinDate) {
+        const lastMs = prev.lastSpinDate.toMillis?.() || 0;
+        if (Date.now() < lastMs + cooldownMs) {
+          const err = new Error('Колесо ещё недоступно');
+          err.code = 'cooldown';
+          err.nextSpinAt = lastMs + cooldownMs;
+          throw err;
+        }
+      }
+      tx.set(spinRef, {
+        userId: session.userId,
+        lastSpinDate: admin.firestore.FieldValue.serverTimestamp(),
+        totalSpins: (Number(prev.totalSpins) || 0) + 1,
+        pending: true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      reserved = true;
+    });
+
+    const prize = pickWheelPrize(prizes);
+    const prizeIndex = Math.max(0, prizes.findIndex((p) => p.id === prize.id));
+    let award = { type: prize.type, promoCode: null, bonusAwarded: 0, balance: null };
+
+    try {
+      if (prize.type === 'bonus') {
+        const credited = await creditBonusPoints(session.userId, prize.value, {
+          source: 'wheel',
+          prizeId: prize.id
+        });
+        award.bonusAwarded = credited.awarded;
+        award.balance = credited.balance;
+      } else if (prize.type === 'promo') {
+        const promo = await createWheelPromoForUser(session.userId, prize);
+        award.promoCode = promo.code;
+        award.discount = promo.discount;
+      }
+
+      const publicPrize = {
+        ...publicWheelPrize(prize),
+        promoCode: award.promoCode || null,
+        claimed: true
+      };
+
+      await spinRef.set({
+        pending: false,
+        prize: publicPrize,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      res.json({
+        success: true,
+        prizeIndex,
+        prize: publicPrize,
+        award,
+        nextSpinAt: Date.now() + cooldownMs,
+        canSpin: false
+      });
+    } catch (awardErr) {
+      if (reserved) {
+        await spinRef.set({
+          pending: false,
+          awardError: String(awardErr.message || awardErr),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+      throw awardErr;
+    }
+  } catch (error) {
+    if (error.code === 'cooldown') {
+      return res.status(429).json({
+        success: false,
+        error: error.message,
+        nextSpinAt: error.nextSpinAt || null
+      });
+    }
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Guest: rate cocktail after ready
 app.post('/api/mini-app/rate', async (req, res) => {
   try {
@@ -2965,6 +3673,7 @@ app.post('/api/mini-app/admin/cocktails', async (req, res) => {
       const id = String(req.body?.id || '');
       if (!id) return res.status(400).json({ success: false, error: 'id required' });
       await db.collection('cocktails').doc(id).delete();
+      invalidateMenuBootstrapCache();
       return res.json({ success: true });
     }
 
@@ -3007,10 +3716,12 @@ app.post('/api/mini-app/admin/cocktails', async (req, res) => {
 
       if (c.id) {
         await db.collection('cocktails').doc(String(c.id)).set(payload, { merge: true });
+        invalidateMenuBootstrapCache();
         return res.json({ success: true, id: String(c.id) });
       }
       payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
       const ref = await db.collection('cocktails').add(payload);
+      invalidateMenuBootstrapCache();
       return res.json({ success: true, id: ref.id });
     }
 
@@ -3177,9 +3888,18 @@ app.post('/api/mini-app/admin/purchases', async (req, res) => {
       };
       if (ing.id) {
         await db.collection('ingredients').doc(String(ing.id)).set(payload, { merge: true });
-        let stoplist = { added: 0, names: [] };
+        let stoplist = { added: 0, removed: 0, names: [], restored: [] };
         if (stock <= 0) {
-          stoplist = await stoplistCocktailsForIngredient(name);
+          const stopped = await stoplistCocktailsForIngredient(name);
+          stoplist = { ...stoplist, ...stopped, restored: [] };
+        } else {
+          const restored = await unstoplistCocktailsAfterRestock(name);
+          stoplist = {
+            added: 0,
+            names: [],
+            removed: restored.removed,
+            restored: restored.names
+          };
         }
         return res.json({ success: true, id: String(ing.id), stoplist });
       }
@@ -3189,9 +3909,18 @@ app.post('/api/mini-app/admin/purchases', async (req, res) => {
       }
       payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
       const ref = await db.collection('ingredients').add(payload);
-      let stoplist = { added: 0, names: [] };
+      let stoplist = { added: 0, removed: 0, names: [], restored: [] };
       if (stock <= 0) {
-        stoplist = await stoplistCocktailsForIngredient(name);
+        const stopped = await stoplistCocktailsForIngredient(name);
+        stoplist = { ...stoplist, ...stopped, restored: [] };
+      } else {
+        const restored = await unstoplistCocktailsAfterRestock(name);
+        stoplist = {
+          added: 0,
+          names: [],
+          removed: restored.removed,
+          restored: restored.names
+        };
       }
       return res.json({ success: true, id: ref.id, stoplist });
     }
@@ -3443,6 +4172,30 @@ app.post('/api/mini-app/ensure-admin', async (req, res) => {
   }
 });
 
+async function ensureAlertsBotWebhook() {
+  const token = alertsBotToken();
+  if (!token) {
+    console.warn('⚠️ Alerts bot token missing — skip alerts webhook');
+    return;
+  }
+  const publicBase = (process.env.PUBLIC_BASE_URL || 'https://asafievbar.duckdns.org').replace(/\/$/, '');
+  const webhookUrl = `${publicBase}/telegram-webhook`;
+  try {
+    const setRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: webhookUrl,
+        allowed_updates: ['message', 'callback_query'],
+        drop_pending_updates: false
+      })
+    }).then((r) => r.json());
+    console.log('📱 Alerts webhook:', setRes.ok ? webhookUrl : setRes);
+  } catch (e) {
+    console.warn('⚠️ ensureAlertsBotWebhook failed:', e.message);
+  }
+}
+
 async function ensureMiniAppBotWebhook() {
   if (!TELEGRAM_MINIAPP_BOT_TOKEN) {
     console.warn('⚠️ TELEGRAM_MINIAPP_BOT_TOKEN missing — skip mini app webhook');
@@ -3499,7 +4252,7 @@ app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   const publicBase = process.env.PUBLIC_BASE_URL || process.env.RAILWAY_PUBLIC_DOMAIN || 'https://asafievbar.duckdns.org';
   console.log(`📱 Telegram webhook: ${publicBase}/telegram-webhook`);
   console.log(`📲 Mini App webhook: ${publicBase}/telegram-miniapp-webhook`);
-  console.log(`📲 Mini App: ${publicBase}/mini-app/`);
+  console.log(`📲 Mini App: ${getMiniAppPublicUrl()}`);
   console.log(`🔍 Health check: ${publicBase}/health`);
 
   // Ensure owner is admin in Firestore on boot
@@ -3507,6 +4260,7 @@ app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
     .then((r) => console.log('👑 Owner admin ensured:', r.uid))
     .catch((e) => console.warn('Owner admin ensure failed:', e.message));
 
+  ensureAlertsBotWebhook().catch((e) => console.warn('Alerts webhook ensure failed:', e.message));
   ensureMiniAppBotWebhook().catch((e) => console.warn('Mini App webhook ensure failed:', e.message));
 });
 

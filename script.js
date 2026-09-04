@@ -656,6 +656,69 @@ async function deductIngredientsForCocktail(cocktailName) {
   }
 }
 
+/**
+ * Возвращает ингредиенты на склад после отмены заказа (идемпотентно по заказу).
+ * @param {string} cocktailName
+ * @param {string} [orderId]
+ */
+async function restoreIngredientsForCocktail(cocktailName, orderId = null) {
+  try {
+    if (orderId) {
+      const orderRef = db.collection('orders').doc(String(orderId));
+      const orderDoc = await orderRef.get();
+      if (!orderDoc.exists) return;
+      const od = orderDoc.data() || {};
+      if (od.ingredientsRestored) return;
+      if (od.ingredientsDeducted === false) return;
+      if (od.status === 'completed') return;
+      await orderRef.set({
+        ingredientsRestored: true,
+        ingredientsRestoredAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+
+    const cocktail = (typeof cocktailsData !== 'undefined' && Array.isArray(cocktailsData))
+      ? cocktailsData.find((c) => c.name === cocktailName)
+      : null;
+
+    let recipe = cocktail && Array.isArray(cocktail.stockRecipe) ? cocktail.stockRecipe : null;
+    if (!recipe || !recipe.length) {
+      const snap = await db.collection('cocktails').where('name', '==', String(cocktailName || '').trim()).limit(1).get();
+      if (snap.empty) return;
+      recipe = Array.isArray(snap.docs[0].data().stockRecipe) ? snap.docs[0].data().stockRecipe : [];
+    }
+    if (!recipe.length) return;
+
+    const ingredientsSnapshot = await db.collection('ingredients').get();
+    const byName = new Map();
+    ingredientsSnapshot.forEach((doc) => {
+      const d = doc.data();
+      const name = (d.name || '').trim();
+      if (name) byName.set(name.toLowerCase(), { id: doc.id, stock: Number(d.stock) || 0 });
+    });
+
+    const batch = db.batch();
+    let changed = false;
+    for (const item of recipe) {
+      const ingName = (item.ingredientName || '').trim();
+      const amount = Number(item.amount) || 0;
+      if (!ingName || amount <= 0) continue;
+      const entry = byName.get(ingName.toLowerCase());
+      if (!entry) continue;
+      batch.update(db.collection('ingredients').doc(entry.id), {
+        stock: entry.stock + amount,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      entry.stock += amount;
+      changed = true;
+    }
+    if (changed) await batch.commit();
+    _debouncedReevaluate();
+  } catch (error) {
+    console.error('❌ Ошибка возврата ингредиентов для коктейля:', error);
+  }
+}
+
 let _reevaluateTimeout = null;
 function _debouncedReevaluate() {
   if (_reevaluateTimeout) clearTimeout(_reevaluateTimeout);
