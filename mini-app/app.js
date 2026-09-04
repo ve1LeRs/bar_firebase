@@ -1981,7 +1981,7 @@
       return;
     }
     els.wheelResult.hidden = false;
-    const isPromo = Boolean(prize.promoCode) && prize.type !== 'bonus' && prize.type !== 'nothing';
+    const isPromo = prize.type === 'promo' && Boolean(prize.promoCode);
     let title = prize.name || 'Готово';
     let desc = prize.description || '';
     if (isPromo) {
