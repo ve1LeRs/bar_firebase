@@ -11,7 +11,7 @@
   };
 
   const DEFAULT_API = 'https://asafievbar.duckdns.org';
-  const MENU_CACHE_KEY = 'asafiev_mini_menu_v3';
+  const MENU_CACHE_KEY = 'asafiev_mini_menu_v4';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
   const STATUS_LABELS = {
     pending: 'Ожидание',
@@ -63,8 +63,11 @@
     adminOrdersTimer: null,
     adminTab: 'cocktails',
     knownOrderStatuses: new Map(),
-    promptedRatingOrders: new Set(),
+    promptedRatingOrders: loadPromptedRatings(),
+    pendingRatingOrders: new Map(),
     billExpandPrefs: new Map(),
+    ratingQuietUntil: 0,
+    placingOrder: false,
     currentView: 'menu',
     ratingOrder: null,
     ratingValue: 0
@@ -75,6 +78,35 @@
 
   let auth;
   let db;
+
+  function loadPromptedRatings() {
+    try {
+      const raw = sessionStorage.getItem('asafiev_rating_prompted_v1');
+      const arr = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(arr) ? arr.map(String) : []);
+    } catch (_) {
+      return new Set();
+    }
+  }
+
+  function persistPromptedRatings() {
+    try {
+      sessionStorage.setItem(
+        'asafiev_rating_prompted_v1',
+        JSON.stringify([...state.promptedRatingOrders].slice(-80))
+      );
+    } catch (_) { /* ignore */ }
+  }
+
+  function markRatingPrompted(id) {
+    if (!id) return;
+    state.promptedRatingOrders.add(String(id));
+    persistPromptedRatings();
+  }
+
+  function wasRatingPrompted(id) {
+    return state.promptedRatingOrders.has(String(id || ''));
+  }
 
   function initFirebase() {
     if (auth && db) return;
@@ -113,9 +145,11 @@
     profileBillItems: document.getElementById('profileBillItems'),
     profileBillEmpty: document.getElementById('profileBillEmpty'),
     profileBillHistory: document.getElementById('profileBillHistory'),
-    profilePromoInput: document.getElementById('profilePromoInput'),
-    profilePromoBtn: document.getElementById('profilePromoBtn'),
-    profilePromoHint: document.getElementById('profilePromoHint'),
+    ordersPromoBox: document.getElementById('ordersPromoBox'),
+    ordersPromoRow: document.getElementById('ordersPromoRow'),
+    ordersPromoInput: document.getElementById('ordersPromoInput'),
+    ordersPromoBtn: document.getElementById('ordersPromoBtn'),
+    ordersPromoHint: document.getElementById('ordersPromoHint'),
     authRetryBtn: document.getElementById('authRetryBtn'),
     avatar: document.getElementById('avatar'),
     adminTabBtn: document.getElementById('adminTabBtn'),
@@ -154,16 +188,60 @@
     ratingSubmitBtn: document.getElementById('ratingSubmitBtn'),
     ratingSkipBtn: document.getElementById('ratingSkipBtn'),
     toast: document.getElementById('toast'),
-    loader: document.getElementById('loader')
+    loader: document.getElementById('loader'),
+    wheelCard: document.getElementById('wheelCard'),
+    wheelCardStatus: document.getElementById('wheelCardStatus'),
+    wheelOpenBtn: document.getElementById('wheelOpenBtn'),
+    wheelSheet: document.getElementById('wheelSheet'),
+    wheelBackdrop: document.getElementById('wheelBackdrop'),
+    wheelCanvas: document.getElementById('wheelCanvas'),
+    wheelSpinBtn: document.getElementById('wheelSpinBtn'),
+    wheelCloseBtn: document.getElementById('wheelCloseBtn'),
+    wheelSheetSub: document.getElementById('wheelSheetSub'),
+    wheelResult: document.getElementById('wheelResult'),
+    wheelResultTitle: document.getElementById('wheelResultTitle'),
+    wheelResultCode: document.getElementById('wheelResultCode'),
+    wheelResultDesc: document.getElementById('wheelResultDesc'),
+    wheelMainPane: document.getElementById('wheelMainPane'),
+    wheelInsidePane: document.getElementById('wheelInsidePane'),
+    wheelInsideBtn: document.getElementById('wheelInsideBtn'),
+    wheelInsideBackBtn: document.getElementById('wheelInsideBackBtn'),
+    wheelPrizeCatalog: document.getElementById('wheelPrizeCatalog'),
+    wheelHubBtn: document.getElementById('wheelHubBtn'),
+    wheelHint: document.getElementById('wheelHint'),
+    wheelCopyPromoBtn: document.getElementById('wheelCopyPromoBtn'),
+    promoVault: document.getElementById('promoVault'),
+    promoVaultCode: document.getElementById('promoVaultCode'),
+    promoVaultDisc: document.getElementById('promoVaultDisc'),
+    promoVaultHint: document.getElementById('promoVaultHint'),
+    promoVaultCopyBtn: document.getElementById('promoVaultCopyBtn'),
+    promoVaultUseBtn: document.getElementById('promoVaultUseBtn')
+  };
+
+  const wheelState = {
+    prizes: [],
+    rotation: 0,
+    spinning: false,
+    canSpin: false,
+    nextSpinAt: null,
+    active: true,
+    ctx: null,
+    lastPrize: null,
+    myPromos: [],
+    promosLoaded: false
   };
 
   function resolveApiBase() {
-    const saved = localStorage.getItem('mini_app_api_url');
-    if (saved) return saved.replace(/\/$/, '');
+    try {
+      const saved = localStorage.getItem('mini_app_api_url');
+      if (saved) return saved.replace(/\/$/, '');
+    } catch (_) { /* private mode */ }
 
-    const host = window.location.hostname;
-    if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3000';
-    if (host.includes('onrender.com')) return `https://${host}`;
+    try {
+      const host = String(window.location?.hostname || '');
+      if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3000';
+      if (host.includes('onrender.com')) return `https://${host}`;
+    } catch (_) { /* ignore */ }
     return DEFAULT_API;
   }
 
@@ -173,7 +251,7 @@
     } catch (_) { /* ignore */ }
   }
 
-  function showToast(message) {
+  function showToast(message, durationMs = 2400) {
     const el = els.toast;
     if (!el) return;
     const text = String(message || '').trim();
@@ -189,6 +267,7 @@
     void el.offsetWidth;
     el.classList.add('is-on');
 
+    const hold = Math.max(1200, Number(durationMs) || 2400);
     showToast._t = setTimeout(() => {
       el.classList.remove('is-on');
       el.classList.add('is-leaving');
@@ -197,7 +276,7 @@
         el.hidden = true;
         el.textContent = '';
       }, 240);
-    }, 2400);
+    }, hold);
   }
 
   function setLoader(on) {
@@ -293,12 +372,27 @@
     let vvHeight = layoutHeight;
     if (vv) {
       vvHeight = vv.height;
-      inset = Math.max(0, Math.round(layoutHeight - vv.height - vv.offsetTop));
+      // Prefer layout viewport vs visual viewport; also compare to cold baseline
+      // (on iOS Telegram innerHeight often shrinks with the keyboard → inset≈0)
+      const baseline = syncKeyboardLayout._baseline || layoutHeight;
+      const fromInner = Math.max(0, Math.round(layoutHeight - vv.height - (vv.offsetTop || 0)));
+      const fromBaseline = Math.max(0, Math.round(baseline - vv.height - (vv.offsetTop || 0)));
+      inset = Math.max(fromInner, fromBaseline);
     }
     document.documentElement.style.setProperty('--keyboard-inset', `${inset}px`);
     document.documentElement.style.setProperty('--vv-height', `${Math.round(vvHeight)}px`);
-    const keyboardOpen = inset > 60;
+
+    const fieldFocused = isTextField(document.activeElement);
+    // iOS WebView: visualViewport inset is unreliable — treat focused text fields as keyboard open
+    const keyboardOpen = inset > 60 || fieldFocused;
+    const keyboardJustOpened = keyboardOpen && !document.body.classList.contains('keyboard-open');
     document.body.classList.toggle('keyboard-open', keyboardOpen);
+    document.body.classList.toggle('field-focused', fieldFocused);
+
+    // Admin typing / keyboard dismiss must never reveal guest rating UI
+    if (state.currentView === 'admin' || keyboardOpen) {
+      closeRatingSheet({ dismiss: false });
+    }
 
     if (els.sheet?.classList.contains('open')) {
       if (keyboardOpen || document.activeElement === els.bonusInput) {
@@ -307,19 +401,115 @@
         els.sheet.classList.remove('sheet-compact');
       }
     }
+
+    // Once when keyboard appears — scroll focused promo/bonus into view
+    if (keyboardJustOpened) {
+      const active = document.activeElement;
+      if (active?.id === 'ordersPromoInput' || active?.id === 'bonusInput') {
+        ensureFieldAboveKeyboard(active);
+      }
+    }
+  }
+
+  function captureViewportBaseline() {
+    const vv = window.visualViewport;
+    const h = vv?.height || window.innerHeight || document.documentElement.clientHeight || 0;
+    if (h > 200 && !isTextField(document.activeElement)) {
+      syncKeyboardLayout._baseline = Math.round(h);
+    }
+  }
+
+  function ensureFieldAboveKeyboard(el) {
+    if (!el || typeof el.scrollIntoView !== 'function') return;
+    const run = () => {
+      try {
+        const row = el.closest?.('.promo-row, .bonus-row, .price-row') || el;
+        row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      } catch (_) {
+        try { el.scrollIntoView(); } catch (__) { /* ignore */ }
+      }
+    };
+    requestAnimationFrame(run);
+    clearTimeout(ensureFieldAboveKeyboard._t1);
+    clearTimeout(ensureFieldAboveKeyboard._t2);
+    ensureFieldAboveKeyboard._t1 = setTimeout(run, 280);
+    ensureFieldAboveKeyboard._t2 = setTimeout(run, 520);
+  }
+
+  function focusOrdersPromoField() {
+    document.body.classList.add('field-focused', 'keyboard-open');
+    ensureFieldAboveKeyboard(els.ordersPromoInput);
+  }
+
+  function isTextField(el) {
+    if (!el || el === document.body || el === document.documentElement) return false;
+    const tag = el.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (el.isContentEditable) return true;
+    return false;
+  }
+
+  function dismissKeyboard() {
+    const active = document.activeElement;
+    if (!isTextField(active)) return false;
+    try { active.blur(); } catch (_) { /* ignore */ }
+    document.body.classList.remove('field-focused');
+    syncKeyboardLayout();
+    return true;
+  }
+
+  function shouldKeepKeyboard(target) {
+    if (!target || typeof target.closest !== 'function') return false;
+    if (isTextField(target)) return true;
+    // Keep focus when interacting with the focused field's controls
+    if (target.closest('input, textarea, select, [contenteditable="true"]')) return true;
+    if (target.closest('label[for]')) return true;
+    return false;
+  }
+
+  function bindDismissKeyboardOnOutsideTap() {
+    const onPointer = (e) => {
+      if (!isTextField(document.activeElement)) return;
+      if (shouldKeepKeyboard(e.target)) return;
+      dismissKeyboard();
+    };
+    // pointerdown covers touch + mouse; capture so empty areas still receive it
+    document.addEventListener('pointerdown', onPointer, { capture: true, passive: true });
   }
 
   function bindKeyboardAwareLayout() {
+    captureViewportBaseline();
     const onViewport = () => syncKeyboardLayout();
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', onViewport);
       window.visualViewport.addEventListener('scroll', onViewport);
     }
-    window.addEventListener('resize', onViewport);
+    window.addEventListener('resize', () => {
+      captureViewportBaseline();
+      onViewport();
+    });
+    document.addEventListener('focusin', (e) => {
+      if (!isTextField(e.target)) return;
+      document.body.classList.add('field-focused', 'keyboard-open');
+      syncKeyboardLayout();
+      if (e.target.id === 'ordersPromoInput' || e.target.id === 'bonusInput') {
+        ensureFieldAboveKeyboard(e.target);
+      }
+    });
+    document.addEventListener('focusout', () => {
+      clearTimeout(bindKeyboardAwareLayout._blurT);
+      bindKeyboardAwareLayout._blurT = setTimeout(() => {
+        if (isTextField(document.activeElement)) return;
+        document.body.classList.remove('field-focused');
+        syncKeyboardLayout();
+      }, 80);
+    });
+    bindDismissKeyboardOnOutsideTap();
     syncKeyboardLayout();
   }
 
   function focusBonusField() {
+    document.body.classList.add('field-focused', 'keyboard-open');
     els.sheet?.classList.add('sheet-compact');
     syncKeyboardLayout();
     // Scroll bonus row into the visible sheet area above action buttons
@@ -333,6 +523,17 @@
   }
 
   function blurBonusField() {
+    // Clamp over-limit bonus and tell the user — don't silently spend "all available"
+    if (state.selected && els.bonusInput && !els.bonusRow?.hidden) {
+      const price = Number(state.selected.price) || 0;
+      const { maxBonus, raw, overLimit, message } = resolveBonusInput(price, { clampInput: true });
+      if (overLimit) {
+        showToast(message);
+        haptic('heavy');
+      }
+      state.bonusToUse = Math.min(raw, maxBonus);
+      updateSheetTotal();
+    }
     // Delay so we don't flicker if focus moves briefly
     setTimeout(() => {
       if (document.activeElement === els.bonusInput) return;
@@ -341,6 +542,29 @@
       }
       syncKeyboardLayout();
     }, 180);
+  }
+
+  function resolveBonusInput(price, { clampInput = false } = {}) {
+    const balance = Math.max(0, Number(state.bonusBalance) || 0);
+    const percentCap = Math.floor(price * (state.maxBonusUsage / 100));
+    const maxBonus = Math.min(balance, percentCap);
+    const raw = Math.max(0, Number(els.bonusInput?.value) || 0);
+    const overLimit = raw > maxBonus;
+    let message = '';
+    if (overLimit) {
+      if (raw > balance) {
+        message = `Недостаточно бонусов. У вас ${balance}`;
+      } else {
+        message = `Можно списать не больше ${maxBonus} (до ${state.maxBonusUsage}% от суммы)`;
+      }
+    }
+    if (clampInput && els.bonusInput) {
+      els.bonusInput.value = String(Math.min(raw, maxBonus));
+    }
+    if (els.bonusInput) {
+      els.bonusInput.classList.toggle('is-invalid', overLimit && !clampInput);
+    }
+    return { maxBonus, balance, percentCap, raw, overLimit, message };
   }
 
   function sleep(ms) {
@@ -528,14 +752,17 @@
     return JSON.stringify({ initData: tg?.initData || '', ...extra });
   }
 
-  async function refreshAdminOrders() {
+  async function refreshAdminOrders({ silent = false } = {}) {
     if (!isAdminUser()) return;
     if (!els.adminOrdersList) return;
     if (!tg?.initData) {
       els.adminOrdersList.innerHTML = '<div class="empty-state">Нет Telegram-сессии — откройте из бота</div>';
       return;
     }
-    els.adminOrdersList.innerHTML = '<div class="empty-state">Загрузка заказов…</div>';
+    const hasCards = Boolean(els.adminOrdersList.querySelector('.order-card'));
+    if (!silent && !hasCards) {
+      els.adminOrdersList.innerHTML = '<div class="empty-state">Загрузка заказов…</div>';
+    }
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/admin/orders`, {
         method: 'POST',
@@ -547,7 +774,9 @@
       renderAdminOrders(data.orders || []);
     } catch (err) {
       console.warn(err);
-      els.adminOrdersList.innerHTML = `<div class="empty-state">${escapeHtml(err.message || 'Не удалось загрузить')}</div>`;
+      if (!hasCards) {
+        els.adminOrdersList.innerHTML = `<div class="empty-state">${escapeHtml(err.message || 'Не удалось загрузить')}</div>`;
+      }
     }
   }
 
@@ -862,8 +1091,10 @@
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Не удалось удалить');
-      showToast('Счёт удалён');
+      const n = Number(data.cancelledOrders) || 0;
+      showToast(n > 0 ? `Счёт удалён · заказов отменено: ${n}` : 'Счёт удалён');
       refreshAdminBills();
+      // Guest "Мои заказы" may be open on another device — local admin list is enough here
     } catch (err) {
       showToast(err.message || 'Ошибка');
     }
@@ -1346,9 +1577,12 @@
       const stopped = data.stoplist?.added
         ? ` · в стоп: ${data.stoplist.names.slice(0, 3).join(', ')}${data.stoplist.added > 3 ? '…' : ''}`
         : '';
-      showToast(`${item.name}: ${stock}${item.unit ? ' ' + item.unit : ''}${stopped}`);
+      const restored = data.stoplist?.removed
+        ? ` · из стопа: ${data.stoplist.restored.slice(0, 3).join(', ')}${data.stoplist.removed > 3 ? '…' : ''}`
+        : '';
+      showToast(`${item.name}: ${stock}${item.unit ? ' ' + item.unit : ''}${stopped}${restored}`);
       await refreshAdminPurchases();
-      if (data.stoplist?.added) {
+      if (data.stoplist?.added || data.stoplist?.removed) {
         refreshAdminStoplist().catch(() => {});
         refreshStoplistFromApi().catch(() => {});
       }
@@ -1383,9 +1617,21 @@
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Ошибка');
-      showToast(ingredient.id ? 'Изменения сохранены' : 'Ингредиент добавлен');
+      const stopped = data.stoplist?.added
+        ? ` · в стоп: ${(data.stoplist.names || []).slice(0, 3).join(', ')}`
+        : '';
+      const restored = data.stoplist?.removed
+        ? ` · из стопа: ${(data.stoplist.restored || []).slice(0, 3).join(', ')}`
+        : '';
+      showToast(
+        (ingredient.id ? 'Изменения сохранены' : 'Ингредиент добавлен') + stopped + restored
+      );
       resetIngredientForm();
       refreshAdminPurchases();
+      if (data.stoplist?.added || data.stoplist?.removed) {
+        refreshAdminStoplist().catch(() => {});
+        refreshStoplistFromApi().catch(() => {});
+      }
     } catch (err) {
       showToast(err.message || 'Ошибка');
     }
@@ -1539,7 +1785,7 @@
     if (state.adminOrdersTimer) clearInterval(state.adminOrdersTimer);
     state.adminOrdersTimer = setInterval(() => {
       if (document.querySelector('.view.active')?.dataset.view === 'admin' && state.adminTab === 'orders') {
-        refreshAdminOrders();
+        refreshAdminOrders({ silent: true });
       }
     }, 5000);
   }
@@ -1572,14 +1818,566 @@
       state.openBillTotal == null ? '—' : `${state.openBillTotal} ₽`;
     renderProfileBillItems();
     renderProfileBillHistory();
-    if (els.profilePromoHint) {
-      if (state.openBillPromo?.code) {
-        els.profilePromoHint.hidden = false;
-        els.profilePromoHint.textContent =
-          `Промокод ${state.openBillPromo.code} (−${state.openBillPromo.discount || 0}%)`;
+    syncOrdersPromoUI();
+    syncWheelCardUI();
+  }
+
+  function formatWheelCountdown(ms) {
+    const totalSec = Math.max(0, Math.ceil(ms / 1000));
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    if (h > 0) return `${h} ч ${m} мин`;
+    if (m > 0) return `${m} мин`;
+    return `${totalSec} сек`;
+  }
+
+  function syncWheelCardUI() {
+    if (!els.wheelCardStatus) return;
+    const saved = getActiveWheelPromo();
+    if (!wheelState.active) {
+      els.wheelCardStatus.textContent = 'Колесо временно выключено';
+      if (els.wheelOpenBtn) els.wheelOpenBtn.disabled = true;
+      return;
+    }
+    if (saved?.code) {
+      const disc = saved.discount ? ` −${saved.discount}%` : '';
+      els.wheelCardStatus.textContent = `Промокод ${saved.code}${disc}`;
+      if (els.wheelOpenBtn) {
+        els.wheelOpenBtn.disabled = false;
+        els.wheelOpenBtn.textContent = wheelState.canSpin ? 'Крутить' : 'Открыть';
+      }
+      return;
+    }
+    if (wheelState.canSpin) {
+      els.wheelCardStatus.textContent = 'Можно крутить — бонусы и скидки';
+      if (els.wheelOpenBtn) {
+        els.wheelOpenBtn.disabled = false;
+        els.wheelOpenBtn.textContent = 'Крутить';
+      }
+      return;
+    }
+    const left = (wheelState.nextSpinAt || 0) - Date.now();
+    if (left > 0) {
+      els.wheelCardStatus.textContent = `Следующая попытка через ${formatWheelCountdown(left)}`;
+      if (els.wheelOpenBtn) {
+        els.wheelOpenBtn.disabled = false;
+        els.wheelOpenBtn.textContent = 'Смотреть';
+      }
+    } else {
+      els.wheelCardStatus.textContent = 'Раз в сутки — бонусы и скидки';
+      if (els.wheelOpenBtn) {
+        els.wheelOpenBtn.disabled = false;
+        els.wheelOpenBtn.textContent = 'Крутить';
+      }
+    }
+  }
+
+  function getActiveWheelPromo() {
+    const list = Array.isArray(wheelState.myPromos) ? wheelState.myPromos : [];
+    if (list.length) return list[0];
+    // After server status: empty myPromos means no unused promo (don't revive used lastPrize)
+    if (wheelState.promosLoaded) return null;
+    const last = wheelState.lastPrize;
+    if (last?.promoCode) {
+      return {
+        code: last.promoCode,
+        discount: Number(last.value) || Number(last.discount) || 0,
+        description: last.description || ''
+      };
+    }
+    try {
+      const raw = localStorage.getItem('asafiev_wheel_promo_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.code) return parsed;
+      }
+    } catch (_) { /* ignore */ }
+    return null;
+  }
+
+  function rememberWheelPromo(promo) {
+    if (!promo?.code) return;
+    try {
+      localStorage.setItem('asafiev_wheel_promo_v1', JSON.stringify({
+        code: promo.code,
+        discount: Number(promo.discount) || 0,
+        description: promo.description || ''
+      }));
+    } catch (_) { /* ignore */ }
+  }
+
+  function clearRememberedWheelPromo(code) {
+    try {
+      const raw = localStorage.getItem('asafiev_wheel_promo_v1');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!code || parsed?.code === code) localStorage.removeItem('asafiev_wheel_promo_v1');
+    } catch (_) { /* ignore */ }
+  }
+
+  async function copyText(value) {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (_) { /* fall through */ }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function syncPromoVaultUI() {
+    const promo = getActiveWheelPromo();
+    if (!els.promoVault) return;
+    if (!promo?.code) {
+      els.promoVault.hidden = true;
+      return;
+    }
+    els.promoVault.hidden = false;
+    if (els.promoVaultCode) els.promoVaultCode.textContent = promo.code;
+    if (els.promoVaultDisc) {
+      els.promoVaultDisc.textContent = promo.discount ? `−${promo.discount}%` : '';
+    }
+    if (els.promoVaultHint) {
+      els.promoVaultHint.textContent = 'Действует 7 дней · примените во вкладке Заказы';
+    }
+    // Prefill orders field when empty
+    if (els.ordersPromoInput && !els.ordersPromoInput.value.trim()) {
+      els.ordersPromoInput.value = promo.code;
+    }
+  }
+
+  function showWheelPrizeResult(prize, { showCopy = true } = {}) {
+    if (!els.wheelResult || !prize) {
+      if (els.wheelResult) els.wheelResult.hidden = true;
+      if (els.wheelCopyPromoBtn) els.wheelCopyPromoBtn.hidden = true;
+      if (els.wheelResultCode) {
+        els.wheelResultCode.hidden = true;
+        els.wheelResultCode.textContent = '';
+      }
+      return;
+    }
+    els.wheelResult.hidden = false;
+    const isPromo = Boolean(prize.promoCode) && prize.type !== 'bonus' && prize.type !== 'nothing';
+    let title = prize.name || 'Готово';
+    let desc = prize.description || '';
+    if (isPromo) {
+      title = prize.name || `Скидка ${prize.value || ''}%`;
+      desc = 'Сохранён в Профиле · примените во вкладке Заказы';
+    } else if (prize.type === 'nothing') {
+      desc = 'Загляните завтра — удача любит упорных';
+    }
+    if (els.wheelResultTitle) els.wheelResultTitle.textContent = title;
+    if (els.wheelResultCode) {
+      if (isPromo) {
+        els.wheelResultCode.hidden = false;
+        els.wheelResultCode.textContent = prize.promoCode;
       } else {
-        els.profilePromoHint.hidden = true;
-        els.profilePromoHint.textContent = '';
+        els.wheelResultCode.hidden = true;
+        els.wheelResultCode.textContent = '';
+      }
+    }
+    if (els.wheelResultDesc) els.wheelResultDesc.textContent = desc;
+    if (els.wheelCopyPromoBtn) {
+      const canCopy = showCopy && isPromo;
+      els.wheelCopyPromoBtn.hidden = !canCopy;
+      els.wheelCopyPromoBtn.dataset.code = isPromo ? (prize.promoCode || '') : '';
+    }
+  }
+
+  /** Show last spin result only — unused vault promos stay on the profile card. */
+  function syncWheelResultFromState() {
+    if (wheelState.spinning) return;
+    const last = wheelState.lastPrize;
+    if (!last) {
+      showWheelPrizeResult(null);
+      return;
+    }
+    showWheelPrizeResult(last);
+  }
+
+  async function refreshWheelStatus() {
+    if (!canOrder()) return;
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/wheel/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData: tg.initData })
+      });
+      const data = await res.json();
+      if (!data.success) return;
+      wheelState.active = data.active !== false;
+      wheelState.canSpin = Boolean(data.canSpin);
+      wheelState.nextSpinAt = data.nextSpinAt || null;
+      wheelState.prizes = Array.isArray(data.prizes) ? data.prizes : [];
+      wheelState.lastPrize = data.lastPrize || null;
+      wheelState.myPromos = Array.isArray(data.myPromos) ? data.myPromos : [];
+      wheelState.promosLoaded = true;
+      if (wheelState.myPromos[0]) rememberWheelPromo(wheelState.myPromos[0]);
+      else clearRememberedWheelPromo();
+      syncWheelCardUI();
+      syncPromoVaultUI();
+      if (els.wheelSheet?.classList.contains('open')) {
+        drawWheel();
+        updateWheelSheetChrome();
+        syncWheelResultFromState();
+      }
+    } catch (err) {
+      console.warn('wheel status', err);
+    }
+  }
+
+  function updateWheelSheetChrome() {
+    if (els.wheelSheetSub) {
+      if (!wheelState.active) els.wheelSheetSub.textContent = 'Колесо выключено';
+      else if (wheelState.canSpin) els.wheelSheetSub.textContent = '1 крутка = раз в сутки';
+      else if (wheelState.nextSpinAt) {
+        const left = wheelState.nextSpinAt - Date.now();
+        els.wheelSheetSub.textContent = left > 0
+          ? `Следующая крутка через ${formatWheelCountdown(left)}`
+          : '1 крутка = раз в сутки';
+      } else els.wheelSheetSub.textContent = '1 крутка = раз в сутки';
+    }
+    const blocked = wheelState.spinning || !wheelState.canSpin || !wheelState.active;
+    if (els.wheelSpinBtn) {
+      els.wheelSpinBtn.disabled = blocked;
+      els.wheelSpinBtn.textContent = wheelState.canSpin ? 'Крутить' : 'Уже крутили сегодня';
+    }
+    if (els.wheelHubBtn) els.wheelHubBtn.disabled = blocked;
+    if (els.wheelHint) {
+      if (!wheelState.active) els.wheelHint.textContent = 'Колесо временно недоступно';
+      else if (!wheelState.canSpin && wheelState.nextSpinAt) {
+        const left = wheelState.nextSpinAt - Date.now();
+        els.wheelHint.textContent = left > 0 ? `Подождите ${formatWheelCountdown(left)}` : '';
+      } else {
+        els.wheelHint.textContent = '';
+      }
+    }
+  }
+
+  function wheelShortLabel(prize) {
+    if (prize?.short) return String(prize.short);
+    if (prize?.type === 'bonus') return `+${prize.value}`;
+    if (prize?.type === 'promo') return `−${prize.value}%`;
+    if (prize?.type === 'nothing') return '—';
+    const name = String(prize?.name || '');
+    return name.length > 10 ? `${name.slice(0, 9)}…` : name;
+  }
+
+  function ensureWheelCtx() {
+    if (!els.wheelCanvas) return null;
+    if (!wheelState.ctx) wheelState.ctx = els.wheelCanvas.getContext('2d');
+    return wheelState.ctx;
+  }
+
+  function drawWheel() {
+    const ctx = ensureWheelCtx();
+    const canvas = els.wheelCanvas;
+    if (!ctx || !canvas) return;
+    const prizes = wheelState.prizes.length ? wheelState.prizes : [
+      { name: '…', short: '…' }
+    ];
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const size = 360;
+    if (canvas.width !== size * dpr) {
+      canvas.width = size * dpr;
+      canvas.height = size * dpr;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+
+    const cx = size / 2;
+    const cy = size / 2;
+    const radius = size / 2 - 14;
+    const n = prizes.length;
+    const slice = (Math.PI * 2) / n;
+    // Strict bar palette — ignore flashy Firestore colors
+    const tones = ['#241c16', '#2e251e', '#382e25', '#43362c'];
+
+    // Outer matte ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + 8, 0, Math.PI * 2);
+    ctx.fillStyle = '#1a1511';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(212, 163, 92, 0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    prizes.forEach((prize, i) => {
+      const start = -Math.PI / 2 + wheelState.rotation + i * slice;
+      const end = start + slice;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, radius, start, end);
+      ctx.closePath();
+      ctx.fillStyle = tones[i % tones.length];
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(212, 163, 92, 0.18)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(start + slice / 2);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = i % 2 === 0 ? '#e8dcc8' : '#d4a35c';
+      ctx.shadowColor = 'transparent';
+      const fontSize = n > 10 ? 11 : 12;
+      ctx.font = `600 ${fontSize}px Sora, sans-serif`;
+      ctx.fillText(wheelShortLabel(prize), radius * 0.64, 0);
+      ctx.restore();
+    });
+
+    // Thin gold rim
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(212, 163, 92, 0.55)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Subtle divider ticks (not carnival pegs)
+    for (let i = 0; i < n; i += 1) {
+      const a = -Math.PI / 2 + wheelState.rotation + i * slice;
+      const x1 = cx + Math.cos(a) * (radius - 2);
+      const y1 = cy + Math.sin(a) * (radius - 2);
+      const x2 = cx + Math.cos(a) * (radius + 2);
+      const y2 = cy + Math.sin(a) * (radius + 2);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = 'rgba(212, 163, 92, 0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    // Hub recess (HTML button sits on top)
+    ctx.beginPath();
+    ctx.arc(cx, cy, 38, 0, Math.PI * 2);
+    ctx.fillStyle = '#14110f';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(212, 163, 92, 0.28)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  function prizeTierMeta(probability) {
+    const p = Number(probability) || 0;
+    if (p >= 15) return { tier: 'C', label: 'частые призы', frequent: true };
+    if (p >= 10) return { tier: 'B', label: 'редкие призы', frequent: false };
+    return { tier: 'A', label: 'очень редкие', frequent: false };
+  }
+
+  function renderWheelCatalog() {
+    const box = els.wheelPrizeCatalog;
+    if (!box) return;
+    const prizes = [...(wheelState.prizes || [])].sort(
+      (a, b) => (Number(b.probability) || 0) - (Number(a.probability) || 0)
+    );
+    if (!prizes.length) {
+      box.innerHTML = '<div class="empty-state">Призы ещё не загружены</div>';
+      return;
+    }
+    const groups = { C: [], B: [], A: [] };
+    prizes.forEach((prize) => {
+      const meta = prizeTierMeta(prize.probability);
+      groups[meta.tier].push({ prize, meta });
+    });
+    box.innerHTML = ['C', 'B', 'A'].map((tier) => {
+      const items = groups[tier];
+      if (!items.length) return '';
+      const label = items[0].meta.label;
+      return `
+        <div class="wheel-tier">
+          <span class="wheel-tier-badge">ТИР ${tier}</span>
+          <span class="wheel-tier-label">${escapeHtml(label)}</span>
+        </div>
+        ${items.map(({ prize, meta }) => `
+          <article class="wheel-prize-card">
+            <div class="wheel-prize-ico">${escapeHtml(prize.icon || wheelShortLabel(prize))}</div>
+            <div class="wheel-prize-copy">
+              <p class="wheel-prize-name">${escapeHtml(prize.name || '')}</p>
+              <p class="wheel-prize-desc">${escapeHtml(prize.description || '')}</p>
+            </div>
+            ${meta.frequent ? '<span class="wheel-prize-freq">Часто</span>' : ''}
+          </article>
+        `).join('')}
+      `;
+    }).join('');
+  }
+
+  function showWheelMainPane() {
+    if (els.wheelMainPane) els.wheelMainPane.hidden = false;
+    if (els.wheelInsidePane) els.wheelInsidePane.hidden = true;
+  }
+
+  function showWheelInsidePane() {
+    renderWheelCatalog();
+    if (els.wheelMainPane) els.wheelMainPane.hidden = true;
+    if (els.wheelInsidePane) els.wheelInsidePane.hidden = false;
+    haptic('light');
+  }
+
+  function openWheelSheet() {
+    if (!canOrder()) {
+      showToast('Нужна авторизация');
+      return;
+    }
+    closeOrderSheet();
+    closeRatingSheet({ dismiss: false });
+    showWheelMainPane();
+    syncWheelResultFromState();
+    els.wheelBackdrop.hidden = false;
+    els.wheelSheet.classList.add('open');
+    els.wheelSheet.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('sheet-open');
+    updateWheelSheetChrome();
+    drawWheel();
+    refreshWheelStatus().then(() => {
+      drawWheel();
+      updateWheelSheetChrome();
+      syncWheelResultFromState();
+    });
+    haptic('light');
+  }
+
+  function closeWheelSheet() {
+    if (wheelState.spinning) return;
+    els.wheelSheet?.classList.remove('open');
+    els.wheelSheet?.setAttribute('aria-hidden', 'true');
+    if (els.wheelBackdrop) els.wheelBackdrop.hidden = true;
+    showWheelMainPane();
+    if (!els.sheet?.classList.contains('open') && !els.ratingSheet?.classList.contains('open')) {
+      document.body.classList.remove('sheet-open');
+    }
+  }
+
+  function animateWheelToIndex(prizeIndex) {
+    return new Promise((resolve) => {
+      const n = Math.max(1, wheelState.prizes.length);
+      const slice = (Math.PI * 2) / n;
+      // Segment center under top pointer (−π/2): rotation + i*slice + slice/2 ≡ 0 (mod 2π)
+      const targetMod = (-(prizeIndex * slice + slice / 2) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+      const currentMod = ((wheelState.rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      let delta = targetMod - currentMod;
+      if (delta <= 0) delta += Math.PI * 2;
+      const extraTurns = 5 + Math.floor(Math.random() * 3);
+      const totalDelta = delta + extraTurns * Math.PI * 2;
+      const start = wheelState.rotation;
+      const duration = 4200;
+      const t0 = performance.now();
+
+      const tick = (now) => {
+        const p = Math.min(1, (now - t0) / duration);
+        const ease = 1 - Math.pow(1 - p, 3);
+        wheelState.rotation = start + totalDelta * ease;
+        drawWheel();
+        if (p < 1) requestAnimationFrame(tick);
+        else resolve();
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+
+  async function spinWheel() {
+    if (wheelState.spinning || !wheelState.canSpin || !canOrder()) return;
+    wheelState.spinning = true;
+    if (els.wheelResult) els.wheelResult.hidden = true;
+    updateWheelSheetChrome();
+    if (els.wheelSpinBtn) els.wheelSpinBtn.disabled = true;
+    haptic('medium');
+
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/wheel/spin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData: tg.initData })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Не удалось крутить');
+
+      const prizeIndex = Number(data.prizeIndex) || 0;
+      await animateWheelToIndex(prizeIndex);
+
+      const prize = data.prize || {};
+      wheelState.canSpin = false;
+      wheelState.nextSpinAt = data.nextSpinAt || (Date.now() + 24 * 3600 * 1000);
+
+      if (typeof data.award?.balance === 'number') {
+        state.bonusBalance = data.award.balance;
+        state.totalEarned = (Number(state.totalEarned) || 0) + (Number(data.award.bonusAwarded) || 0);
+        updateProfileUI();
+      } else if (data.award?.bonusAwarded) {
+        state.bonusBalance = (Number(state.bonusBalance) || 0) + Number(data.award.bonusAwarded);
+        updateProfileUI();
+      }
+
+      wheelState.lastPrize = prize;
+      if (prize.promoCode) {
+        const promo = {
+          code: prize.promoCode,
+          discount: Number(data.award?.discount) || Number(prize.value) || 0,
+          description: prize.description || ''
+        };
+        wheelState.myPromos = [
+          promo,
+          ...(wheelState.myPromos || []).filter((p) => p.code !== promo.code)
+        ];
+        rememberWheelPromo(promo);
+      }
+      showWheelPrizeResult(prize);
+      syncPromoVaultUI();
+
+      if (prize.type === 'nothing') showToast('В этот раз без приза');
+      else if (prize.promoCode) showToast(`Промокод: ${prize.promoCode}`, 7000);
+      else if (data.award?.bonusAwarded) showToast(`+${data.award.bonusAwarded} бонусов`);
+      else showToast(prize.name || 'Приз получен');
+      haptic('heavy');
+      syncWheelCardUI();
+      updateWheelSheetChrome();
+    } catch (err) {
+      showToast(err.message || 'Ошибка колеса');
+      if (err.message?.includes('недоступно') || String(err).includes('429')) {
+        await refreshWheelStatus();
+      }
+    } finally {
+      wheelState.spinning = false;
+      updateWheelSheetChrome();
+    }
+  }
+
+  function syncOrdersPromoUI() {
+    const box = els.ordersPromoBox;
+    const hint = els.ordersPromoHint;
+    if (!box) return;
+    const hasOpenBill = (Array.isArray(state.openBillItems) && state.openBillItems.length > 0)
+      || (Number(state.openBillTotal) || 0) > 0;
+    const promoApplied = Boolean(state.openBillPromo?.code);
+    box.hidden = !hasOpenBill;
+    if (hint) {
+      if (promoApplied) {
+        hint.hidden = false;
+        hint.textContent =
+          `Промокод ${state.openBillPromo.code} (−${state.openBillPromo.discount || 0}%)`;
+        if (els.ordersPromoRow) els.ordersPromoRow.hidden = true;
+      } else {
+        hint.hidden = true;
+        hint.textContent = '';
+        if (els.ordersPromoRow) els.ordersPromoRow.hidden = false;
       }
     }
   }
@@ -1999,36 +2797,64 @@
   }
 
   function openRatingSheet(order) {
-    if (state.currentView === 'admin') return;
-    if (!order?.id || order.rated) return;
+    if (state.currentView === 'admin') return false;
+    if (!canShowRatingNow()) return false;
+    if (!order?.id || order.rated) return false;
+    if (wasRatingPrompted(order.id)) return false;
+    if (els.ratingSheet?.classList.contains('open')) return false;
+
+    markRatingPrompted(order.id);
+    state.pendingRatingOrders.delete(String(order.id));
     state.ratingOrder = order;
     state.ratingValue = 0;
-    if (order.id) state.promptedRatingOrders.add(order.id);
     if (els.ratingTitle) els.ratingTitle.textContent = `Оцените: ${order.name || 'коктейль'}`;
     if (els.ratingSubtitle) els.ratingSubtitle.textContent = 'Поставьте оценку от 1 до 5';
     els.ratingStars?.querySelectorAll('button').forEach((b) => b.classList.remove('is-on'));
-    if (els.ratingBackdrop) els.ratingBackdrop.hidden = false;
+
+    if (els.ratingBackdrop) {
+      els.ratingBackdrop.hidden = false;
+      els.ratingBackdrop.style.pointerEvents = 'none';
+      clearTimeout(openRatingSheet._backdropT);
+      openRatingSheet._backdropT = setTimeout(() => {
+        if (els.ratingSheet?.classList.contains('open') && els.ratingBackdrop) {
+          els.ratingBackdrop.style.pointerEvents = '';
+        }
+      }, 450);
+    }
     els.ratingSheet?.classList.add('open');
     els.ratingSheet?.setAttribute('aria-hidden', 'false');
+    return true;
   }
 
-  function closeRatingSheet() {
+  function closeRatingSheet({ dismiss = false } = {}) {
+    clearTimeout(openRatingSheet._backdropT);
+    clearTimeout(flushPendingRating._t);
+    if (dismiss && state.ratingOrder?.id) {
+      markRatingPrompted(state.ratingOrder.id);
+      state.pendingRatingOrders.delete(String(state.ratingOrder.id));
+    }
     state.ratingOrder = null;
     state.ratingValue = 0;
     els.ratingSheet?.classList.remove('open');
     els.ratingSheet?.setAttribute('aria-hidden', 'true');
-    if (els.ratingBackdrop) els.ratingBackdrop.hidden = true;
+    if (els.ratingBackdrop) {
+      els.ratingBackdrop.hidden = true;
+      els.ratingBackdrop.style.pointerEvents = '';
+    }
   }
 
   async function submitRating({ skip = false } = {}) {
     if (!state.ratingOrder?.id || !canOrder()) return;
+    const orderId = state.ratingOrder.id;
+    markRatingPrompted(orderId);
+    state.pendingRatingOrders.delete(String(orderId));
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/rate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           initData: tg.initData,
-          orderId: state.ratingOrder.id,
+          orderId,
           rating: state.ratingValue,
           skip
         })
@@ -2044,9 +2870,9 @@
     }
   }
 
-  async function applyProfilePromo() {
+  async function applyOrdersPromo() {
     if (!canOrder()) return;
-    const code = els.profilePromoInput?.value?.trim();
+    const code = els.ordersPromoInput?.value?.trim();
     if (!code) {
       showToast('Введите промокод');
       return;
@@ -2060,46 +2886,127 @@
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Промокод не применён');
       applyOpenBill(data);
-      if (els.profilePromoInput) els.profilePromoInput.value = '';
+      const usedCode = code.toUpperCase();
+      clearRememberedWheelPromo(usedCode);
+      wheelState.myPromos = (wheelState.myPromos || []).filter(
+        (p) => String(p.code || '').toUpperCase() !== usedCode
+      );
+      syncPromoVaultUI();
+      if (els.ordersPromoInput) els.ordersPromoInput.value = '';
+      dismissKeyboard();
       showToast(`Промокод −${data.promo?.discount || 0}%`);
       haptic('medium');
+      refreshOrders();
+      refreshWheelStatus();
     } catch (err) {
       showToast(err.message || 'Ошибка промокода');
     }
   }
 
+  function canShowRatingNow() {
+    return (
+      state.currentView === 'orders' &&
+      !state.placingOrder &&
+      !document.body.classList.contains('keyboard-open') &&
+      Date.now() >= (state.ratingQuietUntil || 0) &&
+      !els.sheet?.classList.contains('open') &&
+      !els.ratingSheet?.classList.contains('open') &&
+      !els.wheelSheet?.classList.contains('open')
+    );
+  }
+
+  function queueRatingCandidate(order) {
+    // Never queue while admin is working — avoids surprise popups later in-session
+    if (state.currentView === 'admin') return;
+    if (!order?.id || order.rated || wasRatingPrompted(order.id)) return;
+    if ((order.status || '') !== 'ready') return;
+    state.pendingRatingOrders.set(String(order.id), {
+      ...order,
+      status: 'ready',
+      readyAt: Date.now()
+    });
+  }
+
   function noteOrderStatusChanges(orders) {
     const list = Array.isArray(orders) ? orders : [];
     const kitchen = new Set(['pending', 'confirmed', 'preparing']);
-    const busy =
-      state.currentView === 'admin' ||
-      els.ratingSheet?.classList.contains('open') ||
-      els.sheet?.classList.contains('open');
+    let justBecameReady = null;
 
     list.forEach((order) => {
-      const id = order.id;
+      const id = String(order.id || '');
       const status = order.status || 'pending';
       if (!id) return;
       const prev = state.knownOrderStatuses.get(id);
-      if (prev && prev !== status) {
-        // Status toasts only on guest screens — don't interrupt admin work
-        if (state.currentView !== 'admin') {
+
+      // First time we see an order: seed only — never prompt for already-ready history
+      if (!prev) {
+        state.knownOrderStatuses.set(id, status);
+        return;
+      }
+
+      if (prev !== status) {
+        if (state.currentView !== 'admin' && !state.placingOrder) {
           showToast(`${order.name || 'Заказ'}: ${STATUS_LABELS[status] || status}`);
           haptic('light');
         }
         const becameReady = status === 'ready' && kitchen.has(prev);
-        if (
-          becameReady &&
-          !order.rated &&
-          !busy &&
-          !state.promptedRatingOrders.has(id)
-        ) {
-          state.promptedRatingOrders.add(id);
-          openRatingSheet(order);
+        if (becameReady && !order.rated && !wasRatingPrompted(id)) {
+          justBecameReady = { ...order, id, status: 'ready' };
+        }
+        if (status !== 'ready' || order.rated) {
+          state.pendingRatingOrders.delete(id);
         }
       }
+
       state.knownOrderStatuses.set(id, status);
     });
+
+    // Drop stale candidates (older than 15 min or no longer ready)
+    const now = Date.now();
+    for (const [id, cand] of state.pendingRatingOrders) {
+      const live = list.find((o) => String(o.id) === id);
+      if (!live || live.rated || live.status !== 'ready' || now - (cand.readyAt || 0) > 15 * 60 * 1000) {
+        state.pendingRatingOrders.delete(id);
+      }
+    }
+
+    if (!justBecameReady) return;
+
+    if (canShowRatingNow()) {
+      openRatingSheet(justBecameReady);
+    } else {
+      queueRatingCandidate(justBecameReady);
+    }
+  }
+
+  function flushPendingRating() {
+    clearTimeout(flushPendingRating._t);
+    if (!canShowRatingNow()) return;
+    if (!state.pendingRatingOrders?.size) return;
+
+    const now = Date.now();
+    let best = null;
+    for (const [id, order] of state.pendingRatingOrders) {
+      if (!order || order.rated || wasRatingPrompted(id)) {
+        state.pendingRatingOrders.delete(id);
+        continue;
+      }
+      if ((order.status || '') !== 'ready') {
+        state.pendingRatingOrders.delete(id);
+        continue;
+      }
+      if (now - (order.readyAt || 0) > 15 * 60 * 1000) {
+        state.pendingRatingOrders.delete(id);
+        continue;
+      }
+      if (!best || (order.readyAt || 0) > (best.readyAt || 0)) best = order;
+    }
+    if (best) openRatingSheet(best);
+  }
+
+  function scheduleRatingFlush(delayMs = 500) {
+    clearTimeout(flushPendingRating._t);
+    flushPendingRating._t = setTimeout(() => flushPendingRating(), delayMs);
   }
 
   function getCategory(cocktail) {
@@ -2137,9 +3044,12 @@
       return;
     }
 
+    closeWheelSheet();
     state.selected = cocktail;
     state.bonusToUse = 0;
     els.bonusInput.value = '0';
+    els.bonusInput.classList.remove('is-invalid');
+    updateSheetTotal._overWarned = false;
 
     els.sheetName.textContent = cocktail.name;
     els.sheetIngredients.textContent = cocktail.ingredients || 'Состав уточнит бармен';
@@ -2202,18 +3112,27 @@
     document.body.classList.remove('sheet-open');
     state.selected = null;
     syncKeyboardLayout();
+    // Do not flush rating here — same tap would open+dismiss the sheet
   }
 
   function updateSheetTotal() {
     if (!state.selected) return;
     const price = Number(state.selected.price) || 0;
-    const maxBonus = Math.min(
-      state.bonusBalance,
-      Math.floor(price * (state.maxBonusUsage / 100))
-    );
-    let bonus = Number(els.bonusInput.value) || 0;
-    bonus = Math.max(0, Math.min(bonus, maxBonus));
+    const { maxBonus, raw, overLimit, message } = resolveBonusInput(price);
+    const bonus = Math.min(raw, maxBonus);
     state.bonusToUse = bonus;
+    if (els.bonusInput) {
+      els.bonusInput.max = String(maxBonus);
+      els.bonusInput.classList.toggle('is-invalid', overLimit);
+    }
+    // Warn once when the typed value first exceeds the limit (not on every keystroke)
+    if (overLimit && !updateSheetTotal._overWarned) {
+      updateSheetTotal._overWarned = true;
+      showToast(message);
+      haptic('heavy');
+    } else if (!overLimit) {
+      updateSheetTotal._overWarned = false;
+    }
     const payable = Math.max(0, price - bonus);
     els.sheetTotal.textContent = `${payable} ₽`;
 
@@ -2271,35 +3190,30 @@
     }
   }
 
-  async function getNextQueuePosition() {
-    try {
-      const res = await fetch(`${state.apiBase}/queue-info`);
-      const data = await res.json();
-      const total = data?.queueInfo?.totalOrders ?? data?.totalOrders;
-      if (data?.success && typeof total === 'number') {
-        return total + 1;
-      }
-    } catch (_) { /* fallback below */ }
-
-    try {
-      const snap = await db
-        .collection('orders')
-        .where('status', 'in', ['pending', 'confirmed', 'preparing', 'ready'])
-        .get();
-      return snap.size + 1;
-    } catch (_) {
-      return 1;
-    }
-  }
-
   async function placeOrder() {
     if (!state.selected || !canOrder()) return;
+    if (state.placingOrder) return;
 
     const cocktail = state.selected;
     const price = Number(cocktail.price) || 0;
-    const bonusUsed = state.bonusToUse || 0;
+    const bonusCheck = resolveBonusInput(price);
+    if (bonusCheck.overLimit) {
+      showToast(bonusCheck.message);
+      haptic('heavy');
+      // Keep sheet open — user must fix the amount
+      if (els.bonusInput) {
+        els.bonusInput.focus();
+        els.bonusInput.select?.();
+      }
+      return;
+    }
+    const bonusUsed = Math.min(bonusCheck.raw, bonusCheck.maxBonus);
+    state.bonusToUse = bonusUsed;
     const finalPrice = Math.max(0, price - bonusUsed);
 
+    state.placingOrder = true;
+    state.ratingQuietUntil = Date.now() + 4000;
+    closeRatingSheet();
     els.confirmOrderBtn.disabled = true;
     wakeApi();
 
@@ -2378,7 +3292,7 @@
       } else {
         refreshProfile();
       }
-      refreshOrders();
+      await refreshOrders();
     } catch (err) {
       console.error(err);
       // Rollback optimistic bonus / bill
@@ -2392,7 +3306,10 @@
       showToast(err.name === 'AbortError' ? 'Сервер долго отвечает, попробуйте ещё раз' : (err.message || 'Ошибка заказа'));
       haptic('heavy');
     } finally {
+      state.placingOrder = false;
       els.confirmOrderBtn.disabled = false;
+      // Never auto-pop rating after placing — only when user is on Orders
+      // and a real ready transition happened (or visits Orders later).
     }
   }
 
@@ -2538,6 +3455,29 @@
     return card;
   }
 
+  function syncOpenBillFromOrders(bills) {
+    const list = Array.isArray(bills) ? bills : [];
+    const open = list.find((b) => b && b.status === 'open' && String(b.id) !== 'orphan');
+    if (!open) {
+      state.openBillPromo = null;
+      state.openBillTotal = 0;
+      state.openBillItems = [];
+      return;
+    }
+    if (typeof open.totalAmount === 'number') state.openBillTotal = open.totalAmount;
+    if (Array.isArray(open.items)) {
+      state.openBillItems = open.items.map((item) => ({
+        orderId: item.orderId,
+        cocktailName: item.cocktailName,
+        price: item.price,
+        status: item.status
+      }));
+    }
+    state.openBillPromo = open.promoCode
+      ? { code: open.promoCode, discount: open.discount || 0 }
+      : null;
+  }
+
   async function refreshOrders() {
     if (!canOrder()) return;
     try {
@@ -2549,8 +3489,11 @@
       const data = await res.json();
       if (data.success) {
         const orders = data.orders || [];
+        const bills = data.bills || [];
         noteOrderStatusChanges(orders);
-        renderOrders(orders, data.bills || []);
+        syncOpenBillFromOrders(bills);
+        renderOrders(orders, bills);
+        syncOrdersPromoUI();
       }
     } catch (err) {
       console.warn('orders refresh failed', err);
@@ -2570,6 +3513,7 @@
       state.bonusBalance = Number(data.bonusBalance) || 0;
       if (data.maxBonusUsage) state.maxBonusUsage = Number(data.maxBonusUsage) || 50;
       applyOpenBill(data);
+      refreshWheelStatus();
     } catch (err) {
       console.warn('profile refresh failed', err);
     }
@@ -2617,9 +3561,15 @@
       showToast('Нет прав админа');
       return;
     }
+    dismissKeyboard();
     state.currentView = name;
+    document.body.dataset.view = name;
     // Never interrupt admin with guest rating UI
-    if (name === 'admin') closeRatingSheet();
+    if (name === 'admin') {
+      closeRatingSheet({ dismiss: false });
+      state.pendingRatingOrders.clear();
+      clearTimeout(flushPendingRating._t);
+    }
     document.querySelectorAll('.view').forEach((v) => {
       v.classList.toggle('active', v.dataset.view === name);
     });
@@ -2633,9 +3583,12 @@
     }
     if (name === 'profile') {
       refreshProfile();
+      refreshWheelStatus();
     }
     if (name === 'orders') {
       refreshOrders();
+      // Only surface a queued "ready" rating when guest opens Orders
+      if (!state.placingOrder) scheduleRatingFlush(700);
     }
     haptic('light');
   }
@@ -2690,7 +3643,42 @@
     els.bonusInput.addEventListener('focus', focusBonusField);
     els.bonusInput.addEventListener('blur', blurBonusField);
     els.confirmOrderBtn.addEventListener('click', placeOrder);
-    els.profilePromoBtn?.addEventListener('click', applyProfilePromo);
+    els.ordersPromoBtn?.addEventListener('click', applyOrdersPromo);
+    els.ordersPromoInput?.addEventListener('focus', focusOrdersPromoField);
+    els.ordersPromoInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        dismissKeyboard();
+        applyOrdersPromo();
+      }
+    });
+    els.wheelOpenBtn?.addEventListener('click', openWheelSheet);
+    els.wheelCloseBtn?.addEventListener('click', closeWheelSheet);
+    els.wheelBackdrop?.addEventListener('click', closeWheelSheet);
+    els.wheelSpinBtn?.addEventListener('click', spinWheel);
+    els.wheelHubBtn?.addEventListener('click', spinWheel);
+    els.wheelInsideBtn?.addEventListener('click', showWheelInsidePane);
+    els.wheelInsideBackBtn?.addEventListener('click', showWheelMainPane);
+    els.wheelCopyPromoBtn?.addEventListener('click', async () => {
+      const code = els.wheelCopyPromoBtn.dataset.code;
+      if (!code) return;
+      const ok = await copyText(code);
+      showToast(ok ? `Скопировано: ${code}` : code);
+      haptic('light');
+    });
+    els.promoVaultCopyBtn?.addEventListener('click', async () => {
+      const promo = getActiveWheelPromo();
+      if (!promo?.code) return;
+      const ok = await copyText(promo.code);
+      showToast(ok ? `Скопировано: ${promo.code}` : promo.code);
+      haptic('light');
+    });
+    els.promoVaultUseBtn?.addEventListener('click', () => {
+      const promo = getActiveWheelPromo();
+      if (promo?.code && els.ordersPromoInput) els.ordersPromoInput.value = promo.code;
+      switchView('orders');
+      haptic('light');
+    });
     els.ratingSkipBtn?.addEventListener('click', () => submitRating({ skip: true }));
     els.ratingSubmitBtn?.addEventListener('click', () => {
       if (!state.ratingValue) {
@@ -2699,7 +3687,7 @@
       }
       submitRating();
     });
-    els.ratingBackdrop?.addEventListener('click', closeRatingSheet);
+    els.ratingBackdrop?.addEventListener('click', () => closeRatingSheet({ dismiss: true }));
     els.ratingStars?.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-star]');
       if (!btn) return;
@@ -2770,6 +3758,18 @@
       if (els.sheet.classList.contains('open')) closeOrderSheet();
       else switchView('menu');
     });
+
+    // Admin form fields: never let guest rating UI surface while typing
+    document.getElementById('view-admin')?.addEventListener('focusin', () => {
+      if (state.currentView === 'admin') closeRatingSheet({ dismiss: false });
+    });
+    document.getElementById('view-admin')?.addEventListener('focusout', () => {
+      if (state.currentView === 'admin') {
+        setTimeout(() => {
+          if (state.currentView === 'admin') closeRatingSheet({ dismiss: false });
+        }, 50);
+      }
+    });
   }
 
   async function waitForFirebase(timeoutMs = 8000) {
@@ -2789,35 +3789,51 @@
   }
 
   async function boot() {
-    bindUi();
-    initTelegram();
-    updateProfileUI();
-
-    // Instant paint from cache before network
-    const cached = readMenuCache();
-    if (cached?.cocktails?.length) {
-      applyMenuData(cached.cocktails, cached.stoplist || [], {
-        fromCache: true,
-        ratings: cached.ratings || {},
-        animate: true,
-        render: true
-      });
-    }
-
     try {
-      await waitForFirebase();
-      initFirebase();
-    } catch (err) {
-      console.error(err);
-      setAuthStatus('Не удалось загрузить SDK. Проверьте сеть.', { error: true });
-      if (!state.cocktails.length) {
-        els.menuGrid.innerHTML = '<div class="empty-state">Нет сети для загрузки меню</div>';
-      }
-      return;
-    }
+      document.body.dataset.view = state.currentView || 'menu';
+      bindUi();
+      initTelegram();
+      syncPromoVaultUI();
+      syncWheelCardUI();
+      updateProfileUI();
 
-    // Menu and auth in parallel — UI stays interactive
-    await Promise.all([loadMenu(), authenticate()]);
+      // Instant paint from cache before network
+      const cached = readMenuCache();
+      if (cached?.cocktails?.length) {
+        applyMenuData(cached.cocktails, cached.stoplist || [], {
+          fromCache: true,
+          ratings: cached.ratings || {},
+          animate: true,
+          render: true
+        });
+      }
+
+      try {
+        await waitForFirebase();
+        initFirebase();
+      } catch (err) {
+        console.error(err);
+        setAuthStatus('Не удалось загрузить SDK. Проверьте сеть.', { error: true });
+        if (!state.cocktails.length && els.menuGrid) {
+          els.menuGrid.innerHTML = '<div class="empty-state">Нет сети для загрузки меню</div>';
+        }
+        return;
+      }
+
+      // Menu and auth in parallel — UI stays interactive
+      await Promise.all([loadMenu(), authenticate()]);
+    } catch (err) {
+      console.error('boot failed', err);
+      try {
+        const grid = document.getElementById('menuGrid');
+        if (grid) {
+          grid.innerHTML = `<div class="empty-state">Не удалось открыть приложение.<br>${String(err?.message || err).slice(0, 120)}</div>`;
+        }
+        document.querySelectorAll('.view').forEach((v) => {
+          v.classList.toggle('active', v.dataset.view === 'menu');
+        });
+      } catch (_) { /* ignore */ }
+    }
   }
 
   boot();

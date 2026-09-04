@@ -13,18 +13,28 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://telegram.org">
-  <link rel="preload" href="app.css?v=r0904" as="style">
-  <link rel="stylesheet" href="app.css?v=r0904">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;600&display=swap" media="print" onload="this.media='all'">
-  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;600&display=swap"></noscript>
+  <link rel="preload" href="app.css?v=type1" as="style">
+  <link rel="stylesheet" href="app.css?v=type1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700&display=swap">
   <style id="critical-stop">
-    /* Inline so dimming works even if CSS cache lags */
     .cocktail.stopped {
       opacity: 0.45 !important;
       filter: grayscale(0.45) brightness(0.72);
     }
-    /* Kill legacy auth plaque if an old cached shell injects it */
     #authStatus, .info-panel#authStatus { display: none !important; }
+    .rating-sheet:not(.open),
+    .rating-sheet[aria-hidden='true'] {
+      visibility: hidden !important;
+      pointer-events: none !important;
+      transform: translateY(120%) !important;
+      bottom: 0 !important;
+    }
+    body[data-view='admin'] .rating-sheet,
+    body[data-view='admin'] #ratingBackdrop {
+      display: none !important;
+    }
   </style>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
@@ -68,6 +78,13 @@
     <section class="view" id="view-orders" data-view="orders">
       <h2 class="section-title">Мои заказы</h2>
       <p class="section-sub">Сгруппированы по счетам — нажмите, чтобы раскрыть.</p>
+      <div class="orders-promo" id="ordersPromoBox" hidden>
+        <div class="promo-row" id="ordersPromoRow">
+          <input id="ordersPromoInput" class="admin-input" type="text" placeholder="Промокод к счёту" maxlength="20" autocomplete="off" enterkeyhint="done" inputmode="text">
+          <button class="ghost" id="ordersPromoBtn" type="button">Применить</button>
+        </div>
+        <p class="order-time" id="ordersPromoHint" hidden></p>
+      </div>
       <div id="ordersList" class="orders-list">
         <div class="empty-state">Пока нет заказов</div>
       </div>
@@ -259,16 +276,31 @@
         </div>
       </div>
 
+      <div class="promo-vault" id="promoVault" hidden>
+        <p class="promo-vault-label">Ваш промокод с колеса</p>
+        <div class="promo-vault-row">
+          <strong id="promoVaultCode">—</strong>
+          <span class="promo-vault-disc" id="promoVaultDisc"></span>
+        </div>
+        <div class="promo-vault-actions">
+          <button class="ghost" id="promoVaultCopyBtn" type="button">Скопировать</button>
+          <button class="ghost" id="promoVaultUseBtn" type="button">К заказам</button>
+        </div>
+        <p class="order-time" id="promoVaultHint"></p>
+      </div>
+      <div class="wheel-card" id="wheelCard">
+        <div class="wheel-card-text">
+          <h3 class="wheel-card-title">Колесо удачи</h3>
+          <p class="wheel-card-sub" id="wheelCardStatus">Раз в сутки — бонусы и скидки</p>
+        </div>
+        <button class="cta wheel-card-btn" id="wheelOpenBtn" type="button">Крутить</button>
+      </div>
+
       <div class="bill-panel">
         <h3 class="bill-panel-title">В открытом счёте</h3>
         <div id="profileBillItems" class="bill-items">
           <div class="empty-state" id="profileBillEmpty">Пока нет позиций в счёте</div>
         </div>
-        <div class="promo-row" id="profilePromoRow">
-          <input id="profilePromoInput" class="admin-input" type="text" placeholder="Промокод" maxlength="20" autocomplete="off">
-          <button class="ghost" id="profilePromoBtn" type="button">Применить</button>
-        </div>
-        <p class="order-time" id="profilePromoHint" hidden></p>
       </div>
 
       <div class="bill-panel">
@@ -365,6 +397,49 @@
     </div>
   </aside>
 
+  <div class="sheet-backdrop" id="wheelBackdrop" hidden></div>
+  <aside class="sheet wheel-sheet" id="wheelSheet" aria-hidden="true">
+    <div class="sheet-scroll" id="wheelMainPane">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="wheel-head">
+        <h3 class="wheel-head-title">Колесо удачи</h3>
+        <p class="wheel-head-sub" id="wheelSheetSub">1 крутка = раз в сутки</p>
+      </div>
+      <div class="wheel-stage">
+        <div class="wheel-pointer" aria-hidden="true">
+          <svg viewBox="0 0 28 34" width="28" height="34" focusable="false">
+            <path d="M14 32 L2 14 H9 V2 H19 V14 H26 Z" fill="#d4a35c" stroke="#1a1208" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="wheel-disc">
+          <div class="wheel-glow" aria-hidden="true"></div>
+          <canvas id="wheelCanvas" width="360" height="360" aria-label="Колесо удачи"></canvas>
+          <button class="wheel-hub" id="wheelHubBtn" type="button" aria-label="Крутить">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M8 5.5v13l11-6.5L8 5.5z"/></svg>
+          </button>
+        </div>
+      </div>
+      <button class="wheel-inside-link" id="wheelInsideBtn" type="button">Что внутри колеса</button>
+      <div class="wheel-result" id="wheelResult" hidden>
+        <p class="wheel-result-title" id="wheelResultTitle"></p>
+        <p class="wheel-result-code" id="wheelResultCode" hidden></p>
+        <p class="order-time" id="wheelResultDesc"></p>
+        <button class="ghost" id="wheelCopyPromoBtn" type="button" hidden>Скопировать промокод</button>
+      </div>
+      <p class="wheel-hint" id="wheelHint"></p>
+    </div>
+    <div class="sheet-scroll wheel-inside-pane" id="wheelInsidePane" hidden>
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <button class="wheel-back-link" id="wheelInsideBackBtn" type="button">← Назад к колесу</button>
+      <h3 class="wheel-head-title">Что внутри колеса</h3>
+      <div id="wheelPrizeCatalog" class="wheel-catalog"></div>
+    </div>
+    <div class="sheet-actions">
+      <button class="cta wheel-spin-cta" id="wheelSpinBtn" type="button">Крутить</button>
+      <button class="ghost" id="wheelCloseBtn" type="button">Закрыть</button>
+    </div>
+  </aside>
+
   <div class="toast" id="toast" hidden></div>
   <div class="loader" id="loader" hidden>
     <div class="loader-ring"></div>
@@ -373,6 +448,6 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script defer src="app.js?v=r0904"></script>
+  <script defer src="app.js?v=type1"></script>
 </body>
 </html>
