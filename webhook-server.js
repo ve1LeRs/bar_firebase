@@ -1066,6 +1066,7 @@ async function updateOrderStatus(orderId, newStatus) {
     }
 
     const orderData = orderDoc.data();
+    const prevStatus = String(orderData.status || '');
 
     try {
       await orderRef.set({
@@ -1083,6 +1084,20 @@ async function updateOrderStatus(orderId, newStatus) {
       await syncBillItemStatusForOrder(orderIdTrimmed, newStatus, orderData);
     } catch (billSyncErr) {
       console.warn('⚠️ bill item sync failed:', billSyncErr?.message || billSyncErr);
+    }
+
+    // Return ingredients when admin cancels (not for already-served completed drinks)
+    if (
+      newStatus === 'cancelled'
+      && prevStatus !== 'cancelled'
+      && prevStatus !== 'completed'
+      && !orderData.ingredientsRestored
+    ) {
+      try {
+        await restoreIngredientsAdmin(orderData.name || orderData.cocktailName, orderIdTrimmed);
+      } catch (restoreErr) {
+        console.warn('⚠️ ingredient restore on cancel:', restoreErr?.message || restoreErr);
+      }
     }
 
     if (newStatus === 'completed' && orderData.queuePosition) {
@@ -1833,49 +1848,167 @@ async function spendBonusPointsAdmin(userId, amount, orderId) {
   });
 }
 
-async function deductIngredientsAdmin(cocktailName) {
+async function deductIngredientsAdmin(cocktailName, orderId = null) {
   try {
+    if (orderId) {
+      const orderSnap = await db.collection('orders').doc(String(orderId)).get();
+      if (!orderSnap.exists) return;
+      const od = orderSnap.data() || {};
+      if (od.status === 'cancelled' || od.ingredientsRestored || od.ingredientsDeducted === true) {
+        return;
+      }
+    }
+
     const cocktailsSnap = await db.collection('cocktails')
       .where('name', '==', cocktailName)
       .limit(1)
       .get();
-    if (cocktailsSnap.empty) return;
+    if (cocktailsSnap.empty) {
+      if (orderId) {
+        await db.collection('orders').doc(String(orderId)).set({
+          ingredientsDeducted: false
+        }, { merge: true });
+      }
+      return;
+    }
 
     const cocktail = cocktailsSnap.docs[0].data();
-    if (!Array.isArray(cocktail.stockRecipe) || cocktail.stockRecipe.length === 0) return;
+    if (!Array.isArray(cocktail.stockRecipe) || cocktail.stockRecipe.length === 0) {
+      if (orderId) {
+        await db.collection('orders').doc(String(orderId)).set({
+          ingredientsDeducted: false
+        }, { merge: true });
+      }
+      return;
+    }
 
     const ingredientsSnapshot = await db.collection('ingredients').get();
     const byName = new Map();
     ingredientsSnapshot.forEach((doc) => {
       const d = doc.data();
       const name = (d.name || '').trim();
-      if (name) byName.set(name, { id: doc.id, stock: Number(d.stock) || 0 });
+      if (name) byName.set(name.toLowerCase(), { id: doc.id, stock: Number(d.stock) || 0, name });
     });
 
     const batch = db.batch();
     let needsStoplist = false;
+    let changed = false;
 
     for (const item of cocktail.stockRecipe) {
       const ingName = (item.ingredientName || '').trim();
       const needed = Number(item.amount) || 0;
       if (!ingName || needed <= 0) continue;
-      const entry = byName.get(ingName);
+      const entry = byName.get(ingName.toLowerCase());
       if (!entry) continue;
       const next = Math.max(0, entry.stock - needed);
       batch.update(db.collection('ingredients').doc(entry.id), {
         stock: next,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });
+      entry.stock = next;
+      changed = true;
       if (next <= 0) needsStoplist = true;
     }
 
-    await batch.commit();
+    if (changed) await batch.commit();
+
+    if (orderId) {
+      await db.collection('orders').doc(String(orderId)).set({
+        ingredientsDeducted: changed
+      }, { merge: true });
+    }
 
     if (needsStoplist) {
       await ensureCocktailInStoplist(cocktailName, 'Недостаточно ингредиентов');
     }
   } catch (error) {
     console.error('⚠️ Mini App: не удалось списать ингредиенты:', error.message);
+  }
+}
+
+/** Return stockRecipe amounts after an order is cancelled (idempotent per order). */
+async function restoreIngredientsAdmin(cocktailName, orderId = null) {
+  const orderRef = orderId ? db.collection('orders').doc(String(orderId)) : null;
+  try {
+    if (orderRef) {
+      let shouldRestore = false;
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(orderRef);
+        if (!snap.exists) return;
+        const od = snap.data() || {};
+        if (od.ingredientsRestored) return;
+        // Back-compat: older orders have no flag but were deducted on create
+        if (od.ingredientsDeducted === false) return;
+        shouldRestore = true;
+        tx.set(orderRef, {
+          ingredientsRestored: true,
+          ingredientsRestoredAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
+      if (!shouldRestore) return { restored: false, reason: 'skip' };
+    }
+
+    const name = String(cocktailName || '').trim();
+    if (!name) return { restored: false, reason: 'no-name' };
+
+    const cocktailsSnap = await db.collection('cocktails')
+      .where('name', '==', name)
+      .limit(1)
+      .get();
+    if (cocktailsSnap.empty) return { restored: false, reason: 'cocktail-missing' };
+
+    const cocktail = cocktailsSnap.docs[0].data() || {};
+    const recipe = Array.isArray(cocktail.stockRecipe) ? cocktail.stockRecipe : [];
+    if (!recipe.length) return { restored: false, reason: 'no-recipe' };
+
+    const ingredientsSnapshot = await db.collection('ingredients').get();
+    const byName = new Map();
+    ingredientsSnapshot.forEach((doc) => {
+      const d = doc.data() || {};
+      const ingName = String(d.name || '').trim();
+      if (!ingName) return;
+      byName.set(ingName.toLowerCase(), { id: doc.id, stock: Number(d.stock) || 0, name: ingName });
+    });
+
+    const batch = db.batch();
+    const touched = [];
+    for (const item of recipe) {
+      const ingName = String(item.ingredientName || '').trim();
+      const amount = Number(item.amount) || 0;
+      if (!ingName || amount <= 0) continue;
+      const entry = byName.get(ingName.toLowerCase());
+      if (!entry) continue;
+      const next = entry.stock + amount;
+      batch.update(db.collection('ingredients').doc(entry.id), {
+        stock: next,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      entry.stock = next;
+      touched.push(entry.name);
+    }
+
+    if (touched.length) await batch.commit();
+
+    const uniqueIngs = [...new Set(touched)];
+    for (const ing of uniqueIngs) {
+      try {
+        await unstoplistCocktailsAfterRestock(ing);
+      } catch (err) {
+        console.warn('unstoplist after cancel restore:', err?.message || err);
+      }
+    }
+
+    console.log(`↩️ Ингредиенты возвращены после отмены «${name}»:`, uniqueIngs.join(', ') || '—');
+    return { restored: true, ingredients: uniqueIngs };
+  } catch (error) {
+    // Allow a later retry if stock write failed after the claim
+    if (orderRef) {
+      try {
+        await orderRef.set({ ingredientsRestored: false }, { merge: true });
+      } catch (_) { /* ignore */ }
+    }
+    console.error('⚠️ Mini App: не удалось вернуть ингредиенты:', error.message);
+    return { restored: false, reason: error.message };
   }
 }
 
@@ -2433,7 +2566,7 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       }))
     });
 
-    deductIngredientsAdmin(name).catch((e) => console.warn('deduct ingredients:', e.message));
+    deductIngredientsAdmin(name, orderRef.id).catch((e) => console.warn('deduct ingredients:', e.message));
 
     const message = formatOrderAlertHtml({
       mode: 'new',
@@ -2966,26 +3099,31 @@ app.post('/api/mini-app/admin/bills', async (req, res) => {
       // Cancel linked kitchen orders — otherwise they resurface as "Без счёта"
       let cancelledOrders = 0;
       try {
-        let batch = db.batch();
-        let ops = 0;
         for (const item of items) {
           const orderId = String(item.orderId || '').trim();
           if (!orderId) continue;
-          batch.set(db.collection('orders').doc(orderId), {
+          const orderRef = db.collection('orders').doc(orderId);
+          const orderDoc = await orderRef.get();
+          const prev = orderDoc.exists ? (orderDoc.data() || {}) : {};
+          const prevStatus = String(prev.status || item.status || '');
+
+          await orderRef.set({
             status: 'cancelled',
             cancelledReason: 'bill-deleted',
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedBy: `bill-delete:${session.userId}`
           }, { merge: true });
           cancelledOrders += 1;
-          ops += 1;
-          if (ops >= 400) {
-            await batch.commit();
-            batch = db.batch();
-            ops = 0;
+
+          if (
+            prevStatus !== 'cancelled'
+            && prevStatus !== 'completed'
+            && !prev.ingredientsRestored
+          ) {
+            const cocktailName = prev.name || prev.cocktailName || item.cocktailName || item.name;
+            await restoreIngredientsAdmin(cocktailName, orderId);
           }
         }
-        if (ops > 0) await batch.commit();
       } catch (orderSyncErr) {
         console.warn('⚠️ delete-bill order sync:', orderSyncErr?.message || orderSyncErr);
       }
