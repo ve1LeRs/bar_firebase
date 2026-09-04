@@ -188,7 +188,29 @@
     ratingSubmitBtn: document.getElementById('ratingSubmitBtn'),
     ratingSkipBtn: document.getElementById('ratingSkipBtn'),
     toast: document.getElementById('toast'),
-    loader: document.getElementById('loader')
+    loader: document.getElementById('loader'),
+    wheelCard: document.getElementById('wheelCard'),
+    wheelCardStatus: document.getElementById('wheelCardStatus'),
+    wheelOpenBtn: document.getElementById('wheelOpenBtn'),
+    wheelSheet: document.getElementById('wheelSheet'),
+    wheelBackdrop: document.getElementById('wheelBackdrop'),
+    wheelCanvas: document.getElementById('wheelCanvas'),
+    wheelSpinBtn: document.getElementById('wheelSpinBtn'),
+    wheelCloseBtn: document.getElementById('wheelCloseBtn'),
+    wheelSheetSub: document.getElementById('wheelSheetSub'),
+    wheelResult: document.getElementById('wheelResult'),
+    wheelResultTitle: document.getElementById('wheelResultTitle'),
+    wheelResultDesc: document.getElementById('wheelResultDesc')
+  };
+
+  const wheelState = {
+    prizes: [],
+    rotation: 0,
+    spinning: false,
+    canSpin: false,
+    nextSpinAt: null,
+    active: true,
+    ctx: null
   };
 
   function resolveApiBase() {
@@ -1698,6 +1720,287 @@
     renderProfileBillItems();
     renderProfileBillHistory();
     syncOrdersPromoUI();
+    syncWheelCardUI();
+  }
+
+  function formatWheelCountdown(ms) {
+    const totalSec = Math.max(0, Math.ceil(ms / 1000));
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    if (h > 0) return `${h} ч ${m} мин`;
+    if (m > 0) return `${m} мин`;
+    return `${totalSec} сек`;
+  }
+
+  function syncWheelCardUI() {
+    if (!els.wheelCardStatus) return;
+    if (!wheelState.active) {
+      els.wheelCardStatus.textContent = 'Колесо временно выключено';
+      if (els.wheelOpenBtn) els.wheelOpenBtn.disabled = true;
+      return;
+    }
+    if (wheelState.canSpin) {
+      els.wheelCardStatus.textContent = 'Можно крутить — бонусы и скидки';
+      if (els.wheelOpenBtn) {
+        els.wheelOpenBtn.disabled = false;
+        els.wheelOpenBtn.textContent = 'Крутить';
+      }
+      return;
+    }
+    const left = (wheelState.nextSpinAt || 0) - Date.now();
+    if (left > 0) {
+      els.wheelCardStatus.textContent = `Следующая попытка через ${formatWheelCountdown(left)}`;
+      if (els.wheelOpenBtn) {
+        els.wheelOpenBtn.disabled = false;
+        els.wheelOpenBtn.textContent = 'Смотреть';
+      }
+    } else {
+      els.wheelCardStatus.textContent = 'Раз в сутки — бонусы и скидки';
+      if (els.wheelOpenBtn) {
+        els.wheelOpenBtn.disabled = false;
+        els.wheelOpenBtn.textContent = 'Крутить';
+      }
+    }
+  }
+
+  async function refreshWheelStatus() {
+    if (!canOrder()) return;
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/wheel/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData: tg.initData })
+      });
+      const data = await res.json();
+      if (!data.success) return;
+      wheelState.active = data.active !== false;
+      wheelState.canSpin = Boolean(data.canSpin);
+      wheelState.nextSpinAt = data.nextSpinAt || null;
+      wheelState.prizes = Array.isArray(data.prizes) ? data.prizes : [];
+      syncWheelCardUI();
+      if (els.wheelSheet?.classList.contains('open')) {
+        drawWheel();
+        updateWheelSheetChrome();
+      }
+    } catch (err) {
+      console.warn('wheel status', err);
+    }
+  }
+
+  function updateWheelSheetChrome() {
+    if (els.wheelSheetSub) {
+      if (!wheelState.active) els.wheelSheetSub.textContent = 'Колесо выключено';
+      else if (wheelState.canSpin) els.wheelSheetSub.textContent = 'Крутите раз в сутки';
+      else if (wheelState.nextSpinAt) {
+        const left = wheelState.nextSpinAt - Date.now();
+        els.wheelSheetSub.textContent = left > 0
+          ? `Доступно через ${formatWheelCountdown(left)}`
+          : 'Крутите раз в сутки';
+      } else els.wheelSheetSub.textContent = 'Крутите раз в сутки';
+    }
+    if (els.wheelSpinBtn) {
+      els.wheelSpinBtn.disabled = wheelState.spinning || !wheelState.canSpin || !wheelState.active;
+      els.wheelSpinBtn.textContent = wheelState.canSpin ? 'Испытать удачу' : 'Уже крутили';
+    }
+  }
+
+  function ensureWheelCtx() {
+    if (!els.wheelCanvas) return null;
+    if (!wheelState.ctx) wheelState.ctx = els.wheelCanvas.getContext('2d');
+    return wheelState.ctx;
+  }
+
+  function drawWheel() {
+    const ctx = ensureWheelCtx();
+    const canvas = els.wheelCanvas;
+    if (!ctx || !canvas) return;
+    const prizes = wheelState.prizes.length ? wheelState.prizes : [
+      { name: '…', color: '#3a322c', icon: '★' }
+    ];
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const size = 320;
+    if (canvas.width !== size * dpr) {
+      canvas.width = size * dpr;
+      canvas.height = size * dpr;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+
+    const cx = size / 2;
+    const cy = size / 2;
+    const radius = size / 2 - 8;
+    const n = prizes.length;
+    const slice = (Math.PI * 2) / n;
+
+    prizes.forEach((prize, i) => {
+      const start = -Math.PI / 2 + wheelState.rotation + i * slice;
+      const end = start + slice;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, radius, start, end);
+      ctx.closePath();
+      ctx.fillStyle = prize.color || '#d4a35c';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(20, 14, 10, 0.55)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(start + slice / 2);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#fff8ef';
+      ctx.shadowColor = 'rgba(0,0,0,0.35)';
+      ctx.shadowBlur = 4;
+      ctx.font = '600 15px Sora, sans-serif';
+      const label = String(prize.name || '').slice(0, 14);
+      ctx.fillText(label, radius * 0.58, 0);
+      ctx.restore();
+    });
+
+    // Outer ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(212, 163, 92, 0.85)';
+    ctx.lineWidth = 5;
+    ctx.stroke();
+
+    // Hub
+    ctx.beginPath();
+    ctx.arc(cx, cy, 34, 0, Math.PI * 2);
+    ctx.fillStyle = '#1c1815';
+    ctx.fill();
+    ctx.strokeStyle = '#d4a35c';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.fillStyle = '#d4a35c';
+    ctx.font = '700 13px Fraunces, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('SPIN', cx, cy);
+  }
+
+  function openWheelSheet() {
+    if (!canOrder()) {
+      showToast('Нужна авторизация');
+      return;
+    }
+    closeOrderSheet();
+    closeRatingSheet({ dismiss: false });
+    if (els.wheelResult) els.wheelResult.hidden = true;
+    els.wheelBackdrop.hidden = false;
+    els.wheelSheet.classList.add('open');
+    els.wheelSheet.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('sheet-open');
+    updateWheelSheetChrome();
+    drawWheel();
+    refreshWheelStatus().then(() => {
+      drawWheel();
+      updateWheelSheetChrome();
+    });
+    haptic('light');
+  }
+
+  function closeWheelSheet() {
+    if (wheelState.spinning) return;
+    els.wheelSheet?.classList.remove('open');
+    els.wheelSheet?.setAttribute('aria-hidden', 'true');
+    if (els.wheelBackdrop) els.wheelBackdrop.hidden = true;
+    if (!els.sheet?.classList.contains('open') && !els.ratingSheet?.classList.contains('open')) {
+      document.body.classList.remove('sheet-open');
+    }
+  }
+
+  function animateWheelToIndex(prizeIndex) {
+    return new Promise((resolve) => {
+      const n = Math.max(1, wheelState.prizes.length);
+      const slice = (Math.PI * 2) / n;
+      // Segment center under top pointer (−π/2): rotation + i*slice + slice/2 ≡ 0 (mod 2π)
+      const targetMod = (-(prizeIndex * slice + slice / 2) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+      const currentMod = ((wheelState.rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      let delta = targetMod - currentMod;
+      if (delta <= 0) delta += Math.PI * 2;
+      const extraTurns = 5 + Math.floor(Math.random() * 3);
+      const totalDelta = delta + extraTurns * Math.PI * 2;
+      const start = wheelState.rotation;
+      const duration = 4200;
+      const t0 = performance.now();
+
+      const tick = (now) => {
+        const p = Math.min(1, (now - t0) / duration);
+        const ease = 1 - Math.pow(1 - p, 3);
+        wheelState.rotation = start + totalDelta * ease;
+        drawWheel();
+        if (p < 1) requestAnimationFrame(tick);
+        else resolve();
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+
+  async function spinWheel() {
+    if (wheelState.spinning || !wheelState.canSpin || !canOrder()) return;
+    wheelState.spinning = true;
+    if (els.wheelResult) els.wheelResult.hidden = true;
+    updateWheelSheetChrome();
+    if (els.wheelSpinBtn) els.wheelSpinBtn.disabled = true;
+    haptic('medium');
+
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/wheel/spin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData: tg.initData })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Не удалось крутить');
+
+      const prizeIndex = Number(data.prizeIndex) || 0;
+      await animateWheelToIndex(prizeIndex);
+
+      const prize = data.prize || {};
+      wheelState.canSpin = false;
+      wheelState.nextSpinAt = data.nextSpinAt || (Date.now() + 24 * 3600 * 1000);
+
+      if (typeof data.award?.balance === 'number') {
+        state.bonusBalance = data.award.balance;
+        state.totalEarned = (Number(state.totalEarned) || 0) + (Number(data.award.bonusAwarded) || 0);
+        updateProfileUI();
+      } else if (data.award?.bonusAwarded) {
+        state.bonusBalance = (Number(state.bonusBalance) || 0) + Number(data.award.bonusAwarded);
+        updateProfileUI();
+      }
+
+      if (els.wheelResult) {
+        els.wheelResult.hidden = false;
+        let title = prize.name || 'Готово';
+        let desc = prize.description || '';
+        if (prize.promoCode) {
+          desc = `Промокод ${prize.promoCode} — примените во вкладке Заказы`;
+        } else if (prize.type === 'nothing') {
+          desc = 'Загляните завтра — удача любит упорных';
+        }
+        if (els.wheelResultTitle) els.wheelResultTitle.textContent = title;
+        if (els.wheelResultDesc) els.wheelResultDesc.textContent = desc;
+      }
+
+      if (prize.type === 'nothing') showToast('В этот раз без приза');
+      else if (prize.promoCode) showToast(`Промокод: ${prize.promoCode}`);
+      else if (data.award?.bonusAwarded) showToast(`+${data.award.bonusAwarded} бонусов`);
+      else showToast(prize.name || 'Приз получен');
+      haptic('heavy');
+      syncWheelCardUI();
+      updateWheelSheetChrome();
+    } catch (err) {
+      showToast(err.message || 'Ошибка колеса');
+      if (err.message?.includes('недоступно') || String(err).includes('429')) {
+        await refreshWheelStatus();
+      }
+    } finally {
+      wheelState.spinning = false;
+      updateWheelSheetChrome();
+    }
   }
 
   function syncOrdersPromoUI() {
@@ -2242,7 +2545,8 @@
       !document.body.classList.contains('keyboard-open') &&
       Date.now() >= (state.ratingQuietUntil || 0) &&
       !els.sheet?.classList.contains('open') &&
-      !els.ratingSheet?.classList.contains('open')
+      !els.ratingSheet?.classList.contains('open') &&
+      !els.wheelSheet?.classList.contains('open')
     );
   }
 
@@ -2375,6 +2679,7 @@
       return;
     }
 
+    closeWheelSheet();
     state.selected = cocktail;
     state.bonusToUse = 0;
     els.bonusInput.value = '0';
@@ -2843,6 +3148,7 @@
       state.bonusBalance = Number(data.bonusBalance) || 0;
       if (data.maxBonusUsage) state.maxBonusUsage = Number(data.maxBonusUsage) || 50;
       applyOpenBill(data);
+      refreshWheelStatus();
     } catch (err) {
       console.warn('profile refresh failed', err);
     }
@@ -2911,6 +3217,7 @@
     }
     if (name === 'profile') {
       refreshProfile();
+      refreshWheelStatus();
     }
     if (name === 'orders') {
       refreshOrders();
@@ -2978,6 +3285,10 @@
         applyOrdersPromo();
       }
     });
+    els.wheelOpenBtn?.addEventListener('click', openWheelSheet);
+    els.wheelCloseBtn?.addEventListener('click', closeWheelSheet);
+    els.wheelBackdrop?.addEventListener('click', closeWheelSheet);
+    els.wheelSpinBtn?.addEventListener('click', spinWheel);
     els.ratingSkipBtn?.addEventListener('click', () => submitRating({ skip: true }));
     els.ratingSubmitBtn?.addEventListener('click', () => {
       if (!state.ratingValue) {

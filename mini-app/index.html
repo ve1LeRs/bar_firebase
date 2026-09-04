@@ -13,8 +13,8 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://telegram.org">
-  <link rel="preload" href="app.css?v=promo-ord1" as="style">
-  <link rel="stylesheet" href="app.css?v=promo-ord1">
+  <link rel="preload" href="app.css?v=wheel1" as="style">
+  <link rel="stylesheet" href="app.css?v=wheel1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700&display=swap">
@@ -276,6 +276,14 @@
         </div>
       </div>
 
+      <div class="wheel-card" id="wheelCard">
+        <div class="wheel-card-text">
+          <h3 class="wheel-card-title">Колесо удачи</h3>
+          <p class="wheel-card-sub" id="wheelCardStatus">Раз в сутки — бонусы и скидки</p>
+        </div>
+        <button class="cta wheel-card-btn" id="wheelOpenBtn" type="button">Крутить</button>
+      </div>
+
       <div class="bill-panel">
         <h3 class="bill-panel-title">В открытом счёте</h3>
         <div id="profileBillItems" class="bill-items">
@@ -377,6 +385,27 @@
     </div>
   </aside>
 
+  <div class="sheet-backdrop" id="wheelBackdrop" hidden></div>
+  <aside class="sheet wheel-sheet" id="wheelSheet" aria-hidden="true">
+    <div class="sheet-scroll">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <h3 class="section-title" style="margin-bottom:4px">Колесо удачи</h3>
+      <p class="section-sub" id="wheelSheetSub">Крутите раз в сутки</p>
+      <div class="wheel-stage">
+        <div class="wheel-pointer" aria-hidden="true"></div>
+        <canvas id="wheelCanvas" width="320" height="320" aria-label="Колесо удачи"></canvas>
+      </div>
+      <div class="wheel-result" id="wheelResult" hidden>
+        <p class="wheel-result-title" id="wheelResultTitle"></p>
+        <p class="order-time" id="wheelResultDesc"></p>
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button class="cta" id="wheelSpinBtn" type="button">Испытать удачу</button>
+      <button class="ghost" id="wheelCloseBtn" type="button">Закрыть</button>
+    </div>
+  </aside>
+
   <div class="toast" id="toast" hidden></div>
   <div class="loader" id="loader" hidden>
     <div class="loader-ring"></div>
@@ -385,6 +414,6 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script defer src="app.js?v=promo-ord1"></script>
+  <script defer src="app.js?v=wheel1"></script>
 </body>
 </html>

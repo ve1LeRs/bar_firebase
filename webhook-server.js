@@ -198,7 +198,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'promo-ord1';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'wheel1';
 
 function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
@@ -3093,6 +3093,261 @@ app.post('/api/mini-app/apply-promo', async (req, res) => {
       openBillTotal: newTotal
     });
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ─── Wheel of fortune ───────────────────────────────────────────────
+const DEFAULT_WHEEL_PRIZES = [
+  { id: 'bonus_50', name: '50 бонусов', description: '50 бонусов на счёт', type: 'bonus', value: 50, probability: 25, color: '#7cb89a', icon: '◆' },
+  { id: 'discount_10', name: 'Скидка 10%', description: 'Персональный промокод −10%', type: 'promo', value: 10, probability: 20, color: '#d4a35c', icon: '%' },
+  { id: 'bonus_100', name: '100 бонусов', description: '100 бонусов на счёт', type: 'bonus', value: 100, probability: 15, color: '#a56b2b', icon: '★' },
+  { id: 'bonus_20', name: '20 бонусов', description: '20 бонусов на счёт', type: 'bonus', value: 20, probability: 15, color: '#c4a574', icon: '✧' },
+  { id: 'discount_15', name: 'Скидка 15%', description: 'Персональный промокод −15%', type: 'promo', value: 15, probability: 10, color: '#e0b35c', icon: '✦' },
+  { id: 'bonus_150', name: '150 бонусов', description: '150 бонусов на счёт', type: 'bonus', value: 150, probability: 10, color: '#8f6a3a', icon: '❖' },
+  { id: 'nothing', name: 'Повезёт завтра', description: 'В этот раз без приза', type: 'nothing', value: 0, probability: 5, color: '#5a524a', icon: '·' }
+];
+
+async function ensureWheelPrizes() {
+  const snap = await db.collection('wheelPrizes').limit(1).get();
+  if (!snap.empty) {
+    const all = await db.collection('wheelPrizes').get();
+    return all.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((p) => p.active !== false)
+      .sort((a, b) => (Number(b.probability) || 0) - (Number(a.probability) || 0));
+  }
+  const batch = db.batch();
+  for (const prize of DEFAULT_WHEEL_PRIZES) {
+    batch.set(db.collection('wheelPrizes').doc(prize.id), {
+      ...prize,
+      active: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+  }
+  await batch.commit();
+  return DEFAULT_WHEEL_PRIZES.map((p) => ({ ...p, active: true }));
+}
+
+async function getWheelConfig() {
+  const doc = await db.collection('wheelConfig').doc('settings').get();
+  const data = doc.exists ? doc.data() : {};
+  return {
+    active: data.active !== false,
+    cooldownHours: Number(data.cooldownHours) || 24
+  };
+}
+
+function pickWheelPrize(prizes) {
+  const list = Array.isArray(prizes) ? prizes : [];
+  if (!list.length) return null;
+  const total = list.reduce((s, p) => s + (Number(p.probability) || 0), 0) || list.length;
+  let roll = Math.random() * total;
+  for (const prize of list) {
+    roll -= Number(prize.probability) || (total / list.length);
+    if (roll <= 0) return prize;
+  }
+  return list[list.length - 1];
+}
+
+async function creditBonusPoints(userId, points, meta = {}) {
+  const amount = Math.max(0, Math.floor(Number(points) || 0));
+  if (!userId || amount <= 0) return { awarded: 0 };
+  const bonusRef = db.collection('bonusAccounts').doc(userId);
+  let newBalance = amount;
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(bonusRef);
+    const prev = snap.exists ? snap.data() : {};
+    newBalance = (Number(prev.balance) || 0) + amount;
+    tx.set(bonusRef, {
+      userId,
+      balance: newBalance,
+      totalEarned: (Number(prev.totalEarned) || 0) + amount,
+      lastEarned: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+  await db.collection('bonusTransactions').add({
+    userId,
+    type: 'earn',
+    amount,
+    source: meta.source || 'wheel',
+    prizeId: meta.prizeId || null,
+    createdAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+  return { awarded: amount, balance: newBalance };
+}
+
+async function createWheelPromoForUser(userId, prize) {
+  const code = `WHEEL${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+  const discount = Math.max(1, Math.min(100, Number(prize.value) || 10));
+  await db.collection('promocodes').doc(code).set({
+    code,
+    discount,
+    description: prize.description || `Приз колеса: −${discount}%`,
+    active: true,
+    maxUses: 1,
+    usedCount: 0,
+    expiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    createdBy: 'wheel',
+    ownerUserId: userId,
+    createdAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+  return { code, discount };
+}
+
+function publicWheelPrize(prize) {
+  return {
+    id: prize.id,
+    name: prize.name,
+    description: prize.description || '',
+    type: prize.type,
+    value: Number(prize.value) || 0,
+    color: prize.color || '#d4a35c',
+    icon: prize.icon || '★',
+    probability: Number(prize.probability) || 0
+  };
+}
+
+app.post('/api/mini-app/wheel/status', async (req, res) => {
+  try {
+    const session = await resolveMiniAppUser(req);
+    if (!session.ok) return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
+
+    const [config, prizes, spinDoc] = await Promise.all([
+      getWheelConfig(),
+      ensureWheelPrizes(),
+      db.collection('wheelSpins').doc(session.userId).get()
+    ]);
+
+    let canSpin = config.active;
+    let nextSpinAt = null;
+    let lastPrize = null;
+    const spin = spinDoc.exists ? spinDoc.data() : {};
+    if (spin.lastSpinDate) {
+      const lastMs = spin.lastSpinDate.toMillis?.() || Date.parse(spin.lastSpinDate) || 0;
+      const cooldownMs = (config.cooldownHours || 24) * 3600 * 1000;
+      const unlockAt = lastMs + cooldownMs;
+      if (Date.now() < unlockAt) {
+        canSpin = false;
+        nextSpinAt = unlockAt;
+      }
+      if (spin.prize) lastPrize = spin.prize;
+    }
+
+    res.json({
+      success: true,
+      active: config.active,
+      canSpin: Boolean(canSpin && config.active),
+      cooldownHours: config.cooldownHours,
+      nextSpinAt,
+      totalSpins: Number(spin.totalSpins) || 0,
+      lastPrize,
+      prizes: prizes.map(publicWheelPrize)
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/mini-app/wheel/spin', async (req, res) => {
+  try {
+    const session = await resolveMiniAppUser(req);
+    if (!session.ok) return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
+
+    const config = await getWheelConfig();
+    if (!config.active) {
+      return res.status(400).json({ success: false, error: 'Колесо временно выключено' });
+    }
+
+    const prizes = await ensureWheelPrizes();
+    if (!prizes.length) {
+      return res.status(500).json({ success: false, error: 'Призы не настроены' });
+    }
+
+    const spinRef = db.collection('wheelSpins').doc(session.userId);
+    const cooldownMs = (config.cooldownHours || 24) * 3600 * 1000;
+
+    // Atomic cooldown check + reserve spin slot before awarding
+    let reserved = false;
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(spinRef);
+      const prev = snap.exists ? snap.data() : {};
+      if (prev.lastSpinDate) {
+        const lastMs = prev.lastSpinDate.toMillis?.() || 0;
+        if (Date.now() < lastMs + cooldownMs) {
+          const err = new Error('Колесо ещё недоступно');
+          err.code = 'cooldown';
+          err.nextSpinAt = lastMs + cooldownMs;
+          throw err;
+        }
+      }
+      tx.set(spinRef, {
+        userId: session.userId,
+        lastSpinDate: admin.firestore.FieldValue.serverTimestamp(),
+        totalSpins: (Number(prev.totalSpins) || 0) + 1,
+        pending: true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      reserved = true;
+    });
+
+    const prize = pickWheelPrize(prizes);
+    const prizeIndex = Math.max(0, prizes.findIndex((p) => p.id === prize.id));
+    let award = { type: prize.type, promoCode: null, bonusAwarded: 0, balance: null };
+
+    try {
+      if (prize.type === 'bonus') {
+        const credited = await creditBonusPoints(session.userId, prize.value, {
+          source: 'wheel',
+          prizeId: prize.id
+        });
+        award.bonusAwarded = credited.awarded;
+        award.balance = credited.balance;
+      } else if (prize.type === 'promo') {
+        const promo = await createWheelPromoForUser(session.userId, prize);
+        award.promoCode = promo.code;
+        award.discount = promo.discount;
+      }
+
+      const publicPrize = {
+        ...publicWheelPrize(prize),
+        promoCode: award.promoCode || null,
+        claimed: true
+      };
+
+      await spinRef.set({
+        pending: false,
+        prize: publicPrize,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      res.json({
+        success: true,
+        prizeIndex,
+        prize: publicPrize,
+        award,
+        nextSpinAt: Date.now() + cooldownMs,
+        canSpin: false
+      });
+    } catch (awardErr) {
+      if (reserved) {
+        await spinRef.set({
+          pending: false,
+          awardError: String(awardErr.message || awardErr),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+      throw awardErr;
+    }
+  } catch (error) {
+    if (error.code === 'cooldown') {
+      return res.status(429).json({
+        success: false,
+        error: error.message,
+        nextSpinAt: error.nextSpinAt || null
+      });
+    }
     res.status(500).json({ success: false, error: error.message });
   }
 });
