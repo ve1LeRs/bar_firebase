@@ -1391,9 +1391,10 @@ body.keyboard-open .sheet.open .sheet-actions,
 }
 
 .sheet.sheet-compact .bonus-row input {
-  width: 112px;
+  width: 7.5em;
+  min-width: 7.5em;
   min-height: 44px;
-  font-size: var(--text-base);
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -1517,13 +1518,33 @@ body.sheet-open.field-focused {
 }
 
 .bonus-row input {
-  width: 96px;
+  flex: 0 0 auto;
+  width: 7.5em;
+  min-width: 7.5em;
+  max-width: 42%;
+  box-sizing: border-box;
   border: 1px solid var(--line);
   background: rgba(0, 0, 0, 0.25);
   border-radius: 10px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   text-align: right;
   color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px; /* ≥16px — no iOS focus zoom / caret glitches */
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  letter-spacing: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.bonus-row input:focus {
+  outline: none;
+  border-color: rgba(91, 140, 255, 0.85);
+  box-shadow: 0 0 0 2px rgba(91, 140, 255, 0.25);
 }
 
 .bonus-label {

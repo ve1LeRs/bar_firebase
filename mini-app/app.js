@@ -559,11 +559,23 @@
     els.bonusHaveHint.textContent = `У вас ${formatBonusCount(balance)}`;
   }
 
+  function sanitizeBonusInputValue() {
+    const el = els.bonusInput;
+    if (!el) return 0;
+    const digits = String(el.value || '').replace(/\D+/g, '');
+    const next = digits.replace(/^0+(?=\d)/, '') || '0';
+    if (el.value !== next) {
+      // Preserve caret near end after sanitize
+      el.value = next;
+    }
+    return Math.max(0, Number(next) || 0);
+  }
+
   function resolveBonusInput(price, { clampInput = false } = {}) {
     const balance = Math.max(0, Number(state.bonusBalance) || 0);
     const percentCap = Math.floor(price * (state.maxBonusUsage / 100));
     const maxBonus = Math.min(balance, percentCap);
-    const raw = Math.max(0, Number(els.bonusInput?.value) || 0);
+    const raw = sanitizeBonusInputValue();
     const overLimit = raw > maxBonus;
     let message = '';
     if (overLimit) {
@@ -3187,14 +3199,10 @@
     const price = Number(cocktail.price) || 0;
     els.sheetPrice.textContent = `${price} ₽`;
 
-    const maxBonus = Math.min(
-      state.bonusBalance,
-      Math.floor(price * (state.maxBonusUsage / 100))
-    );
-    if (maxBonus > 0) {
+    if (state.bonusActive !== false) {
       els.bonusRow.hidden = false;
-      els.bonusInput.max = '';
       els.bonusInput.placeholder = '0';
+      els.bonusInput.value = '0';
       syncBonusHaveHint();
     } else {
       els.bonusRow.hidden = true;
@@ -3222,11 +3230,11 @@
   function updateSheetTotal() {
     if (!state.selected) return;
     const price = Number(state.selected.price) || 0;
-    const { raw } = resolveBonusInput(price);
-    // Preview only — do not warn/clamp while typing; «Заказать» validates for real
-    const previewBonus = Math.min(raw, price);
+    const { raw, maxBonus, overLimit } = resolveBonusInput(price);
+    // Preview with real cap so «К оплате» doesn't lie while typing over-limit
+    const previewBonus = Math.min(raw, maxBonus, price);
     state.bonusToUse = previewBonus;
-    if (els.bonusInput) els.bonusInput.classList.remove('is-invalid');
+    if (els.bonusInput) els.bonusInput.classList.toggle('is-invalid', Boolean(overLimit && raw > 0));
     syncBonusHaveHint();
     const payable = Math.max(0, price - previewBonus);
     els.sheetTotal.textContent = `${payable} ₽`;
