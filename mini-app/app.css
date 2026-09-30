@@ -198,16 +198,20 @@ textarea {
 
 .view {
   display: none;
-  animation: rise 0.35s ease;
 }
 
 .view.active {
   display: block;
 }
 
+/* Only when switching tabs after boot — not on first paint */
+.view.view-enter.active {
+  animation: rise 0.28s ease;
+}
+
 @keyframes rise {
-  from { transform: translateY(8px); }
-  to { transform: translateY(0); }
+  from { transform: translateY(8px); opacity: 0.92; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 .hero {
@@ -773,6 +777,11 @@ body[data-view='admin'] #ratingBackdrop {
   margin-bottom: 12px;
 }
 
+.profile-card-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .avatar {
   width: 52px;
   height: 52px;
@@ -800,6 +809,16 @@ body[data-view='admin'] #ratingBackdrop {
   font-family: var(--font-body);
   font-size: var(--text-sm);
   font-weight: 400;
+}
+
+.profile-summary {
+  margin: 8px 0 0;
+  color: var(--accent);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-normal);
+  line-height: var(--leading-snug);
 }
 
 .stat-row {
@@ -1035,6 +1054,92 @@ body.has-admin .tabbar {
   color: var(--muted);
 }
 
+.admin-fold {
+  margin: 0 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+.admin-fold[open] {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-fold.is-editing {
+  border-color: rgba(212, 163, 92, 0.55);
+  box-shadow: 0 0 0 1px rgba(212, 163, 92, 0.25);
+  background: rgba(212, 163, 92, 0.06);
+}
+
+.admin-fold-summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--text-md);
+  letter-spacing: var(--tracking-normal);
+  color: var(--text, var(--ink));
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.admin-fold-summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-fold-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-fold-chevron {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.admin-fold-chevron::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg) translate(-1px, -1px);
+  transition: transform 0.2s ease;
+}
+
+.admin-fold[open] .admin-fold-chevron {
+  background: rgba(212, 163, 92, 0.12);
+  border-color: rgba(212, 163, 92, 0.35);
+}
+
+.admin-fold[open] .admin-fold-chevron::before {
+  transform: rotate(-135deg) translate(-1px, -1px);
+  border-color: var(--brand, #d4a35c);
+}
+
+.admin-fold .admin-add {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  box-shadow: none;
+}
+
 .admin-add.is-editing {
   border-color: rgba(212, 163, 92, 0.55);
   box-shadow: 0 0 0 1px rgba(212, 163, 92, 0.25);
@@ -1231,14 +1336,16 @@ button.danger {
 
 .sheet.open {
   transform: translateY(0);
-  bottom: var(--keyboard-inset, 0px);
   visibility: visible;
   pointer-events: auto;
 }
 
-/* Keyboard open: keep sheet above keyboard, collapse bulky media */
-body.keyboard-open .sheet.open {
-  max-height: calc(var(--vv-height, 100dvh) - 4px);
+/* Keyboard open: keep sheet ABOVE keyboard, sized to content (no empty stretch). */
+body.keyboard-open .sheet.open,
+.sheet.sheet-compact.open {
+  bottom: 0;
+  height: auto;
+  max-height: min(72dvh, calc(var(--vv-height, 55dvh) - 8px));
 }
 
 .sheet.sheet-compact .sheet-media {
@@ -1250,7 +1357,7 @@ body.keyboard-open .sheet.open {
 }
 
 .sheet.sheet-compact .sheet-ingredients {
-  margin-top: 4px;
+  margin-top: 2px;
   font-size: var(--text-sm);
   white-space: nowrap;
   overflow: hidden;
@@ -1259,14 +1366,56 @@ body.keyboard-open .sheet.open {
 
 .sheet.sheet-compact h3 {
   font-size: var(--text-lg);
+  margin-bottom: 2px;
 }
 
 .sheet.sheet-compact .price-block {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
-body.keyboard-open .sheet-actions {
-  padding-bottom: 12px;
+/* Keep «Начислим бонусов» visible even while typing */
+body.keyboard-open .sheet.open .sheet-actions,
+.sheet.sheet-compact .sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 16px 10px;
+}
+
+.sheet.sheet-compact .sheet-actions .ghost {
+  display: none;
+}
+
+.sheet.sheet-compact .sheet-scroll {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 16px 6px;
+}
+
+.sheet.sheet-compact .bonus-row {
+  margin-top: 6px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.sheet.sheet-compact .bonus-row label {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.sheet.sheet-compact .bonus-row input {
+  width: 7.5em;
+  min-width: 7.5em;
+  min-height: 44px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.sheet.sheet-compact .total-row {
+  margin-top: 2px;
+  padding-top: 8px;
 }
 
 body.sheet-open .tabbar {
@@ -1289,6 +1438,12 @@ body.field-focused .tabbar {
 body.keyboard-open,
 body.field-focused {
   padding-bottom: max(16px, calc(var(--keyboard-inset, 0px) + 16px));
+}
+
+/* Order/rating sheets manage their own keyboard layout — don't pad the page */
+body.sheet-open.keyboard-open,
+body.sheet-open.field-focused {
+  padding-bottom: 0;
 }
 
 .sheet-scroll {
@@ -1378,13 +1533,52 @@ body.field-focused {
 }
 
 .bonus-row input {
-  width: 96px;
+  flex: 0 0 auto;
+  width: 7.5em;
+  min-width: 7.5em;
+  max-width: 42%;
+  box-sizing: border-box;
   border: 1px solid var(--line);
   background: rgba(0, 0, 0, 0.25);
   border-radius: 10px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   text-align: right;
   color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px; /* ≥16px — no iOS focus zoom / caret glitches */
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  letter-spacing: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.bonus-row input:focus {
+  outline: none;
+  border-color: rgba(91, 140, 255, 0.85);
+  box-shadow: 0 0 0 2px rgba(91, 140, 255, 0.25);
+}
+
+.bonus-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bonus-label > span:first-child {
+  font-weight: 500;
+}
+
+.bonus-have {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  line-height: var(--leading-snug);
 }
 
 .bonus-row input.is-invalid {
@@ -1419,16 +1613,44 @@ body.field-focused {
   letter-spacing: var(--tracking-normal);
   line-height: var(--leading-tight);
   min-height: 48px;
+  transition:
+    transform 0.12s ease,
+    filter 0.12s ease,
+    box-shadow 0.12s ease,
+    background 0.12s ease,
+    opacity 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
 }
 
 .cta {
-  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+  /* Brand gold — ignore Telegram blue theme so the button reads clearly */
+  --cta-from: #d4a35c;
+  --cta-to: #a56b2b;
+  background: linear-gradient(135deg, var(--cta-from), var(--cta-to));
   color: #1a1208;
   margin-bottom: 8px;
+  box-shadow: 0 6px 16px rgba(165, 107, 43, 0.28);
+}
+
+.cta:active,
+.cta.is-pressed {
+  transform: scale(0.97);
+  filter: brightness(0.82);
+  box-shadow: inset 0 3px 10px rgba(0, 0, 0, 0.35);
 }
 
 .cta:disabled {
   opacity: 0.55;
+  transform: none;
+  filter: none;
+  box-shadow: none;
+}
+
+.cta.is-busy {
+  opacity: 0.72;
+  filter: brightness(0.9);
 }
 
 .ghost {
@@ -1436,6 +1658,13 @@ body.field-focused {
   color: var(--ink);
   border: 1px solid var(--line);
   margin-bottom: 0;
+}
+
+.ghost:active,
+.ghost.is-pressed {
+  transform: scale(0.97);
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(244, 238, 230, 0.22);
 }
 
 .toast {
@@ -1600,6 +1829,11 @@ body.field-focused {
   margin: 10px auto 0;
   padding: 10px 14px;
   display: inline-block;
+}
+
+.wheel-result .ghost[hidden],
+.wheel-result-code[hidden] {
+  display: none !important;
 }
 
 .wheel-sheet {

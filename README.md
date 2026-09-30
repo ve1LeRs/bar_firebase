@@ -21,13 +21,18 @@
 ## Архитектура
 
 ```
-Telegram Bot ←→ Webhook Server ←→ Firebase ←→ Website
+Telegram Mini App / Bots ←→ VPS (webhook-server.js) ←→ Firebase
+GitHub Pages website  ←→ Firebase (+ ограниченно API)
 ```
 
-1. **Telegram Bot** - отправляет заказы с inline кнопками для управления статусом
-2. **Webhook Server** - обрабатывает callback от Telegram и обновляет Firebase
-3. **Firebase** - хранит данные заказов и обеспечивает real-time синхронизацию
-4. **Website** - отображает заказы с автоматическими обновлениями
+**Прод:** VPS `163.5.16.63` + DuckDNS `https://asafievbar.duckdns.org`  
+**Код:** GitHub `ve1LeRs/bar_firebase`  
+**Мини-приложение:** `/m/?v=…` (отдаёт Express)
+
+1. **Mini App bot** — меню, заказы, колесо, админка
+2. **Alerts bot** — уведомления бармену + inline-статусы
+3. **Webhook Server** на VPS — API, webhooks, статика Mini App
+4. **Firebase** — Auth / Firestore (правила: см. `firestore.rules`)
 
 ## Установка и настройка
 
@@ -36,31 +41,8 @@ Telegram Bot ←→ Webhook Server ←→ Firebase ←→ Website
 1. Создайте проект в Firebase Console
 2. Включите Firestore Database
 3. Создайте Service Account и скачайте ключ
-4. Настройте правила безопасности Firestore:
-
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /orders/{document} {
-      allow read, write: if request.auth != null;
-    }
-    match /cocktails/{document} {
-      allow read: if true;
-      allow write: if request.auth != null && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-    match /users/{document} {
-      allow read, write: if request.auth != null;
-    }
-    match /stoplist/{document} {
-      allow read: if true;
-      allow write: if request.auth != null && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-  }
-}
-```
+4. Опубликуйте правила из файла `firestore.rules` (Firebase Console → Firestore → Rules).  
+   Важно: пользователи **не могут** сами выдать себе `role: admin`; админы задаются через `TELEGRAM_ADMIN_IDS` на сервере.
 
 ### 2. Настройка Telegram бота
 

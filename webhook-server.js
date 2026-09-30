@@ -9,71 +9,143 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware - CORS configuration with proper wildcard support
+// ── Security helpers ───────────────────────────────────────────────
+const OPS_ADMIN_SECRET = String(process.env.OPS_ADMIN_SECRET || '').trim();
+const TELEGRAM_WEBHOOK_SECRET = String(process.env.TELEGRAM_WEBHOOK_SECRET || '').trim();
+const INIT_DATA_MAX_AGE_SEC = Math.max(300, Number(process.env.INIT_DATA_MAX_AGE_SEC) || 3600);
+const IS_PRODUCTION = Boolean(process.env.PUBLIC_BASE_URL) || process.env.NODE_ENV === 'production';
+
+const rateLimitBuckets = new Map();
+function clientIp(req) {
+  const xf = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return xf || req.ip || req.socket?.remoteAddress || 'unknown';
+}
+function rateLimit(req, res, { key, limit = 60, windowMs = 60_000 } = {}) {
+  const bucketKey = `${key}:${clientIp(req)}`;
+  const now = Date.now();
+  let bucket = rateLimitBuckets.get(bucketKey);
+  if (!bucket || now > bucket.resetAt) {
+    bucket = { count: 0, resetAt: now + windowMs };
+    rateLimitBuckets.set(bucketKey, bucket);
+  }
+  bucket.count += 1;
+  if (bucket.count > limit) {
+    res.status(429).json({ success: false, error: 'Слишком много запросов' });
+    return false;
+  }
+  return true;
+}
+// Opportunistic cleanup of stale buckets
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of rateLimitBuckets) {
+    if (now > v.resetAt + 60_000) rateLimitBuckets.delete(k);
+  }
+}, 120_000).unref?.();
+
+function safeEqualStr(a, b) {
+  const aa = Buffer.from(String(a || ''), 'utf8');
+  const bb = Buffer.from(String(b || ''), 'utf8');
+  if (aa.length !== bb.length) return false;
+  return crypto.timingSafeEqual(aa, bb);
+}
+
+function requireOpsSecret(req, res) {
+  if (!OPS_ADMIN_SECRET) {
+    res.status(503).json({ success: false, error: 'OPS_ADMIN_SECRET не настроен на сервере' });
+    return false;
+  }
+  const provided =
+    req.headers['x-ops-secret'] ||
+    req.query?.opsSecret ||
+    req.body?.opsSecret ||
+    '';
+  if (!safeEqualStr(provided, OPS_ADMIN_SECRET)) {
+    res.status(403).json({ success: false, error: 'Forbidden' });
+    return false;
+  }
+  return true;
+}
+
+function requireTelegramWebhookSecret(req, res) {
+  if (!TELEGRAM_WEBHOOK_SECRET) {
+    if (IS_PRODUCTION) {
+      console.error('❌ TELEGRAM_WEBHOOK_SECRET missing — rejecting webhook');
+      res.status(503).json({ error: 'Webhook secret not configured' });
+      return false;
+    }
+    return true;
+  }
+  const header = req.headers['x-telegram-bot-api-secret-token'] || '';
+  if (!safeEqualStr(header, TELEGRAM_WEBHOOK_SECRET)) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+  }
+  return true;
+}
+
+function getConfiguredAdminIds() {
+  const raw = String(process.env.TELEGRAM_ADMIN_IDS || process.env.TELEGRAM_CHAT_ID || '').trim();
+  return new Set(
+    raw
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean)
+  );
+}
+
+// Middleware — CORS (deny unknown origins in production)
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, Postman, or file://)
     if (!origin) return callback(null, true);
-    
-    // List of allowed origins and patterns
     const allowedOrigins = [
-      'https://railway.com',
       'http://localhost:3000',
       'http://127.0.0.1:3000',
       'https://ve1lers.github.io',
       'https://asafievbar.duckdns.org',
-      'null' // For file:// protocol
+      'null'
     ];
-    
     const allowedPatterns = [
-      /^https:\/\/.*\.railway\.app$/,
       /^https:\/\/.*\.github\.io$/,
-      /^https:\/\/.*\.duckdns\.org$/
+      /^https:\/\/.*\.duckdns\.org$/,
+      /^https:\/\/.*\.onrender\.com$/
     ];
-    
-    // Check if origin is in allowed list
-    if (allowedOrigins.includes(origin)) {
+    if (allowedOrigins.includes(origin) || allowedPatterns.some((p) => p.test(origin))) {
       return callback(null, true);
     }
-    
-    // Check if origin matches any pattern
-    if (allowedPatterns.some(pattern => pattern.test(origin))) {
-      return callback(null, true);
-    }
-    
-    // For development, allow all origins
-    // Remove this in production if needed
-    return callback(null, true);
+    if (!IS_PRODUCTION) return callback(null, true);
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Ops-Secret', 'X-Telegram-Init-Data']
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 
-// Telegram Mini App static files + shared brand assets
+// Versioned JS/CSS (?v=) can be cached; HTML always revalidated.
+// NEVER Clear-Site-Data — it blanks Telegram WebView loads.
+function setMiniAppStaticHeaders(res, filePath) {
+  if (/\.(?:js|css|png|jpe?g|webp|gif|svg|woff2?)$/i.test(filePath)) {
+    res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+    return;
+  }
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+}
 app.use('/mini-app', express.static(path.join(__dirname, 'mini-app'), {
   extensions: ['html'],
   etag: false,
   lastModified: false,
-  setHeaders: (res, filePath) => {
-    // Revalidate — but NEVER Clear-Site-Data: it blanks Telegram WebView loads
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-  }
+  setHeaders: setMiniAppStaticHeaders
 }));
 // Fresh alias path to bust stubborn Telegram WebView caches
 app.use('/m', express.static(path.join(__dirname, 'mini-app'), {
   extensions: ['html'],
   etag: false,
   lastModified: false,
-  setHeaders: (res, filePath) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-  }
+  setHeaders: setMiniAppStaticHeaders
 }));
 app.get('/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'logo.png')));
 app.get('/favicon.ico', (req, res) => res.sendFile(path.join(__dirname, 'favicon.ico')));
@@ -120,10 +192,7 @@ try {
     privateKey = privateKey.replace(/^["']|["']$/g, '');
     // Заменяем \\n на реальные переносы строк
     privateKey = privateKey.replace(/\\n/g, '\n');
-    console.log('🔑 Processed private key length:', privateKey.length);
-    console.log('🔑 Private key starts with:', privateKey.substring(0, 30) + '...');
-    console.log('🔑 Private key ends with:', '...' + privateKey.substring(privateKey.length - 30));
-    
+    console.log('🔑 Private key processed, length:', privateKey.length);
     // Проверяем, что private key имеет правильный формат
     if (!privateKey.includes('BEGIN PRIVATE KEY') || !privateKey.includes('END PRIVATE KEY')) {
       console.error('❌ Private key format is invalid');
@@ -192,7 +261,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'type1';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'harden1';
 
 function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
@@ -239,26 +308,15 @@ app.get('/', (req, res) => {
     timestamp: new Date().toISOString(),
     endpoints: {
       health: '/health',
-      diagnose: '/diagnose',
-      testFirebase: '/test-firebase',
-      queueInfo: '/queue-info',
-      ordersLast: '/orders-last',
-      webhook: '/telegram-webhook',
-      miniAppWebhook: '/telegram-miniapp-webhook',
       miniApp: '/mini-app/',
-      miniAppAuth: '/api/mini-app/auth',
-      miniAppCreateOrder: '/api/mini-app/create-order'
+      miniAppAuth: '/api/mini-app/auth'
     }
   });
 });
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  // Разрешаем CORS для фронтенда (GitHub Pages, локальный файл и т.п.)
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-
+  if (!rateLimit(req, res, { key: 'health', limit: 120, windowMs: 60_000 })) return;
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
@@ -270,6 +328,7 @@ app.get('/health', (req, res) => {
 
 // Диагностика переменных окружения
 app.get('/diagnose', (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
     console.log('🔍 Запуск диагностики переменных окружения...');
     
@@ -304,12 +363,8 @@ app.get('/diagnose', (req, res) => {
 
 // Test Firebase connection
 app.get('/test-firebase', async (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
-    // Разрешаем CORS для фронтенда
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-
     console.log('🔥 Тестируем подключение к Firebase...');
     
     // Проверяем переменные окружения Firebase
@@ -325,14 +380,6 @@ app.get('/test-firebase', async (req, res) => {
     console.log('🔍 Проверка переменных окружения Firebase:', envCheck);
     
     // Дополнительная диагностика private key
-    if (process.env.FIREBASE_PRIVATE_KEY) {
-      const privateKey = process.env.FIREBASE_PRIVATE_KEY;
-      console.log('🔑 Private key length:', privateKey.length);
-      console.log('🔑 Private key starts with:', privateKey.substring(0, 50) + '...');
-      console.log('🔑 Private key contains \\n:', privateKey.includes('\\n'));
-      console.log('🔑 Private key contains actual newlines:', privateKey.includes('\n'));
-    }
-    
     // Проверяем, что Firebase инициализирован
     if (!db) {
       throw new Error('Firebase не инициализирован');
@@ -376,6 +423,7 @@ app.get('/test-firebase', async (req, res) => {
 
 // Получение информации об очереди заказов
 app.get('/queue-info', async (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
     const queueInfo = await getQueueInfo();
     res.json({
@@ -394,8 +442,8 @@ app.get('/queue-info', async (req, res) => {
 
 // Диагностика: заказы, которые видит webhook — сверьте id с ID в кнопке Telegram
 app.get('/orders-last', async (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
-    res.setHeader('Access-Control-Allow-Origin', '*');
     const limit = Math.min(parseInt(req.query.limit, 10) || 10, 20);
     const snap = await db.collection('orders').limit(limit).get();
     const projectId = admin.app().options?.projectId || serviceAccount?.project_id || '?';
@@ -413,6 +461,7 @@ app.get('/orders-last', async (req, res) => {
 
 // Очистка всех заказов из базы данных (только для разработки)
 app.delete('/cleanup-orders', async (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
     console.log('🧹 Начинаем очистку всех заказов из базы данных...');
     
@@ -460,6 +509,7 @@ app.delete('/cleanup-orders', async (req, res) => {
 // Валидация промокода
 app.post('/validate-promo', async (req, res) => {
   try {
+    if (!rateLimit(req, res, { key: 'validate-promo', limit: 60, windowMs: 60_000 })) return;
     const { promoCode } = req.body;
     
     if (!promoCode) {
@@ -531,6 +581,7 @@ app.post('/validate-promo', async (req, res) => {
 // Отправка уведомления в Telegram о новом заказе
 app.post('/notify-telegram', async (req, res) => {
   try {
+    if (!rateLimit(req, res, { key: 'notify-telegram', limit: 30, windowMs: 60_000 })) return;
     const { orderId, orderData } = req.body;
     
     if (!orderId || !orderData) {
@@ -539,15 +590,27 @@ app.post('/notify-telegram', async (req, res) => {
         error: 'Отсутствуют данные заказа'
       });
     }
+
+    // Only alert for orders that actually exist (blocks forged spam)
+    const orderSnap = await db.collection('orders').doc(String(orderId)).get();
+    if (!orderSnap.exists) {
+      return res.status(404).json({ success: false, error: 'Заказ не найден' });
+    }
+    const live = orderSnap.data() || {};
+    const cocktailName = live.name || orderData.name;
+    const customerName = live.user || orderData.user;
+    const price = live.price != null ? live.price : orderData.price;
+    const queuePosition = live.queuePosition || orderData.queuePosition || 0;
+    const displayTime = live.displayTime || orderData.displayTime || new Date().toLocaleString('ru-RU');
     
     const message = formatOrderAlertHtml({
       mode: 'new',
-      status: 'confirmed',
-      cocktailName: orderData.name,
-      customerName: orderData.user,
-      price: orderData.price,
-      queuePosition: orderData.queuePosition || 0,
-      displayTime: orderData.displayTime || new Date().toLocaleString('ru-RU'),
+      status: live.status || 'confirmed',
+      cocktailName,
+      customerName,
+      price,
+      queuePosition,
+      displayTime,
       orderId
     });
     const inlineKeyboard = buildOrderActionKeyboard(orderId, 'pending');
@@ -582,49 +645,65 @@ app.post('/notify-telegram', async (req, res) => {
 // Использование промокода (увеличение счетчика)
 app.post('/use-promo', async (req, res) => {
   try {
+    if (!rateLimit(req, res, { key: 'use-promo', limit: 20, windowMs: 60_000 })) return;
+    // Prefer authenticated ops or Mini App session; bare public burn is disabled
+    const hasOps = Boolean(OPS_ADMIN_SECRET) && safeEqualStr(
+      req.headers['x-ops-secret'] || req.body?.opsSecret || '',
+      OPS_ADMIN_SECRET
+    );
+    if (!hasOps) {
+      const session = await resolveMiniAppUser(req).catch(() => ({ ok: false }));
+      if (!session?.ok) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+    }
+
     const { promoCode } = req.body;
-    
     if (!promoCode) {
-      return res.status(400).json({
-        success: false,
-        error: 'Промокод не указан'
-      });
+      return res.status(400).json({ success: false, error: 'Промокод не указан' });
     }
-    
-    const promoRef = db.collection('promocodes').doc(promoCode.toUpperCase());
-    const promoDoc = await promoRef.get();
-    
-    if (!promoDoc.exists) {
-      return res.json({
-        success: false,
-        error: 'Промокод не найден'
+
+    const code = String(promoCode).trim().toUpperCase();
+    const promoRef = db.collection('promocodes').doc(code);
+    await db.runTransaction(async (tx) => {
+      const promoDoc = await tx.get(promoRef);
+      if (!promoDoc.exists) {
+        const err = new Error('Промокод не найден');
+        err.code = 'not_found';
+        throw err;
+      }
+      const promoData = promoDoc.data() || {};
+      if (promoData.active === false) {
+        const err = new Error('Промокод неактивен');
+        err.code = 'inactive';
+        throw err;
+      }
+      const maxUses = Number(promoData.maxUses) || 0;
+      const usedCount = Number(promoData.usedCount) || 0;
+      if (maxUses > 0 && usedCount >= maxUses) {
+        const err = new Error('Промокод исчерпан');
+        err.code = 'exhausted';
+        throw err;
+      }
+      tx.update(promoRef, {
+        usedCount: usedCount + 1,
+        lastUsedAt: admin.firestore.FieldValue.serverTimestamp()
       });
-    }
-    
-    // Увеличиваем счетчик использований
-    await promoRef.update({
-      usedCount: admin.firestore.FieldValue.increment(1),
-      lastUsedAt: admin.firestore.FieldValue.serverTimestamp()
     });
-    
-    console.log(`✅ Промокод ${promoCode} использован`);
-    
-    res.json({
-      success: true,
-      message: 'Промокод использован'
-    });
-    
+
+    res.json({ success: true, message: 'Промокод использован' });
   } catch (error) {
+    if (['not_found', 'inactive', 'exhausted'].includes(error.code)) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
     console.error('❌ Ошибка использования промокода:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // Очистка только тестовых заказов (по статусу или названию)
 app.delete('/cleanup-test-orders', async (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
     console.log('🧹 Начинаем очистку тестовых заказов...');
     
@@ -638,11 +717,10 @@ app.delete('/cleanup-test-orders', async (req, res) => {
     ordersSnapshot.forEach(doc => {
       const orderData = doc.data();
       const orderName = orderData.name?.toLowerCase() || '';
-      const isTestOrder = orderName.includes('тест') || 
+      const isTestOrder = orderName.includes('тест') ||
                          orderName.includes('test') ||
                          orderName.includes('проверка') ||
-                         orderData.status === 'completed' ||
-                         orderData.status === 'cancelled';
+                         orderData.isTest === true;
       
       if (isTestOrder) {
         batch.delete(doc.ref);
@@ -685,11 +763,7 @@ app.options('/send-purchase-list', (req, res) => {
 });
 
 app.post('/send-purchase-list', async (req, res) => {
-  // Устанавливаем CORS заголовки
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  
+  if (!requireOpsSecret(req, res)) return;
   try {
     console.log('🛒 Получен запрос на отправку списка закупок...');
     console.log('📨 Origin:', req.headers.origin);
@@ -804,6 +878,7 @@ async function handleMiniAppBotMessage(message) {
 
 // Основной webhook для Telegram (alerts bot — callback buttons)
 app.post('/telegram-webhook', async (req, res) => {
+  if (!requireTelegramWebhookSecret(req, res)) return;
   try {
     let body = req.body;
     if (typeof body === 'string') {
@@ -831,6 +906,7 @@ app.post('/telegram-webhook', async (req, res) => {
 
 // Webhook для Mini App бота (@asafievbar_bot) — /start → подсказка открыть Mini App
 app.post('/telegram-miniapp-webhook', async (req, res) => {
+  if (!requireTelegramWebhookSecret(req, res)) return;
   try {
     let body = req.body;
     if (typeof body === 'string') {
@@ -947,7 +1023,25 @@ async function getNextQueuePosition() {
   }
 }
 
+function priceFromMenuBootstrapCache(cocktailId, name) {
+  const list = menuBootstrapCache?.payload?.cocktails;
+  if (!Array.isArray(list) || !list.length) return null;
+  const id = String(cocktailId || '');
+  if (id) {
+    const byId = list.find((c) => c && c.id === id);
+    const p = Number(byId?.price);
+    if (Number.isFinite(p) && p >= 0) return p;
+  }
+  const nm = String(name || '').trim().toLowerCase();
+  if (!nm) return null;
+  const byName = list.find((c) => String(c?.name || '').trim().toLowerCase() === nm);
+  const p = Number(byName?.price);
+  return Number.isFinite(p) && p >= 0 ? p : null;
+}
+
 async function resolveMenuCocktailPrice({ cocktailId, name }) {
+  const cached = priceFromMenuBootstrapCache(cocktailId, name);
+  if (cached != null) return cached;
   try {
     if (cocktailId) {
       const doc = await db.collection('cocktails').doc(String(cocktailId)).get();
@@ -1452,7 +1546,7 @@ function validateTelegramWebAppData(initData, botToken) {
     .update(dataCheckString)
     .digest('hex');
 
-  if (calculatedHash !== hash) {
+  if (!safeEqualStr(calculatedHash, hash)) {
     // Fallback: URLSearchParams style (some clients)
     const params = new URLSearchParams(initData);
     const hash2 = params.get('hash');
@@ -1465,7 +1559,7 @@ function validateTelegramWebAppData(initData, botToken) {
       .createHmac('sha256', secretKey)
       .update(dataCheckString2)
       .digest('hex');
-    if (calculatedHash2 !== hash2) {
+    if (!safeEqualStr(calculatedHash2, hash2 || '')) {
       return { ok: false, reason: 'bad_hash' };
     }
   }
@@ -1473,7 +1567,7 @@ function validateTelegramWebAppData(initData, botToken) {
   const params = new URLSearchParams(initData);
   const authDate = Number(params.get('auth_date') || 0);
   const ageSec = Math.floor(Date.now() / 1000) - authDate;
-  if (!authDate || ageSec > 86400) {
+  if (!authDate || ageSec > INIT_DATA_MAX_AGE_SEC) {
     return { ok: false, reason: 'expired', ageSec };
   }
 
@@ -1534,6 +1628,9 @@ async function resolveMiniAppUser(req) {
 
 // In-memory stoplist cache — avoids Firestore roundtrip on every order
 const stoplistCache = { names: new Set(), at: 0, loading: null };
+// Shared with menu-bootstrap + create-order price lookup
+const menuBootstrapCache = { at: 0, payload: null };
+const MENU_BOOTSTRAP_TTL_MS = 120000;
 
 function invalidateStoplistCache() {
   stoplistCache.at = 0;
@@ -1817,7 +1914,10 @@ async function validatePromoCodeData(codeRaw) {
     promo: {
       code,
       discount: Number(promoData.discount) || 0,
-      description: promoData.description || ''
+      description: promoData.description || '',
+      ownerUserId: promoData.ownerUserId || null,
+      maxUses: Number(promoData.maxUses) || 0,
+      usedCount: Number(promoData.usedCount) || 0
     }
   };
 }
@@ -2015,6 +2115,7 @@ async function restoreIngredientsAdmin(cocktailName, orderId = null) {
 // Auth: validate Telegram initData → session (+ optional Firebase custom token)
 app.post('/api/mini-app/auth', async (req, res) => {
   try {
+    if (!rateLimit(req, res, { key: 'auth', limit: 30, windowMs: 60_000 })) return;
     const { initData } = req.body || {};
     const parsed = validateTelegramWebAppData(initData, TELEGRAM_MINIAPP_BOT_TOKEN);
 
@@ -2030,87 +2131,115 @@ app.post('/api/mini-app/auth', async (req, res) => {
     const tgUser = parsed.user;
     const uid = `tg_${tgUser.id}`;
     const displayName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Гость Telegram';
-    const adminIds = new Set(
-      String(process.env.TELEGRAM_ADMIN_IDS || TELEGRAM_CHAT_ID || '')
-        .split(',')
-        .map((v) => v.trim())
-        .filter(Boolean)
-    );
-    // Owner chat id from project defaults
-    adminIds.add('1743362083');
-    const isAdmin = adminIds.has(String(tgUser.id));
+    const isAdminEnv = getConfiguredAdminIds().has(String(tgUser.id));
 
-    try {
-      const updatePayload = { displayName };
-      if (tgUser.photo_url) updatePayload.photoURL = tgUser.photo_url;
-      await admin.auth().updateUser(uid, updatePayload);
-    } catch (error) {
-      if (error.code === 'auth/user-not-found') {
-        const createPayload = { uid, displayName };
-        if (tgUser.photo_url) createPayload.photoURL = tgUser.photo_url;
-        await admin.auth().createUser(createPayload);
-      } else {
-        console.warn('Firebase user upsert skipped:', error.message);
+    // Firebase Auth upsert is ~0.8s+ — never block login on it
+    void (async () => {
+      try {
+        const updatePayload = { displayName };
+        if (tgUser.photo_url) updatePayload.photoURL = tgUser.photo_url;
+        await admin.auth().updateUser(uid, updatePayload);
+      } catch (error) {
+        if (error.code === 'auth/user-not-found') {
+          try {
+            const createPayload = { uid, displayName };
+            if (tgUser.photo_url) createPayload.photoURL = tgUser.photo_url;
+            await admin.auth().createUser(createPayload);
+          } catch (createErr) {
+            console.warn('Firebase user create skipped:', createErr.message);
+          }
+        } else {
+          console.warn('Firebase user upsert skipped:', error.message);
+        }
       }
-    }
+    })();
 
     const userRef = db.collection('users').doc(uid);
-    const existingUser = await userRef.get();
-    const existingRole = existingUser.exists ? (existingUser.data().role || 'user') : 'user';
-    await userRef.set({
+
+    // Fast path: env admins don't need a Firestore role lookup.
+    // Bonus/bill come from /me + polling right after login — don't block session.
+    const [existingUser, customToken] = await Promise.all([
+      isAdminEnv
+        ? Promise.resolve(null)
+        : userRef.get().catch(() => null),
+      admin.auth().createCustomToken(uid, {
+        telegramId: tgUser.id,
+        provider: 'telegram-mini-app'
+      }).catch((tokenError) => {
+        console.warn('Custom token unavailable:', tokenError.message);
+        return null;
+      })
+    ]);
+
+    const existingRole = existingUser?.exists ? (existingUser.data().role || 'user') : 'user';
+    const role = isAdminEnv ? 'admin' : (existingRole || 'user');
+
+    // Profile + bonus/bill snapshot in background (client refreshes via /me)
+    void userRef.set({
       displayName,
       telegramId: tgUser.id,
       telegramUsername: tgUser.username || null,
       photoURL: tgUser.photo_url || null,
-      role: isAdmin ? 'admin' : existingRole,
+      role,
       source: 'telegram-mini-app',
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...(existingUser.exists ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
-    }, { merge: true });
+      ...(existingUser?.exists ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
+    }, { merge: true }).catch((e) => console.warn('user profile write:', e.message));
 
-    let customToken = null;
-    try {
-      customToken = await admin.auth().createCustomToken(uid, {
-        telegramId: tgUser.id,
-        provider: 'telegram-mini-app'
-      });
-    } catch (tokenError) {
-      console.warn('Custom token unavailable:', tokenError.message);
-    }
-
-    const bonusDoc = await db.collection('bonusAccounts').doc(uid).get();
-    const bonusBalance = bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0;
-
+    let bonusBalance = 0;
     let openBillTotal = 0;
     let openBillItems = [];
+
+    // Non-blocking enrich — race a short timeout so cold Firestore can't stall login
     try {
-      const billsSnap = await db.collection('bills')
-        .where('userId', '==', uid)
-        .where('status', '==', 'open')
-        .limit(1)
-        .get();
-      if (!billsSnap.empty) {
-        const billDoc = billsSnap.docs[0];
-        const bill = billDoc.data();
-        openBillItems = await hydrateBillItemsWithOrderStatus(bill.items);
-        openBillTotal = billTotalFromItems(openBillItems);
-        // Repair stale item statuses / total in Firestore (best-effort)
-        const stale = (Array.isArray(bill.items) ? bill.items : []).some((it, idx) => {
-          const live = openBillItems[idx];
-          return live && it.status !== live.status;
-        }) || Number(bill.totalAmount || 0) !== openBillTotal;
-        if (stale) {
-          billDoc.ref.update({
-            items: openBillItems.map((it, idx) => ({
-              ...(Array.isArray(bill.items) ? bill.items[idx] : {}),
-              ...it
-            })),
-            totalAmount: openBillTotal,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-          }).catch(() => {});
+      const enrich = Promise.all([
+        db.collection('bonusAccounts').doc(uid).get().catch(() => null),
+        db.collection('bills')
+          .where('userId', '==', uid)
+          .where('status', '==', 'open')
+          .limit(1)
+          .get()
+          .catch(() => null)
+      ]);
+      const timed = await Promise.race([
+        enrich.then((v) => ({ ok: true, v })),
+        new Promise((resolve) => setTimeout(() => resolve({ ok: false }), 450))
+      ]);
+      if (timed.ok) {
+        const [bonusDoc, billsSnap] = timed.v;
+        bonusBalance = bonusDoc?.exists ? Number(bonusDoc.data().balance) || 0 : 0;
+        if (billsSnap && !billsSnap.empty) {
+          const billDoc = billsSnap.docs[0];
+          const bill = billDoc.data() || {};
+          openBillItems = mapBillItemsForClient(bill.items);
+          openBillTotal = Number(bill.totalAmount);
+          if (!Number.isFinite(openBillTotal)) openBillTotal = billTotalFromItems(openBillItems);
+          void (async () => {
+            try {
+              const hydrated = await hydrateBillItemsWithOrderStatus(bill.items);
+              const total = billTotalFromItems(hydrated);
+              const stale = (Array.isArray(bill.items) ? bill.items : []).some((it, idx) => {
+                const live = hydrated[idx];
+                return live && it.status !== live.status;
+              }) || Number(bill.totalAmount || 0) !== total;
+              if (stale) {
+                await billDoc.ref.update({
+                  items: hydrated.map((it, idx) => ({
+                    ...(Array.isArray(bill.items) ? bill.items[idx] : {}),
+                    ...it
+                  })),
+                  totalAmount: total,
+                  updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+              }
+            } catch (_) { /* ignore */ }
+          })();
         }
+      } else {
+        // Still load in background; client /me will pick it up
+        enrich.catch(() => {});
       }
-    } catch (_) { /* index optional */ }
+    } catch (_) { /* ignore */ }
 
     res.json({
       success: true,
@@ -2120,7 +2249,7 @@ app.post('/api/mini-app/auth', async (req, res) => {
       bonusBalance,
       openBillTotal,
       openBillItems,
-      role: isAdmin ? 'admin' : (existingRole || 'user'),
+      role,
       user: {
         id: tgUser.id,
         first_name: tgUser.first_name,
@@ -2449,6 +2578,7 @@ app.post('/api/mini-app/my-orders', async (req, res) => {
 // Create order from Mini App (initData or Firebase ID token)
 app.post('/api/mini-app/create-order', async (req, res) => {
   try {
+    if (!rateLimit(req, res, { key: 'create-order', limit: 40, windowMs: 60_000 })) return;
     const session = await resolveMiniAppUser(req);
     if (!session.ok) {
       return res.status(401).json({
@@ -2481,23 +2611,29 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       return res.status(409).json({ success: false, error: 'Коктейль в стоп-листе' });
     }
 
-    const menuPrice = await resolveMenuCocktailPrice({ cocktailId, name });
-    let listedPrice = menuPrice;
-    if (listedPrice == null) {
-      const fallback = Number(originalPrice != null ? originalPrice : price);
-      if (!Number.isFinite(fallback) || fallback < 0) {
-        return res.status(400).json({ success: false, error: 'Коктейль не найден в меню' });
-      }
-      console.warn('create-order: menu price missing for', name, '— fallback', fallback);
-      listedPrice = fallback;
-    }
-
     const bonusAmount = Math.max(0, Number(bonusUsed) || 0);
-    if (bonusAmount > 0) {
-      const [bonusDoc, settingsDoc] = await Promise.all([
-        db.collection('bonusAccounts').doc(userId).get(),
-        db.collection('settings').doc('bonusSystem').get()
-      ]);
+
+    // Price, queue, and bonus docs in parallel — biggest create-order win
+    const [menuPrice, nextQueue, bonusPair] = await Promise.all([
+      resolveMenuCocktailPrice({ cocktailId, name }),
+      getNextQueuePosition(),
+      bonusAmount > 0
+        ? Promise.all([
+          db.collection('bonusAccounts').doc(userId).get(),
+          db.collection('settings').doc('bonusSystem').get()
+        ])
+        : Promise.resolve(null)
+    ]);
+
+    let listedPrice = menuPrice;
+    if (listedPrice == null || !Number.isFinite(Number(listedPrice)) || Number(listedPrice) < 0) {
+      // Never trust client-supplied prices
+      return res.status(400).json({ success: false, error: 'Коктейль не найден в меню' });
+    }
+    listedPrice = Number(listedPrice);
+
+    if (bonusAmount > 0 && bonusPair) {
+      const [bonusDoc, settingsDoc] = bonusPair;
       const balance = bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0;
       const maxUsage = settingsDoc.exists ? (Number(settingsDoc.data().maxUsage) || 50) : 50;
       const maxByPrice = Math.floor(listedPrice * (maxUsage / 100));
@@ -2512,7 +2648,6 @@ app.post('/api/mini-app/create-order', async (req, res) => {
     const finalPrice = Math.max(0, listedPrice - bonusAmount);
     const now = new Date();
     const displayName = user || session.displayName || 'Гость Telegram';
-    const nextQueue = await getNextQueuePosition();
 
     const orderData = {
       name,
@@ -2600,6 +2735,7 @@ app.post('/api/mini-app/create-order', async (req, res) => {
 
 // Helper: configure Telegram Menu Button to open Mini App
 app.post('/api/mini-app/setup-menu-button', async (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
     const miniAppUrl = (req.body?.url || '').trim() || getMiniAppPublicUrl();
 
@@ -2637,6 +2773,7 @@ app.post('/api/mini-app/setup-menu-button', async (req, res) => {
 
 // Configure Mini App bot profile (name/description/menu)
 app.post('/api/mini-app/setup-bot-profile', async (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
     const token = TELEGRAM_MINIAPP_BOT_TOKEN;
     const miniAppUrl = (req.body?.url || '').trim() || getMiniAppPublicUrl();
@@ -2754,29 +2891,23 @@ async function ensureTelegramAdmin(telegramId) {
   return { uid, telegramId: id, role: 'admin' };
 }
 
+async function isMiniAppAdminUser(session) {
+  if (!session?.ok && session?.userId == null && !session?.telegramId) return false;
+  const allowed = getConfiguredAdminIds();
+
+  if (session.telegramId && allowed.has(String(session.telegramId))) return true;
+
+  // Env allowlist is source of truth; Firestore role alone is not enough
+  // (clients must not be able to self-grant admin via open rules).
+  return false;
+}
+
 async function resolveMiniAppAdmin(req) {
   const session = await resolveMiniAppUser(req);
   if (!session.ok) return session;
-
-  const allowed = new Set(
-    String(process.env.TELEGRAM_ADMIN_IDS || TELEGRAM_CHAT_ID || '1743362083')
-      .split(',')
-      .map((v) => v.trim())
-      .filter(Boolean)
-  );
-  allowed.add('1743362083');
-
-  if (session.telegramId && allowed.has(String(session.telegramId))) {
+  if (await isMiniAppAdminUser(session)) {
     return { ...session, isAdmin: true };
   }
-
-  try {
-    const userDoc = await db.collection('users').doc(session.userId).get();
-    if (userDoc.exists && userDoc.data().role === 'admin') {
-      return { ...session, isAdmin: true };
-    }
-  } catch (_) { /* ignore */ }
-
   return { ok: false, reason: 'not_admin' };
 }
 
@@ -2933,16 +3064,12 @@ app.get('/api/mini-app/stoplist', async (req, res) => {
 });
 
 // One-shot menu bootstrap: cocktails + stoplist + ratings (reduces Mini App flicker)
-const menuBootstrapCache = { at: 0, payload: null };
-app.get('/api/mini-app/menu-bootstrap', async (req, res) => {
+async function warmMenuBootstrapCache() {
   try {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'public, max-age=15');
     const now = Date.now();
-    if (menuBootstrapCache.payload && now - menuBootstrapCache.at < 15000) {
-      return res.json(menuBootstrapCache.payload);
+    if (menuBootstrapCache.payload && now - menuBootstrapCache.at < MENU_BOOTSTRAP_TTL_MS) {
+      return menuBootstrapCache.payload;
     }
-
     const [cocktailsSnap, stopNames, ratingsSnap] = await Promise.all([
       db.collection('cocktails').get(),
       refreshStoplistCache(false),
@@ -2972,16 +3099,16 @@ app.get('/api/mini-app/menu-bootstrap', async (req, res) => {
       const acc = new Map();
       ratingsSnap.forEach((doc) => {
         const d = doc.data() || {};
-        const name = String(d.cocktailName || '').trim();
+        const cocktailName = String(d.cocktailName || '').trim();
         const rating = Number(d.rating) || 0;
-        if (!name || rating <= 0) return;
-        const cur = acc.get(name) || { sum: 0, count: 0 };
+        if (!cocktailName || rating <= 0) return;
+        const cur = acc.get(cocktailName) || { sum: 0, count: 0 };
         cur.sum += rating;
         cur.count += 1;
-        acc.set(name, cur);
+        acc.set(cocktailName, cur);
       });
-      acc.forEach((v, name) => {
-        averages[name] = Number((v.sum / v.count).toFixed(1));
+      acc.forEach((v, cocktailName) => {
+        averages[cocktailName] = Number((v.sum / v.count).toFixed(1));
       });
     }
 
@@ -2994,6 +3121,26 @@ app.get('/api/mini-app/menu-bootstrap', async (req, res) => {
     };
     menuBootstrapCache.at = now;
     menuBootstrapCache.payload = payload;
+    return payload;
+  } catch (err) {
+    console.warn('warmMenuBootstrapCache:', err.message);
+    return null;
+  }
+}
+
+app.get('/api/mini-app/menu-bootstrap', async (req, res) => {
+  try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    const now = Date.now();
+    if (menuBootstrapCache.payload && now - menuBootstrapCache.at < MENU_BOOTSTRAP_TTL_MS) {
+      return res.json(menuBootstrapCache.payload);
+    }
+
+    const payload = await warmMenuBootstrapCache();
+    if (!payload) {
+      return res.status(500).json({ success: false, error: 'menu bootstrap failed' });
+    }
     res.json(payload);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -3176,6 +3323,9 @@ app.post('/api/mini-app/apply-promo', async (req, res) => {
 
     const checked = await validatePromoCodeData(req.body?.promoCode);
     if (!checked.ok) return res.status(400).json({ success: false, error: checked.error });
+    if (checked.promo.ownerUserId && String(checked.promo.ownerUserId) !== String(session.userId)) {
+      return res.status(403).json({ success: false, error: 'Этот промокод персональный' });
+    }
 
     const billsSnap = await db.collection('bills')
       .where('userId', '==', session.userId)
@@ -3201,23 +3351,60 @@ app.post('/api/mini-app/apply-promo', async (req, res) => {
     const discountPct = Number(checked.promo.discount) || 0;
     const discountAmount = Math.round(originalTotal * discountPct / 100);
     const newTotal = Math.max(0, originalTotal - discountAmount);
+    const promoRef = db.collection('promocodes').doc(checked.promo.code);
 
-    await billDoc.ref.update({
-      promoCode: checked.promo.code,
-      discount: discountPct,
-      originalTotal,
-      totalAmount: newTotal,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    await db.runTransaction(async (tx) => {
+      const promoSnap = await tx.get(promoRef);
+      if (!promoSnap.exists) {
+        const err = new Error('Промокод не найден');
+        err.code = 'promo';
+        throw err;
+      }
+      const p = promoSnap.data() || {};
+      if (p.active === false) {
+        const err = new Error('Промокод неактивен');
+        err.code = 'promo';
+        throw err;
+      }
+      if (p.ownerUserId && String(p.ownerUserId) !== String(session.userId)) {
+        const err = new Error('Этот промокод персональный');
+        err.code = 'promo';
+        throw err;
+      }
+      const maxUses = Number(p.maxUses) || 0;
+      const usedCount = Number(p.usedCount) || 0;
+      if (maxUses > 0 && usedCount >= maxUses) {
+        const err = new Error('Промокод исчерпан');
+        err.code = 'promo';
+        throw err;
+      }
+      const billSnap = await tx.get(billDoc.ref);
+      const liveBill = billSnap.exists ? (billSnap.data() || {}) : {};
+      if (liveBill.promoCode) {
+        const err = new Error('Промокод уже применён к этому счёту');
+        err.code = 'promo';
+        throw err;
+      }
+      tx.update(billDoc.ref, {
+        promoCode: checked.promo.code,
+        discount: discountPct,
+        originalTotal,
+        totalAmount: newTotal,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      tx.set(promoRef, {
+        usedCount: usedCount + 1,
+        lastUsedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
     });
-
-    await db.collection('promocodes').doc(checked.promo.code).set({
-      usedCount: admin.firestore.FieldValue.increment(1),
-      lastUsedAt: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
 
     res.json({
       success: true,
-      promo: checked.promo,
+      promo: {
+        code: checked.promo.code,
+        discount: checked.promo.discount,
+        description: checked.promo.description
+      },
       originalTotal,
       discountAmount,
       totalAmount: newTotal,
@@ -3243,60 +3430,103 @@ const DEFAULT_WHEEL_PRIZES = [
   { id: 'nothing', name: 'Повезёт завтра', short: '—', description: 'В этот раз без приза — загляните завтра', type: 'nothing', value: 0, probability: 4, color: '#1f1a16', icon: '—' }
 ];
 
+const wheelRuntimeCache = {
+  prizesAt: 0,
+  prizes: null,
+  configAt: 0,
+  config: null,
+  seeding: null
+};
+
 async function ensureWheelPrizes() {
-  const all = await db.collection('wheelPrizes').get();
-  const existing = new Map(all.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() }]));
-  const defaultIds = new Set(DEFAULT_WHEEL_PRIZES.map((p) => p.id));
-  let batch = db.batch();
-  let ops = 0;
+  const now = Date.now();
+  if (wheelRuntimeCache.prizes && now - wheelRuntimeCache.prizesAt < 300000) {
+    return wheelRuntimeCache.prizes;
+  }
+  if (wheelRuntimeCache.seeding) return wheelRuntimeCache.seeding;
 
-  const commitIfNeeded = async (force = false) => {
-    if (ops >= 400 || (force && ops > 0)) {
-      await batch.commit();
-      batch = db.batch();
-      ops = 0;
+  wheelRuntimeCache.seeding = (async () => {
+    const all = await db.collection('wheelPrizes').get();
+    const existing = new Map(all.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() }]));
+    const defaultIds = new Set(DEFAULT_WHEEL_PRIZES.map((p) => p.id));
+    let batch = db.batch();
+    let ops = 0;
+    let changed = false;
+
+    const commitIfNeeded = async (force = false) => {
+      if (ops >= 400 || (force && ops > 0)) {
+        await batch.commit();
+        batch = db.batch();
+        ops = 0;
+      }
+    };
+
+    // Upsert canonical prizes only when missing or outdated labels/colors
+    for (const prize of DEFAULT_WHEEL_PRIZES) {
+      const prev = existing.get(prize.id);
+      const needsWrite = !prev
+        || prev.active === false
+        || prev.short !== prize.short
+        || prev.color !== prize.color
+        || Number(prev.probability) !== Number(prize.probability);
+      if (needsWrite) {
+        batch.set(db.collection('wheelPrizes').doc(prize.id), {
+          ...prize,
+          active: true,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...(prev ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
+        }, { merge: true });
+        ops += 1;
+        changed = true;
+        await commitIfNeeded();
+      }
+      existing.set(prize.id, { ...prev, ...prize, active: true });
     }
-  };
 
-  // Upsert canonical prizes (fixes rainbow legacy colors / short labels)
-  for (const prize of DEFAULT_WHEEL_PRIZES) {
-    batch.set(db.collection('wheelPrizes').doc(prize.id), {
-      ...prize,
-      active: true,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...(existing.has(prize.id) ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
-    }, { merge: true });
-    existing.set(prize.id, { ...existing.get(prize.id), ...prize, active: true });
-    ops += 1;
-    await commitIfNeeded();
+    // Disable legacy prizes (e.g. free_shot / −100%) that make the wheel look childish
+    for (const [id, data] of existing.entries()) {
+      if (defaultIds.has(id)) continue;
+      if (data.active === false) continue;
+      batch.set(db.collection('wheelPrizes').doc(id), {
+        active: false,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      data.active = false;
+      ops += 1;
+      changed = true;
+      await commitIfNeeded();
+    }
+    if (changed) await commitIfNeeded(true);
+
+    const list = [...existing.values()]
+      .filter((p) => p.active !== false)
+      .sort((a, b) => (Number(b.probability) || 0) - (Number(a.probability) || 0));
+    wheelRuntimeCache.prizes = list;
+    wheelRuntimeCache.prizesAt = Date.now();
+    return list;
+  })();
+
+  try {
+    return await wheelRuntimeCache.seeding;
+  } finally {
+    wheelRuntimeCache.seeding = null;
   }
-
-  // Disable legacy prizes (e.g. free_shot / −100%) that make the wheel look childish
-  for (const [id, data] of existing.entries()) {
-    if (defaultIds.has(id)) continue;
-    if (data.active === false) continue;
-    batch.set(db.collection('wheelPrizes').doc(id), {
-      active: false,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-    data.active = false;
-    ops += 1;
-    await commitIfNeeded();
-  }
-  await commitIfNeeded(true);
-
-  return [...existing.values()]
-    .filter((p) => p.active !== false)
-    .sort((a, b) => (Number(b.probability) || 0) - (Number(a.probability) || 0));
 }
 
 async function getWheelConfig() {
+  const now = Date.now();
+  if (wheelRuntimeCache.config && now - wheelRuntimeCache.configAt < 120000) {
+    return wheelRuntimeCache.config;
+  }
   const doc = await db.collection('wheelConfig').doc('settings').get();
   const data = doc.exists ? doc.data() : {};
-  return {
+  const config = {
     active: data.active !== false,
     cooldownHours: Number(data.cooldownHours) || 24
   };
+  wheelRuntimeCache.config = config;
+  wheelRuntimeCache.configAt = now;
+  return config;
 }
 
 function pickWheelPrize(prizes) {
@@ -3414,6 +3644,7 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
     const session = await resolveMiniAppUser(req);
     if (!session.ok) return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
 
+    const isAdmin = await isMiniAppAdminUser(session);
     const [config, prizes, spinDoc, myPromos] = await Promise.all([
       getWheelConfig(),
       ensureWheelPrizes(),
@@ -3425,7 +3656,9 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
     let nextSpinAt = null;
     let lastPrize = null;
     const spin = spinDoc.exists ? spinDoc.data() : {};
-    if (spin.lastSpinDate) {
+    if (spin.prize) lastPrize = spin.prize;
+    // Admins can spin without cooldown
+    if (!isAdmin && spin.lastSpinDate) {
       const lastMs = spin.lastSpinDate.toMillis?.() || Date.parse(spin.lastSpinDate) || 0;
       const cooldownMs = (config.cooldownHours || 24) * 3600 * 1000;
       const unlockAt = lastMs + cooldownMs;
@@ -3433,7 +3666,6 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
         canSpin = false;
         nextSpinAt = unlockAt;
       }
-      if (spin.prize) lastPrize = spin.prize;
     }
 
     // If last prize promo is missing from list but still stored on spin — include it
@@ -3468,8 +3700,9 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
       success: true,
       active: config.active,
       canSpin: Boolean(canSpin && config.active),
+      unlimited: Boolean(isAdmin),
       cooldownHours: config.cooldownHours,
-      nextSpinAt,
+      nextSpinAt: isAdmin ? null : nextSpinAt,
       totalSpins: Number(spin.totalSpins) || 0,
       lastPrize,
       myPromos,
@@ -3482,15 +3715,18 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
 
 app.post('/api/mini-app/wheel/spin', async (req, res) => {
   try {
+    if (!rateLimit(req, res, { key: 'wheel-spin', limit: 20, windowMs: 60_000 })) return;
     const session = await resolveMiniAppUser(req);
     if (!session.ok) return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
 
-    const config = await getWheelConfig();
+    const [isAdmin, config, prizes] = await Promise.all([
+      isMiniAppAdminUser(session),
+      getWheelConfig(),
+      ensureWheelPrizes()
+    ]);
     if (!config.active) {
       return res.status(400).json({ success: false, error: 'Колесо временно выключено' });
     }
-
-    const prizes = await ensureWheelPrizes();
     if (!prizes.length) {
       return res.status(500).json({ success: false, error: 'Призы не настроены' });
     }
@@ -3499,11 +3735,13 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
     const cooldownMs = (config.cooldownHours || 24) * 3600 * 1000;
 
     // Atomic cooldown check + reserve spin slot before awarding
+    // Admins skip the daily limit
     let reserved = false;
+    let prize = null;
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(spinRef);
       const prev = snap.exists ? snap.data() : {};
-      if (prev.lastSpinDate) {
+      if (!isAdmin && prev.lastSpinDate) {
         const lastMs = prev.lastSpinDate.toMillis?.() || 0;
         if (Date.now() < lastMs + cooldownMs) {
           const err = new Error('Колесо ещё недоступно');
@@ -3512,17 +3750,20 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
           throw err;
         }
       }
+      // Pick inside tx so we can persist pending prize id atomically
+      prize = pickWheelPrize(prizes);
       tx.set(spinRef, {
         userId: session.userId,
         lastSpinDate: admin.firestore.FieldValue.serverTimestamp(),
         totalSpins: (Number(prev.totalSpins) || 0) + 1,
         pending: true,
+        pendingPrizeId: prize?.id || null,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
       reserved = true;
     });
 
-    const prize = pickWheelPrize(prizes);
+    if (!prize) prize = pickWheelPrize(prizes);
     const prizeIndex = Math.max(0, prizes.findIndex((p) => p.id === prize.id));
     let award = { type: prize.type, promoCode: null, bonusAwarded: 0, balance: null };
 
@@ -3546,8 +3787,10 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
         claimed: true
       };
 
+      // Don't block the response on the final write for "nothing" — still await for consistency
       await spinRef.set({
         pending: false,
+        pendingPrizeId: admin.firestore.FieldValue.delete(),
         prize: publicPrize,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
@@ -3557,13 +3800,17 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
         prizeIndex,
         prize: publicPrize,
         award,
-        nextSpinAt: Date.now() + cooldownMs,
-        canSpin: false
+        unlimited: Boolean(isAdmin),
+        nextSpinAt: isAdmin ? null : Date.now() + cooldownMs,
+        canSpin: Boolean(isAdmin)
       });
     } catch (awardErr) {
       if (reserved) {
+        // Unlock cooldown so the guest does not lose the day without a prize
         await spinRef.set({
           pending: false,
+          pendingPrizeId: admin.firestore.FieldValue.delete(),
+          lastSpinDate: admin.firestore.FieldValue.delete(),
           awardError: String(awardErr.message || awardErr),
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
@@ -4150,20 +4397,13 @@ app.post('/api/mini-app/admin/monitoring', async (req, res) => {
 
 // Grant/ensure admin for owner Telegram id
 app.post('/api/mini-app/ensure-admin', async (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
-    const requestedId = String(req.body?.telegramId || TELEGRAM_CHAT_ID || '1743362083');
-    const allowed = new Set(
-      String(process.env.TELEGRAM_ADMIN_IDS || TELEGRAM_CHAT_ID || '1743362083')
-        .split(',')
-        .map((v) => v.trim())
-        .filter(Boolean)
-    );
-    allowed.add('1743362083');
-
-    if (!allowed.has(requestedId)) {
-      return res.status(403).json({ success: false, error: 'Этот Telegram ID не в списке админов' });
+    const allowed = getConfiguredAdminIds();
+    const requestedId = String(req.body?.telegramId || [...allowed][0] || '').trim();
+    if (!requestedId || !allowed.has(requestedId)) {
+      return res.status(403).json({ success: false, error: 'Этот Telegram ID не в TELEGRAM_ADMIN_IDS' });
     }
-
     const result = await ensureTelegramAdmin(requestedId);
     res.json({ success: true, ...result });
   } catch (error) {
@@ -4181,14 +4421,16 @@ async function ensureAlertsBotWebhook() {
   const publicBase = (process.env.PUBLIC_BASE_URL || 'https://asafievbar.duckdns.org').replace(/\/$/, '');
   const webhookUrl = `${publicBase}/telegram-webhook`;
   try {
+    const payload = {
+      url: webhookUrl,
+      allowed_updates: ['message', 'callback_query'],
+      drop_pending_updates: false
+    };
+    if (TELEGRAM_WEBHOOK_SECRET) payload.secret_token = TELEGRAM_WEBHOOK_SECRET;
     const setRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: webhookUrl,
-        allowed_updates: ['message', 'callback_query'],
-        drop_pending_updates: false
-      })
+      body: JSON.stringify(payload)
     }).then((r) => r.json());
     console.log('📱 Alerts webhook:', setRes.ok ? webhookUrl : setRes);
   } catch (e) {
@@ -4204,14 +4446,16 @@ async function ensureMiniAppBotWebhook() {
   const publicBase = (process.env.PUBLIC_BASE_URL || 'https://asafievbar.duckdns.org').replace(/\/$/, '');
   const webhookUrl = `${publicBase}/telegram-miniapp-webhook`;
   try {
+    const payload = {
+      url: webhookUrl,
+      allowed_updates: ['message'],
+      drop_pending_updates: false
+    };
+    if (TELEGRAM_WEBHOOK_SECRET) payload.secret_token = TELEGRAM_WEBHOOK_SECRET;
     const setRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_MINIAPP_BOT_TOKEN}/setWebhook`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: webhookUrl,
-        allowed_updates: ['message'],
-        drop_pending_updates: false
-      })
+      body: JSON.stringify(payload)
     }).then((r) => r.json());
     console.log('📲 Mini App webhook:', setRes.ok ? webhookUrl : setRes);
 
@@ -4255,13 +4499,27 @@ app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   console.log(`📲 Mini App: ${getMiniAppPublicUrl()}`);
   console.log(`🔍 Health check: ${publicBase}/health`);
 
-  // Ensure owner is admin in Firestore on boot
-  ensureTelegramAdmin(process.env.TELEGRAM_CHAT_ID || '1743362083')
-    .then((r) => console.log('👑 Owner admin ensured:', r.uid))
-    .catch((e) => console.warn('Owner admin ensure failed:', e.message));
+  // Ensure configured admins in Firestore on boot
+  const bootAdmins = [...getConfiguredAdminIds()];
+  if (!bootAdmins.length) {
+    console.warn('⚠️ TELEGRAM_ADMIN_IDS / TELEGRAM_CHAT_ID empty — no owner admin ensure');
+  } else {
+    Promise.all(bootAdmins.map((id) => ensureTelegramAdmin(id)))
+      .then((rows) => console.log('👑 Admins ensured:', rows.map((r) => r.uid).join(', ')))
+      .catch((e) => console.warn('Owner admin ensure failed:', e.message));
+  }
+  if (!OPS_ADMIN_SECRET) console.warn('⚠️ OPS_ADMIN_SECRET not set — ops endpoints disabled');
+  if (!TELEGRAM_WEBHOOK_SECRET) console.warn('⚠️ TELEGRAM_WEBHOOK_SECRET not set — webhooks insecure/rejected in prod');
 
   ensureAlertsBotWebhook().catch((e) => console.warn('Alerts webhook ensure failed:', e.message));
   ensureMiniAppBotWebhook().catch((e) => console.warn('Mini App webhook ensure failed:', e.message));
+  warmMenuBootstrapCache()
+    .then((p) => console.log('🍹 Menu bootstrap cache warm:', p?.cocktails?.length || 0, 'cocktails'))
+    .catch((e) => console.warn('Menu bootstrap warm failed:', e.message));
+  ensureWheelPrizes()
+    .then((p) => console.log('🎡 Wheel prizes cache warm:', p?.length || 0))
+    .catch((e) => console.warn('Wheel prizes warm failed:', e.message));
+  getWheelConfig().catch(() => {});
 });
 
 module.exports = app;
