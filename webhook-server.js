@@ -9,48 +9,119 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware - CORS configuration with proper wildcard support
+// ── Security helpers ───────────────────────────────────────────────
+const OPS_ADMIN_SECRET = String(process.env.OPS_ADMIN_SECRET || '').trim();
+const TELEGRAM_WEBHOOK_SECRET = String(process.env.TELEGRAM_WEBHOOK_SECRET || '').trim();
+const INIT_DATA_MAX_AGE_SEC = Math.max(300, Number(process.env.INIT_DATA_MAX_AGE_SEC) || 3600);
+const IS_PRODUCTION = Boolean(process.env.PUBLIC_BASE_URL) || process.env.NODE_ENV === 'production';
+
+const rateLimitBuckets = new Map();
+function clientIp(req) {
+  const xf = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return xf || req.ip || req.socket?.remoteAddress || 'unknown';
+}
+function rateLimit(req, res, { key, limit = 60, windowMs = 60_000 } = {}) {
+  const bucketKey = `${key}:${clientIp(req)}`;
+  const now = Date.now();
+  let bucket = rateLimitBuckets.get(bucketKey);
+  if (!bucket || now > bucket.resetAt) {
+    bucket = { count: 0, resetAt: now + windowMs };
+    rateLimitBuckets.set(bucketKey, bucket);
+  }
+  bucket.count += 1;
+  if (bucket.count > limit) {
+    res.status(429).json({ success: false, error: 'Слишком много запросов' });
+    return false;
+  }
+  return true;
+}
+// Opportunistic cleanup of stale buckets
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of rateLimitBuckets) {
+    if (now > v.resetAt + 60_000) rateLimitBuckets.delete(k);
+  }
+}, 120_000).unref?.();
+
+function safeEqualStr(a, b) {
+  const aa = Buffer.from(String(a || ''), 'utf8');
+  const bb = Buffer.from(String(b || ''), 'utf8');
+  if (aa.length !== bb.length) return false;
+  return crypto.timingSafeEqual(aa, bb);
+}
+
+function requireOpsSecret(req, res) {
+  if (!OPS_ADMIN_SECRET) {
+    res.status(503).json({ success: false, error: 'OPS_ADMIN_SECRET не настроен на сервере' });
+    return false;
+  }
+  const provided =
+    req.headers['x-ops-secret'] ||
+    req.query?.opsSecret ||
+    req.body?.opsSecret ||
+    '';
+  if (!safeEqualStr(provided, OPS_ADMIN_SECRET)) {
+    res.status(403).json({ success: false, error: 'Forbidden' });
+    return false;
+  }
+  return true;
+}
+
+function requireTelegramWebhookSecret(req, res) {
+  if (!TELEGRAM_WEBHOOK_SECRET) {
+    if (IS_PRODUCTION) {
+      console.error('❌ TELEGRAM_WEBHOOK_SECRET missing — rejecting webhook');
+      res.status(503).json({ error: 'Webhook secret not configured' });
+      return false;
+    }
+    return true;
+  }
+  const header = req.headers['x-telegram-bot-api-secret-token'] || '';
+  if (!safeEqualStr(header, TELEGRAM_WEBHOOK_SECRET)) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+  }
+  return true;
+}
+
+function getConfiguredAdminIds() {
+  const raw = String(process.env.TELEGRAM_ADMIN_IDS || process.env.TELEGRAM_CHAT_ID || '').trim();
+  return new Set(
+    raw
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean)
+  );
+}
+
+// Middleware — CORS (deny unknown origins in production)
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, Postman, or file://)
     if (!origin) return callback(null, true);
-    
-    // List of allowed origins and patterns
     const allowedOrigins = [
-      'https://railway.com',
       'http://localhost:3000',
       'http://127.0.0.1:3000',
       'https://ve1lers.github.io',
       'https://asafievbar.duckdns.org',
-      'null' // For file:// protocol
+      'null'
     ];
-    
     const allowedPatterns = [
-      /^https:\/\/.*\.railway\.app$/,
       /^https:\/\/.*\.github\.io$/,
-      /^https:\/\/.*\.duckdns\.org$/
+      /^https:\/\/.*\.duckdns\.org$/,
+      /^https:\/\/.*\.onrender\.com$/
     ];
-    
-    // Check if origin is in allowed list
-    if (allowedOrigins.includes(origin)) {
+    if (allowedOrigins.includes(origin) || allowedPatterns.some((p) => p.test(origin))) {
       return callback(null, true);
     }
-    
-    // Check if origin matches any pattern
-    if (allowedPatterns.some(pattern => pattern.test(origin))) {
-      return callback(null, true);
-    }
-    
-    // For development, allow all origins
-    // Remove this in production if needed
-    return callback(null, true);
+    if (!IS_PRODUCTION) return callback(null, true);
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Ops-Secret', 'X-Telegram-Init-Data']
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 
 // Versioned JS/CSS (?v=) can be cached; HTML always revalidated.
 // NEVER Clear-Site-Data — it blanks Telegram WebView loads.
@@ -121,10 +192,7 @@ try {
     privateKey = privateKey.replace(/^["']|["']$/g, '');
     // Заменяем \\n на реальные переносы строк
     privateKey = privateKey.replace(/\\n/g, '\n');
-    console.log('🔑 Processed private key length:', privateKey.length);
-    console.log('🔑 Private key starts with:', privateKey.substring(0, 30) + '...');
-    console.log('🔑 Private key ends with:', '...' + privateKey.substring(privateKey.length - 30));
-    
+    console.log('🔑 Private key processed, length:', privateKey.length);
     // Проверяем, что private key имеет правильный формат
     if (!privateKey.includes('BEGIN PRIVATE KEY') || !privateKey.includes('END PRIVATE KEY')) {
       console.error('❌ Private key format is invalid');
@@ -193,7 +261,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'wheelspin1';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'harden1';
 
 function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
@@ -240,26 +308,15 @@ app.get('/', (req, res) => {
     timestamp: new Date().toISOString(),
     endpoints: {
       health: '/health',
-      diagnose: '/diagnose',
-      testFirebase: '/test-firebase',
-      queueInfo: '/queue-info',
-      ordersLast: '/orders-last',
-      webhook: '/telegram-webhook',
-      miniAppWebhook: '/telegram-miniapp-webhook',
       miniApp: '/mini-app/',
-      miniAppAuth: '/api/mini-app/auth',
-      miniAppCreateOrder: '/api/mini-app/create-order'
+      miniAppAuth: '/api/mini-app/auth'
     }
   });
 });
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  // Разрешаем CORS для фронтенда (GitHub Pages, локальный файл и т.п.)
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-
+  if (!rateLimit(req, res, { key: 'health', limit: 120, windowMs: 60_000 })) return;
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
@@ -271,6 +328,7 @@ app.get('/health', (req, res) => {
 
 // Диагностика переменных окружения
 app.get('/diagnose', (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
     console.log('🔍 Запуск диагностики переменных окружения...');
     
@@ -305,12 +363,8 @@ app.get('/diagnose', (req, res) => {
 
 // Test Firebase connection
 app.get('/test-firebase', async (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
-    // Разрешаем CORS для фронтенда
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-
     console.log('🔥 Тестируем подключение к Firebase...');
     
     // Проверяем переменные окружения Firebase
@@ -326,14 +380,6 @@ app.get('/test-firebase', async (req, res) => {
     console.log('🔍 Проверка переменных окружения Firebase:', envCheck);
     
     // Дополнительная диагностика private key
-    if (process.env.FIREBASE_PRIVATE_KEY) {
-      const privateKey = process.env.FIREBASE_PRIVATE_KEY;
-      console.log('🔑 Private key length:', privateKey.length);
-      console.log('🔑 Private key starts with:', privateKey.substring(0, 50) + '...');
-      console.log('🔑 Private key contains \\n:', privateKey.includes('\\n'));
-      console.log('🔑 Private key contains actual newlines:', privateKey.includes('\n'));
-    }
-    
     // Проверяем, что Firebase инициализирован
     if (!db) {
       throw new Error('Firebase не инициализирован');
@@ -377,6 +423,7 @@ app.get('/test-firebase', async (req, res) => {
 
 // Получение информации об очереди заказов
 app.get('/queue-info', async (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
     const queueInfo = await getQueueInfo();
     res.json({
@@ -395,8 +442,8 @@ app.get('/queue-info', async (req, res) => {
 
 // Диагностика: заказы, которые видит webhook — сверьте id с ID в кнопке Telegram
 app.get('/orders-last', async (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
-    res.setHeader('Access-Control-Allow-Origin', '*');
     const limit = Math.min(parseInt(req.query.limit, 10) || 10, 20);
     const snap = await db.collection('orders').limit(limit).get();
     const projectId = admin.app().options?.projectId || serviceAccount?.project_id || '?';
@@ -414,6 +461,7 @@ app.get('/orders-last', async (req, res) => {
 
 // Очистка всех заказов из базы данных (только для разработки)
 app.delete('/cleanup-orders', async (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
     console.log('🧹 Начинаем очистку всех заказов из базы данных...');
     
@@ -461,6 +509,7 @@ app.delete('/cleanup-orders', async (req, res) => {
 // Валидация промокода
 app.post('/validate-promo', async (req, res) => {
   try {
+    if (!rateLimit(req, res, { key: 'validate-promo', limit: 60, windowMs: 60_000 })) return;
     const { promoCode } = req.body;
     
     if (!promoCode) {
@@ -532,6 +581,7 @@ app.post('/validate-promo', async (req, res) => {
 // Отправка уведомления в Telegram о новом заказе
 app.post('/notify-telegram', async (req, res) => {
   try {
+    if (!rateLimit(req, res, { key: 'notify-telegram', limit: 30, windowMs: 60_000 })) return;
     const { orderId, orderData } = req.body;
     
     if (!orderId || !orderData) {
@@ -540,15 +590,27 @@ app.post('/notify-telegram', async (req, res) => {
         error: 'Отсутствуют данные заказа'
       });
     }
+
+    // Only alert for orders that actually exist (blocks forged spam)
+    const orderSnap = await db.collection('orders').doc(String(orderId)).get();
+    if (!orderSnap.exists) {
+      return res.status(404).json({ success: false, error: 'Заказ не найден' });
+    }
+    const live = orderSnap.data() || {};
+    const cocktailName = live.name || orderData.name;
+    const customerName = live.user || orderData.user;
+    const price = live.price != null ? live.price : orderData.price;
+    const queuePosition = live.queuePosition || orderData.queuePosition || 0;
+    const displayTime = live.displayTime || orderData.displayTime || new Date().toLocaleString('ru-RU');
     
     const message = formatOrderAlertHtml({
       mode: 'new',
-      status: 'confirmed',
-      cocktailName: orderData.name,
-      customerName: orderData.user,
-      price: orderData.price,
-      queuePosition: orderData.queuePosition || 0,
-      displayTime: orderData.displayTime || new Date().toLocaleString('ru-RU'),
+      status: live.status || 'confirmed',
+      cocktailName,
+      customerName,
+      price,
+      queuePosition,
+      displayTime,
       orderId
     });
     const inlineKeyboard = buildOrderActionKeyboard(orderId, 'pending');
@@ -583,49 +645,65 @@ app.post('/notify-telegram', async (req, res) => {
 // Использование промокода (увеличение счетчика)
 app.post('/use-promo', async (req, res) => {
   try {
+    if (!rateLimit(req, res, { key: 'use-promo', limit: 20, windowMs: 60_000 })) return;
+    // Prefer authenticated ops or Mini App session; bare public burn is disabled
+    const hasOps = Boolean(OPS_ADMIN_SECRET) && safeEqualStr(
+      req.headers['x-ops-secret'] || req.body?.opsSecret || '',
+      OPS_ADMIN_SECRET
+    );
+    if (!hasOps) {
+      const session = await resolveMiniAppUser(req).catch(() => ({ ok: false }));
+      if (!session?.ok) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+    }
+
     const { promoCode } = req.body;
-    
     if (!promoCode) {
-      return res.status(400).json({
-        success: false,
-        error: 'Промокод не указан'
-      });
+      return res.status(400).json({ success: false, error: 'Промокод не указан' });
     }
-    
-    const promoRef = db.collection('promocodes').doc(promoCode.toUpperCase());
-    const promoDoc = await promoRef.get();
-    
-    if (!promoDoc.exists) {
-      return res.json({
-        success: false,
-        error: 'Промокод не найден'
+
+    const code = String(promoCode).trim().toUpperCase();
+    const promoRef = db.collection('promocodes').doc(code);
+    await db.runTransaction(async (tx) => {
+      const promoDoc = await tx.get(promoRef);
+      if (!promoDoc.exists) {
+        const err = new Error('Промокод не найден');
+        err.code = 'not_found';
+        throw err;
+      }
+      const promoData = promoDoc.data() || {};
+      if (promoData.active === false) {
+        const err = new Error('Промокод неактивен');
+        err.code = 'inactive';
+        throw err;
+      }
+      const maxUses = Number(promoData.maxUses) || 0;
+      const usedCount = Number(promoData.usedCount) || 0;
+      if (maxUses > 0 && usedCount >= maxUses) {
+        const err = new Error('Промокод исчерпан');
+        err.code = 'exhausted';
+        throw err;
+      }
+      tx.update(promoRef, {
+        usedCount: usedCount + 1,
+        lastUsedAt: admin.firestore.FieldValue.serverTimestamp()
       });
-    }
-    
-    // Увеличиваем счетчик использований
-    await promoRef.update({
-      usedCount: admin.firestore.FieldValue.increment(1),
-      lastUsedAt: admin.firestore.FieldValue.serverTimestamp()
     });
-    
-    console.log(`✅ Промокод ${promoCode} использован`);
-    
-    res.json({
-      success: true,
-      message: 'Промокод использован'
-    });
-    
+
+    res.json({ success: true, message: 'Промокод использован' });
   } catch (error) {
+    if (['not_found', 'inactive', 'exhausted'].includes(error.code)) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
     console.error('❌ Ошибка использования промокода:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // Очистка только тестовых заказов (по статусу или названию)
 app.delete('/cleanup-test-orders', async (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
     console.log('🧹 Начинаем очистку тестовых заказов...');
     
@@ -639,11 +717,10 @@ app.delete('/cleanup-test-orders', async (req, res) => {
     ordersSnapshot.forEach(doc => {
       const orderData = doc.data();
       const orderName = orderData.name?.toLowerCase() || '';
-      const isTestOrder = orderName.includes('тест') || 
+      const isTestOrder = orderName.includes('тест') ||
                          orderName.includes('test') ||
                          orderName.includes('проверка') ||
-                         orderData.status === 'completed' ||
-                         orderData.status === 'cancelled';
+                         orderData.isTest === true;
       
       if (isTestOrder) {
         batch.delete(doc.ref);
@@ -686,11 +763,7 @@ app.options('/send-purchase-list', (req, res) => {
 });
 
 app.post('/send-purchase-list', async (req, res) => {
-  // Устанавливаем CORS заголовки
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  
+  if (!requireOpsSecret(req, res)) return;
   try {
     console.log('🛒 Получен запрос на отправку списка закупок...');
     console.log('📨 Origin:', req.headers.origin);
@@ -805,6 +878,7 @@ async function handleMiniAppBotMessage(message) {
 
 // Основной webhook для Telegram (alerts bot — callback buttons)
 app.post('/telegram-webhook', async (req, res) => {
+  if (!requireTelegramWebhookSecret(req, res)) return;
   try {
     let body = req.body;
     if (typeof body === 'string') {
@@ -832,6 +906,7 @@ app.post('/telegram-webhook', async (req, res) => {
 
 // Webhook для Mini App бота (@asafievbar_bot) — /start → подсказка открыть Mini App
 app.post('/telegram-miniapp-webhook', async (req, res) => {
+  if (!requireTelegramWebhookSecret(req, res)) return;
   try {
     let body = req.body;
     if (typeof body === 'string') {
@@ -1471,7 +1546,7 @@ function validateTelegramWebAppData(initData, botToken) {
     .update(dataCheckString)
     .digest('hex');
 
-  if (calculatedHash !== hash) {
+  if (!safeEqualStr(calculatedHash, hash)) {
     // Fallback: URLSearchParams style (some clients)
     const params = new URLSearchParams(initData);
     const hash2 = params.get('hash');
@@ -1484,7 +1559,7 @@ function validateTelegramWebAppData(initData, botToken) {
       .createHmac('sha256', secretKey)
       .update(dataCheckString2)
       .digest('hex');
-    if (calculatedHash2 !== hash2) {
+    if (!safeEqualStr(calculatedHash2, hash2 || '')) {
       return { ok: false, reason: 'bad_hash' };
     }
   }
@@ -1492,7 +1567,7 @@ function validateTelegramWebAppData(initData, botToken) {
   const params = new URLSearchParams(initData);
   const authDate = Number(params.get('auth_date') || 0);
   const ageSec = Math.floor(Date.now() / 1000) - authDate;
-  if (!authDate || ageSec > 86400) {
+  if (!authDate || ageSec > INIT_DATA_MAX_AGE_SEC) {
     return { ok: false, reason: 'expired', ageSec };
   }
 
@@ -1839,7 +1914,10 @@ async function validatePromoCodeData(codeRaw) {
     promo: {
       code,
       discount: Number(promoData.discount) || 0,
-      description: promoData.description || ''
+      description: promoData.description || '',
+      ownerUserId: promoData.ownerUserId || null,
+      maxUses: Number(promoData.maxUses) || 0,
+      usedCount: Number(promoData.usedCount) || 0
     }
   };
 }
@@ -2037,6 +2115,7 @@ async function restoreIngredientsAdmin(cocktailName, orderId = null) {
 // Auth: validate Telegram initData → session (+ optional Firebase custom token)
 app.post('/api/mini-app/auth', async (req, res) => {
   try {
+    if (!rateLimit(req, res, { key: 'auth', limit: 30, windowMs: 60_000 })) return;
     const { initData } = req.body || {};
     const parsed = validateTelegramWebAppData(initData, TELEGRAM_MINIAPP_BOT_TOKEN);
 
@@ -2052,15 +2131,7 @@ app.post('/api/mini-app/auth', async (req, res) => {
     const tgUser = parsed.user;
     const uid = `tg_${tgUser.id}`;
     const displayName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Гость Telegram';
-    const adminIds = new Set(
-      String(process.env.TELEGRAM_ADMIN_IDS || TELEGRAM_CHAT_ID || '')
-        .split(',')
-        .map((v) => v.trim())
-        .filter(Boolean)
-    );
-    // Owner chat id from project defaults
-    adminIds.add('1743362083');
-    const isAdminEnv = adminIds.has(String(tgUser.id));
+    const isAdminEnv = getConfiguredAdminIds().has(String(tgUser.id));
 
     // Firebase Auth upsert is ~0.8s+ — never block login on it
     void (async () => {
@@ -2507,6 +2578,7 @@ app.post('/api/mini-app/my-orders', async (req, res) => {
 // Create order from Mini App (initData or Firebase ID token)
 app.post('/api/mini-app/create-order', async (req, res) => {
   try {
+    if (!rateLimit(req, res, { key: 'create-order', limit: 40, windowMs: 60_000 })) return;
     const session = await resolveMiniAppUser(req);
     if (!session.ok) {
       return res.status(401).json({
@@ -2554,14 +2626,11 @@ app.post('/api/mini-app/create-order', async (req, res) => {
     ]);
 
     let listedPrice = menuPrice;
-    if (listedPrice == null) {
-      const fallback = Number(originalPrice != null ? originalPrice : price);
-      if (!Number.isFinite(fallback) || fallback < 0) {
-        return res.status(400).json({ success: false, error: 'Коктейль не найден в меню' });
-      }
-      console.warn('create-order: menu price missing for', name, '— fallback', fallback);
-      listedPrice = fallback;
+    if (listedPrice == null || !Number.isFinite(Number(listedPrice)) || Number(listedPrice) < 0) {
+      // Never trust client-supplied prices
+      return res.status(400).json({ success: false, error: 'Коктейль не найден в меню' });
     }
+    listedPrice = Number(listedPrice);
 
     if (bonusAmount > 0 && bonusPair) {
       const [bonusDoc, settingsDoc] = bonusPair;
@@ -2666,6 +2735,7 @@ app.post('/api/mini-app/create-order', async (req, res) => {
 
 // Helper: configure Telegram Menu Button to open Mini App
 app.post('/api/mini-app/setup-menu-button', async (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
     const miniAppUrl = (req.body?.url || '').trim() || getMiniAppPublicUrl();
 
@@ -2703,6 +2773,7 @@ app.post('/api/mini-app/setup-menu-button', async (req, res) => {
 
 // Configure Mini App bot profile (name/description/menu)
 app.post('/api/mini-app/setup-bot-profile', async (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
     const token = TELEGRAM_MINIAPP_BOT_TOKEN;
     const miniAppUrl = (req.body?.url || '').trim() || getMiniAppPublicUrl();
@@ -2822,23 +2893,12 @@ async function ensureTelegramAdmin(telegramId) {
 
 async function isMiniAppAdminUser(session) {
   if (!session?.ok && session?.userId == null && !session?.telegramId) return false;
-  const allowed = new Set(
-    String(process.env.TELEGRAM_ADMIN_IDS || TELEGRAM_CHAT_ID || '1743362083')
-      .split(',')
-      .map((v) => v.trim())
-      .filter(Boolean)
-  );
-  allowed.add('1743362083');
+  const allowed = getConfiguredAdminIds();
 
   if (session.telegramId && allowed.has(String(session.telegramId))) return true;
 
-  try {
-    const uid = session.userId || (session.telegramId ? `tg_${session.telegramId}` : null);
-    if (!uid) return false;
-    const userDoc = await db.collection('users').doc(uid).get();
-    if (userDoc.exists && userDoc.data().role === 'admin') return true;
-  } catch (_) { /* ignore */ }
-
+  // Env allowlist is source of truth; Firestore role alone is not enough
+  // (clients must not be able to self-grant admin via open rules).
   return false;
 }
 
@@ -3263,6 +3323,9 @@ app.post('/api/mini-app/apply-promo', async (req, res) => {
 
     const checked = await validatePromoCodeData(req.body?.promoCode);
     if (!checked.ok) return res.status(400).json({ success: false, error: checked.error });
+    if (checked.promo.ownerUserId && String(checked.promo.ownerUserId) !== String(session.userId)) {
+      return res.status(403).json({ success: false, error: 'Этот промокод персональный' });
+    }
 
     const billsSnap = await db.collection('bills')
       .where('userId', '==', session.userId)
@@ -3288,23 +3351,60 @@ app.post('/api/mini-app/apply-promo', async (req, res) => {
     const discountPct = Number(checked.promo.discount) || 0;
     const discountAmount = Math.round(originalTotal * discountPct / 100);
     const newTotal = Math.max(0, originalTotal - discountAmount);
+    const promoRef = db.collection('promocodes').doc(checked.promo.code);
 
-    await billDoc.ref.update({
-      promoCode: checked.promo.code,
-      discount: discountPct,
-      originalTotal,
-      totalAmount: newTotal,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    await db.runTransaction(async (tx) => {
+      const promoSnap = await tx.get(promoRef);
+      if (!promoSnap.exists) {
+        const err = new Error('Промокод не найден');
+        err.code = 'promo';
+        throw err;
+      }
+      const p = promoSnap.data() || {};
+      if (p.active === false) {
+        const err = new Error('Промокод неактивен');
+        err.code = 'promo';
+        throw err;
+      }
+      if (p.ownerUserId && String(p.ownerUserId) !== String(session.userId)) {
+        const err = new Error('Этот промокод персональный');
+        err.code = 'promo';
+        throw err;
+      }
+      const maxUses = Number(p.maxUses) || 0;
+      const usedCount = Number(p.usedCount) || 0;
+      if (maxUses > 0 && usedCount >= maxUses) {
+        const err = new Error('Промокод исчерпан');
+        err.code = 'promo';
+        throw err;
+      }
+      const billSnap = await tx.get(billDoc.ref);
+      const liveBill = billSnap.exists ? (billSnap.data() || {}) : {};
+      if (liveBill.promoCode) {
+        const err = new Error('Промокод уже применён к этому счёту');
+        err.code = 'promo';
+        throw err;
+      }
+      tx.update(billDoc.ref, {
+        promoCode: checked.promo.code,
+        discount: discountPct,
+        originalTotal,
+        totalAmount: newTotal,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      tx.set(promoRef, {
+        usedCount: usedCount + 1,
+        lastUsedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
     });
-
-    await db.collection('promocodes').doc(checked.promo.code).set({
-      usedCount: admin.firestore.FieldValue.increment(1),
-      lastUsedAt: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
 
     res.json({
       success: true,
-      promo: checked.promo,
+      promo: {
+        code: checked.promo.code,
+        discount: checked.promo.discount,
+        description: checked.promo.description
+      },
       originalTotal,
       discountAmount,
       totalAmount: newTotal,
@@ -3615,6 +3715,7 @@ app.post('/api/mini-app/wheel/status', async (req, res) => {
 
 app.post('/api/mini-app/wheel/spin', async (req, res) => {
   try {
+    if (!rateLimit(req, res, { key: 'wheel-spin', limit: 20, windowMs: 60_000 })) return;
     const session = await resolveMiniAppUser(req);
     if (!session.ok) return res.status(401).json({ success: false, error: 'Unauthorized', reason: session.reason });
 
@@ -3705,8 +3806,11 @@ app.post('/api/mini-app/wheel/spin', async (req, res) => {
       });
     } catch (awardErr) {
       if (reserved) {
+        // Unlock cooldown so the guest does not lose the day without a prize
         await spinRef.set({
           pending: false,
+          pendingPrizeId: admin.firestore.FieldValue.delete(),
+          lastSpinDate: admin.firestore.FieldValue.delete(),
           awardError: String(awardErr.message || awardErr),
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
@@ -4293,20 +4397,13 @@ app.post('/api/mini-app/admin/monitoring', async (req, res) => {
 
 // Grant/ensure admin for owner Telegram id
 app.post('/api/mini-app/ensure-admin', async (req, res) => {
+  if (!requireOpsSecret(req, res)) return;
   try {
-    const requestedId = String(req.body?.telegramId || TELEGRAM_CHAT_ID || '1743362083');
-    const allowed = new Set(
-      String(process.env.TELEGRAM_ADMIN_IDS || TELEGRAM_CHAT_ID || '1743362083')
-        .split(',')
-        .map((v) => v.trim())
-        .filter(Boolean)
-    );
-    allowed.add('1743362083');
-
-    if (!allowed.has(requestedId)) {
-      return res.status(403).json({ success: false, error: 'Этот Telegram ID не в списке админов' });
+    const allowed = getConfiguredAdminIds();
+    const requestedId = String(req.body?.telegramId || [...allowed][0] || '').trim();
+    if (!requestedId || !allowed.has(requestedId)) {
+      return res.status(403).json({ success: false, error: 'Этот Telegram ID не в TELEGRAM_ADMIN_IDS' });
     }
-
     const result = await ensureTelegramAdmin(requestedId);
     res.json({ success: true, ...result });
   } catch (error) {
@@ -4324,14 +4421,16 @@ async function ensureAlertsBotWebhook() {
   const publicBase = (process.env.PUBLIC_BASE_URL || 'https://asafievbar.duckdns.org').replace(/\/$/, '');
   const webhookUrl = `${publicBase}/telegram-webhook`;
   try {
+    const payload = {
+      url: webhookUrl,
+      allowed_updates: ['message', 'callback_query'],
+      drop_pending_updates: false
+    };
+    if (TELEGRAM_WEBHOOK_SECRET) payload.secret_token = TELEGRAM_WEBHOOK_SECRET;
     const setRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: webhookUrl,
-        allowed_updates: ['message', 'callback_query'],
-        drop_pending_updates: false
-      })
+      body: JSON.stringify(payload)
     }).then((r) => r.json());
     console.log('📱 Alerts webhook:', setRes.ok ? webhookUrl : setRes);
   } catch (e) {
@@ -4347,14 +4446,16 @@ async function ensureMiniAppBotWebhook() {
   const publicBase = (process.env.PUBLIC_BASE_URL || 'https://asafievbar.duckdns.org').replace(/\/$/, '');
   const webhookUrl = `${publicBase}/telegram-miniapp-webhook`;
   try {
+    const payload = {
+      url: webhookUrl,
+      allowed_updates: ['message'],
+      drop_pending_updates: false
+    };
+    if (TELEGRAM_WEBHOOK_SECRET) payload.secret_token = TELEGRAM_WEBHOOK_SECRET;
     const setRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_MINIAPP_BOT_TOKEN}/setWebhook`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: webhookUrl,
-        allowed_updates: ['message'],
-        drop_pending_updates: false
-      })
+      body: JSON.stringify(payload)
     }).then((r) => r.json());
     console.log('📲 Mini App webhook:', setRes.ok ? webhookUrl : setRes);
 
@@ -4398,10 +4499,17 @@ app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   console.log(`📲 Mini App: ${getMiniAppPublicUrl()}`);
   console.log(`🔍 Health check: ${publicBase}/health`);
 
-  // Ensure owner is admin in Firestore on boot
-  ensureTelegramAdmin(process.env.TELEGRAM_CHAT_ID || '1743362083')
-    .then((r) => console.log('👑 Owner admin ensured:', r.uid))
-    .catch((e) => console.warn('Owner admin ensure failed:', e.message));
+  // Ensure configured admins in Firestore on boot
+  const bootAdmins = [...getConfiguredAdminIds()];
+  if (!bootAdmins.length) {
+    console.warn('⚠️ TELEGRAM_ADMIN_IDS / TELEGRAM_CHAT_ID empty — no owner admin ensure');
+  } else {
+    Promise.all(bootAdmins.map((id) => ensureTelegramAdmin(id)))
+      .then((rows) => console.log('👑 Admins ensured:', rows.map((r) => r.uid).join(', ')))
+      .catch((e) => console.warn('Owner admin ensure failed:', e.message));
+  }
+  if (!OPS_ADMIN_SECRET) console.warn('⚠️ OPS_ADMIN_SECRET not set — ops endpoints disabled');
+  if (!TELEGRAM_WEBHOOK_SECRET) console.warn('⚠️ TELEGRAM_WEBHOOK_SECRET not set — webhooks insecure/rejected in prod');
 
   ensureAlertsBotWebhook().catch((e) => console.warn('Alerts webhook ensure failed:', e.message));
   ensureMiniAppBotWebhook().catch((e) => console.warn('Mini App webhook ensure failed:', e.message));

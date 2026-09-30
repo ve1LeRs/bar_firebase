@@ -467,6 +467,8 @@
     // Keep focus when interacting with the focused field's controls
     if (target.closest('input, textarea, select, [contenteditable="true"]')) return true;
     if (target.closest('label[for]')) return true;
+    // Never steal the first tap from primary actions (iOS keyboard dismiss race)
+    if (target.closest('#confirmOrderBtn, #ordersPromoBtn, .sheet-actions button, .cta, button.primary')) return true;
     return false;
   }
 
@@ -703,6 +705,9 @@
         state.sessionOk = false;
         state.authReady = false;
         state.authError = err.name === 'AbortError' ? 'timeout' : 'auth_failed';
+        state.role = 'user';
+        applyAdminUi();
+        try { localStorage.removeItem(AUTH_CACHE_KEY); } catch (_) { /* ignore */ }
         const msg =
           err.name === 'AbortError'
             ? 'Сервер не ответил вовремя'
@@ -2359,8 +2364,12 @@
     haptic('light');
   }
 
-  function closeWheelSheet() {
-    if (wheelState.spinning) return;
+  function closeWheelSheet({ force = false } = {}) {
+    if (wheelState.spinning && !force) return;
+    if (force) {
+      stopWheelSpinLoop();
+      wheelState.spinning = false;
+    }
     els.wheelSheet?.classList.remove('open');
     els.wheelSheet?.setAttribute('aria-hidden', 'true');
     if (els.wheelBackdrop) els.wheelBackdrop.hidden = true;
@@ -2441,12 +2450,21 @@
     // Visual spin starts immediately — don't wait for the API
     startWheelSpinLoop();
 
+    const spinWatchdog = setTimeout(() => {
+      if (!wheelState.spinning) return;
+      showToast('Долго нет ответа — можно закрыть');
+      if (els.wheelCloseBtn) els.wheelCloseBtn.disabled = false;
+    }, 12000);
     try {
-      const res = await fetch(`${state.apiBase}/api/mini-app/wheel/spin`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initData: tg.initData })
-      });
+      const res = await fetchWithTimeout(
+        `${state.apiBase}/api/mini-app/wheel/spin`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: tg.initData })
+        },
+        18000
+      );
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Не удалось крутить');
 
@@ -2498,6 +2516,7 @@
         await refreshWheelStatus();
       }
     } finally {
+      clearTimeout(spinWatchdog);
       stopWheelSpinLoop();
       wheelState.spinning = false;
       updateWheelSheetChrome();
@@ -2653,6 +2672,9 @@
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       if (!parsed || !Array.isArray(parsed.cocktails)) return null;
+      const age = Date.now() - (Number(parsed.ts) || 0);
+      // Soft TTL: still usable for instant paint, but mark stale for refresh priority
+      parsed._stale = age > MENU_CACHE_TTL_MS;
       return parsed;
     } catch (_) {
       return null;
@@ -3379,17 +3401,23 @@
     };
 
     // Optimistic UX: close sheet immediately, confirm in background
+    const placeToken = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    state._placeToken = placeToken;
+    const prevBonus = state.bonusBalance;
+    const prevBillTotal = Number(state.openBillTotal) || 0;
+    const prevBillItems = Array.isArray(state.openBillItems) ? [...state.openBillItems] : [];
+
     if (bonusUsed > 0) {
       state.bonusBalance = Math.max(0, state.bonusBalance - bonusUsed);
     }
-    state.openBillTotal = (Number(state.openBillTotal) || 0) + finalPrice;
+    state.openBillTotal = prevBillTotal + finalPrice;
     state.openBillItems = [
-      ...(Array.isArray(state.openBillItems) ? state.openBillItems : []),
+      ...prevBillItems,
       {
         cocktailName: cocktail.name,
         price: finalPrice,
         status: 'pending',
-        orderId: 'optimistic'
+        orderId: `optimistic:${placeToken}`
       }
     ];
     updateProfileUI();
@@ -3397,11 +3425,10 @@
     closeOrderSheet();
     showToast('Отправляем заказ…');
     switchView('orders');
-    // Optimistic placeholder in orders list
     if (els.ordersList && !els.ordersList.querySelector('[data-optimistic]')) {
       const pending = document.createElement('article');
       pending.className = 'order-card';
-      pending.dataset.optimistic = '1';
+      pending.dataset.optimistic = placeToken;
       pending.innerHTML = `
         <div class="order-top">
           <div>
@@ -3429,32 +3456,29 @@
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Не удалось создать заказ');
       }
+      if (state._placeToken !== placeToken) return;
 
       showToast(`Заказ принят · очередь #${data.queuePosition || '—'}`);
       if (typeof data.openBillTotal === 'number' || Array.isArray(data.openBillItems)) {
         applyOpenBill(data);
-      } else {
-        void refreshProfile();
       }
-      // Don't block "заказ принят" on a second round-trip
+      document.querySelector(`[data-optimistic="${placeToken}"]`)?.remove();
       void refreshOrders();
     } catch (err) {
       console.error(err);
-      // Rollback optimistic bonus / bill
-      if (bonusUsed > 0) {
-        state.bonusBalance += bonusUsed;
+      // Rollback only if this request is still the latest place attempt
+      if (state._placeToken === placeToken) {
+        state.bonusBalance = prevBonus;
+        state.openBillTotal = prevBillTotal;
+        state.openBillItems = prevBillItems;
+        updateProfileUI();
       }
-      state.openBillTotal = Math.max(0, (Number(state.openBillTotal) || 0) - finalPrice);
-      state.openBillItems = (state.openBillItems || []).filter((item) => item.orderId !== 'optimistic');
-      updateProfileUI();
-      document.querySelector('[data-optimistic]')?.remove();
+      document.querySelector(`[data-optimistic="${placeToken}"]`)?.remove();
       showToast(err.name === 'AbortError' ? 'Сервер долго отвечает, попробуйте ещё раз' : (err.message || 'Ошибка заказа'));
       haptic('heavy');
     } finally {
       state.placingOrder = false;
       els.confirmOrderBtn.disabled = false;
-      // Never auto-pop rating after placing — only when user is on Orders
-      // and a real ready transition happened (or visits Orders later).
     }
   }
 
@@ -3668,10 +3692,15 @@
     refreshOrders();
     refreshProfile();
     if (state.ordersPollTimer) clearInterval(state.ordersPollTimer);
-    state.ordersPollTimer = setInterval(() => {
+    const tick = () => {
+      if (document.hidden) return;
       refreshOrders();
-      refreshProfile();
-    }, 5000);
+      // Profile/me less often — every other tick
+      if (!tick._n) tick._n = 0;
+      tick._n += 1;
+      if (tick._n % 2 === 0) refreshProfile();
+    };
+    state.ordersPollTimer = setInterval(tick, 12000);
   }
 
   function subscribeOrders() {
@@ -3812,7 +3841,7 @@
       }
     });
     els.wheelOpenBtn?.addEventListener('click', openWheelSheet);
-    els.wheelCloseBtn?.addEventListener('click', closeWheelSheet);
+    els.wheelCloseBtn?.addEventListener('click', () => closeWheelSheet({ force: true }));
     els.wheelBackdrop?.addEventListener('click', closeWheelSheet);
     els.wheelSpinBtn?.addEventListener('click', spinWheel);
     els.wheelHubBtn?.addEventListener('click', spinWheel);
@@ -3914,8 +3943,19 @@
     });
 
     tg?.BackButton?.onClick?.(() => {
-      if (els.sheet.classList.contains('open')) closeOrderSheet();
-      else switchView('menu');
+      if (els.wheelSheet?.classList.contains('open')) {
+        closeWheelSheet({ force: true });
+        return;
+      }
+      if (els.ratingSheet?.classList.contains('open')) {
+        closeRatingSheet({ dismiss: true });
+        return;
+      }
+      if (els.sheet?.classList.contains('open')) {
+        closeOrderSheet();
+        return;
+      }
+      switchView('menu');
     });
 
     // Admin form fields: never let guest rating UI surface while typing

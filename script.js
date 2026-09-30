@@ -59,7 +59,36 @@ if (window.location.hostname === 'localhost' || window.location.hostname === '12
   }
 }
 
+
 console.log('🎯 Финальный URL webhook сервера:', WEBHOOK_SERVER_URL);
+
+function getOpsSecret() {
+  try {
+    return localStorage.getItem('asafiev_ops_secret') || '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function requireOpsSecretOrPrompt(reason) {
+  let secret = getOpsSecret();
+  if (!secret) {
+    secret = prompt(`Ops-секрет сервера (${reason}). Сохраняется локально в браузере:`) || '';
+    secret = secret.trim();
+    if (secret) {
+      try { localStorage.setItem('asafiev_ops_secret', secret); } catch (_) { /* ignore */ }
+    }
+  }
+  return secret;
+}
+
+function opsHeaders(extra = {}) {
+  const secret = getOpsSecret();
+  const headers = { ...extra };
+  if (secret) headers['X-Ops-Secret'] = secret;
+  return headers;
+}
+
 
 // Функция для обновления URL webhook сервера
 function updateWebhookServerUrl(newUrl) {
@@ -115,7 +144,7 @@ async function getNextQueuePosition() {
 // Получение информации об очереди
 async function getQueueInfo() {
   try {
-    const response = await fetch(`${WEBHOOK_SERVER_URL}/queue-info`);
+    const response = await fetch(`${WEBHOOK_SERVER_URL}/queue-info`, { headers: opsHeaders() });
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -2506,7 +2535,13 @@ diagnoseBtn?.addEventListener('click', async () => {
     showSuccess('🔍 Запуск диагностики...');
     
     const baseUrl = WEBHOOK_SERVER_URL.replace(/\/+$/, '');
-    const response = await fetch(`${baseUrl}/diagnose`);
+    const ops = requireOpsSecretOrPrompt('diagnose');
+    const response = await fetch(`${baseUrl}/diagnose`, {
+      headers: opsHeaders()
+    });
+    if (response.status === 403 || response.status === 503) {
+      throw new Error('Нужен OPS_ADMIN_SECRET (сохраните в localStorage asafiev_ops_secret)');
+    }
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -2711,11 +2746,11 @@ cleanupOrdersBtn?.addEventListener('click', async () => {
     
     console.log('🧹 Начинаем очистку всех заказов...');
     
+    const ops = requireOpsSecretOrPrompt('cleanup-orders');
+    if (!ops) throw new Error('Ops-секрет обязателен для очистки заказов');
     const response = await fetch(`${WEBHOOK_SERVER_URL}/cleanup-orders`, {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      headers: opsHeaders({ 'Content-Type': 'application/json' })
     });
     
     if (!response.ok) {
@@ -5254,7 +5289,9 @@ async function testTelegramIntegration() {
     console.log('ℹ️ Пропускаем проверку webhook Firebase в локальной среде');
   } else {
     try {
-      const response = await fetch(`${WEBHOOK_SERVER_URL}/test-firebase`);
+      const response = await fetch(`${WEBHOOK_SERVER_URL}/test-firebase`, {
+        headers: opsHeaders()
+      });
       const data = await response.json();
       
       if (data.success) {
@@ -7396,11 +7433,11 @@ sendToTelegramBtn?.addEventListener('click', async () => {
       ? getWebhookServerUrl()
       : (localStorage.getItem('webhook_server_url') || 'https://asafievbar.duckdns.org');
     
+    const ops = requireOpsSecretOrPrompt('send-purchase-list');
+    if (!ops) throw new Error('Ops-секрет обязателен для списка закупок');
     const response = await fetch(`${serverUrl}/send-purchase-list`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: opsHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         message: message,
         purchaseList: window.currentPurchaseList
