@@ -77,6 +77,15 @@ app.use('/m', express.static(path.join(__dirname, 'mini-app'), {
 }));
 app.get('/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'logo.png')));
 app.get('/favicon.ico', (req, res) => res.sendFile(path.join(__dirname, 'favicon.ico')));
+// Main website static files
+app.use(express.static(path.join(__dirname), {
+  index: 'index.html',
+  extensions: ['html'],
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+  }
+}));
+
 
 // Firebase Admin SDK инициализация
 let serviceAccount;
