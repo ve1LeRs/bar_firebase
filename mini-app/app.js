@@ -3730,15 +3730,9 @@
       document.querySelectorAll('#adminPurchaseFilters .filter').forEach((f) => {
         f.classList.toggle('active', f === btn);
       });
-    const ingSearch = document.getElementById('adminIngSearch');
-    if (ingSearch && !ingSearch.dataset.bound) {
-      ingSearch.dataset.bound = '1';
-      ingSearch.addEventListener('input', () => renderAdminPurchasesList());
-      ingSearch.addEventListener('keyup', () => renderAdminPurchasesList());
-    }
-
       renderAdminPurchasesList();
     });
+    document.getElementById('adminIngSearch')?.addEventListener('input', () => renderAdminPurchasesList());
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
