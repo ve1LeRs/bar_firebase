@@ -583,28 +583,20 @@
 
   async function ensureApiAwake(onStatus) {
     const started = Date.now();
-    const maxWait = 75000;
+    const maxWait = 12000;
     let attempt = 0;
 
     while (Date.now() - started < maxWait) {
       attempt += 1;
-      const waited = Math.round((Date.now() - started) / 1000);
-      onStatus?.(
-        attempt === 1
-          ? 'Будим сервер заказов…'
-          : `Сервер просыпается… ${waited}с`
-      );
       try {
         const res = await fetchWithTimeout(
           `${state.apiBase}/health`,
           { method: 'GET', cache: 'no-store', mode: 'cors' },
-          10000
+          4000
         );
         if (res.ok) return true;
-      } catch (_) {
-        // cold start / network — keep trying
-      }
-      await sleep(Math.min(2500, 800 + attempt * 400));
+      } catch (_) {}
+      await sleep(400);
     }
     return false;
   }
