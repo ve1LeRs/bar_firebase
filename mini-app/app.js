@@ -1453,9 +1453,11 @@
     const box = document.getElementById('adminPurchasesList');
     if (!box) return;
     const filter = state.ingFilter || 'all';
+    const q = (document.getElementById('adminIngSearch')?.value || '').trim().toLowerCase();
     let list = state.adminIngredients || [];
     if (filter === 'low') list = list.filter((i) => i.low && !i.out);
     if (filter === 'out') list = list.filter((i) => i.out || i.stock <= 0);
+    if (q) list = list.filter((i) => String(i.name || '').toLowerCase().includes(q));
     if (!list.length) {
       box.innerHTML = '<div class="empty-state">Ингредиентов нет — добавьте первый формой выше</div>';
       return;
@@ -3728,6 +3730,8 @@
       document.querySelectorAll('#adminPurchaseFilters .filter').forEach((f) => {
         f.classList.toggle('active', f === btn);
       });
+    document.getElementById('adminIngSearch')?.addEventListener('input', () => renderAdminPurchasesList());
+
       renderAdminPurchasesList();
     });
 
