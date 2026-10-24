@@ -742,9 +742,7 @@ app.post('/send-purchase-list', async (req, res) => {
 });
 
 function getMiniAppPublicUrl() {
-  const base = (process.env.PUBLIC_BASE_URL || 'https://asafievbar.duckdns.org').replace(/\/$/, '');
-  // /m/ is a fresh alias — Telegram WebView often keeps a stale /mini-app/ shell
-  return `${base}/m/?v=${MINI_APP_ASSET_VERSION}`;
+  return 'https://ve1lers.github.io/bar_firebase/mini-app/';
 }
 
 const MINIAPP_BOT_DESCRIPTION =
@@ -4269,8 +4267,32 @@ app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
     .then((r) => console.log('👑 Owner admin ensured:', r.uid))
     .catch((e) => console.warn('Owner admin ensure failed:', e.message));
 
-  ensureAlertsBotWebhook().catch((e) => console.warn('Alerts webhook ensure failed:', e.message));
-  ensureMiniAppBotWebhook().catch((e) => console.warn('Mini App webhook ensure failed:', e.message));
+  // ensureAlertsBotWebhook().catch((e) => console.warn('Alerts webhook ensure failed:', e.message));
+  // ensureMiniAppBotWebhook().catch((e) => console.warn('Mini App webhook ensure failed:', e.message));
 });
 
 module.exports = app;
+
+// Polling
+let pollOffset = 0;
+async function startPolling() {
+  const token = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_MINIAPP_BOT_TOKEN;
+  if (!token) return;
+  console.log("Polling started");
+  while (true) {
+    try {
+      const res = await fetch("https://api.telegram.org/bot" + token + "/getUpdates?offset=" + pollOffset + "&timeout=25");
+      const data = await res.json();
+      if (!data.ok) { await new Promise(r => setTimeout(r, 3000)); continue; }
+      for (const u of (data.result || [])) {
+        pollOffset = u.update_id + 1;
+        if (u.message) await handleMiniAppBotMessage(u.message);
+        else if (u.callback_query) await handleCallbackQuery(u.callback_query);
+      }
+    } catch (e) {
+      console.error("poll err", e.message);
+      await new Promise(r => setTimeout(r, 5000));
+    }
+  }
+}
+setTimeout(startPolling, 2000);

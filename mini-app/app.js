@@ -3730,7 +3730,12 @@
       document.querySelectorAll('#adminPurchaseFilters .filter').forEach((f) => {
         f.classList.toggle('active', f === btn);
       });
-    document.getElementById('adminIngSearch')?.addEventListener('input', () => renderAdminPurchasesList());
+    const ingSearch = document.getElementById('adminIngSearch');
+    if (ingSearch && !ingSearch.dataset.bound) {
+      ingSearch.dataset.bound = '1';
+      ingSearch.addEventListener('input', () => renderAdminPurchasesList());
+      ingSearch.addEventListener('keyup', () => renderAdminPurchasesList());
+    }
 
       renderAdminPurchasesList();
     });
