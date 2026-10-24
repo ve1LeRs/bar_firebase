@@ -1903,3 +1903,20 @@ body.field-focused {
     height: 72px;
   }
 }
+
+.admin-collapse { margin-bottom: 10px; }
+.admin-collapse > summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 10px 12px;
+  background: rgba(255,255,255,.04);
+  border-radius: 12px;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.admin-collapse > summary::-webkit-details-marker { display: none; }
+.admin-collapse > summary::after { content: "▸"; opacity: .6; }
+.admin-collapse[open] > summary::after { content: "▾"; }
+.admin-collapse > .admin-collapse-body { padding: 10px 2px 4px; }

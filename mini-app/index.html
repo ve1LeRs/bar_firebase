@@ -13,8 +13,8 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://telegram.org">
-  <link rel="preload" href="app.css?v=type1" as="style">
-  <link rel="stylesheet" href="app.css?v=type1">
+  <link rel="preload" href="app.css?v=collapse1?v=type1" as="style">
+  <link rel="stylesheet" href="app.css?v=collapse1?v=type1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700&display=swap">
@@ -202,7 +202,10 @@
       </div>
 
       <div class="admin-pane" id="adminPurchasesPane">
-        <p class="admin-section-title">Ингредиенты и закупки</p>
+        <details class="admin-collapse">
+          <summary>Добавить / изменить ингредиент</summary>
+          <div class="admin-collapse-body">
+        <p class="admin-section-title" hidden>Ингредиенты и закупки</p>
         <p class="section-sub" style="margin-top:-4px">Нажмите «Изменить» у позиции — поля заполнятся сверху, поправьте и сохраните.</p>
         <div id="adminPurchaseStats" class="stat-row" style="margin-bottom:12px"></div>
 
@@ -228,7 +231,12 @@
           <button class="ghost" id="adminPurchaseSendBtn" type="button">Отправить список закупок в Telegram</button>
         </div>
 
-        <p class="admin-section-title">Список ингредиентов</p>
+          </div>
+        </details>
+        <details class="admin-collapse" open>
+          <summary>Список ингредиентов</summary>
+          <div class="admin-collapse-body">
+        <p class="admin-section-title" hidden>Список ингредиентов</p>
         <div class="admin-subtabs" id="adminPurchaseFilters">
           <button class="filter active" type="button" data-ing-filter="all">Все</button>
           <button class="filter" type="button" data-ing-filter="low">Заканчиваются</button>
@@ -236,6 +244,8 @@
         </div>
         <input id="adminIngSearch" class="admin-input" type="search" placeholder="Поиск ингредиента..." style="margin:8px 0 12px" autocomplete="off">
         <div id="adminPurchasesList" class="orders-list"></div>
+          </div>
+        </details>
       </div>
 
       <div class="admin-pane" id="adminMonitoringPane">
@@ -449,6 +459,6 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script defer src="app.js?v=search1"></script>
+  <script defer src="app.js?v=collapse1"></script>
 </body>
 </html>
