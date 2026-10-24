@@ -1231,7 +1231,7 @@ button.danger {
 
 .sheet.open {
   transform: translateY(0);
-  bottom: var(--keyboard-inset, 0px);
+  bottom: 0;
   visibility: visible;
   pointer-events: auto;
 }
@@ -1920,3 +1920,14 @@ body.field-focused {
 .admin-collapse > summary::after { content: "▸"; opacity: .6; }
 .admin-collapse[open] > summary::after { content: "▾"; }
 .admin-collapse > .admin-collapse-body { padding: 10px 2px 4px; }
+
+/* Keep order sheet stable when keyboard opens */
+body.keyboard-open .sheet.open {
+  bottom: 0 !important;
+  max-height: 70dvh;
+}
+body.keyboard-open .sheet-body,
+body.keyboard-open .sheet .sheet-scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
