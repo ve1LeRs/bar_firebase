@@ -233,7 +233,7 @@
 
   function resolveApiBase() {
     try {
-      const saved = localStorage.getItem('mini_app_api_url');
+      localStorage.removeItem('mini_app_api_url'); const saved = null;
       if (saved) return saved.replace(/\/$/, '');
     } catch (_) { /* private mode */ }
 
@@ -2623,10 +2623,14 @@
 
     try {
       // Single bootstrap request: cocktails + stoplist + ratings
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
       const res = await fetch(`${state.apiBase}/api/mini-app/menu-bootstrap`, {
         cache: 'default',
-        headers: { Accept: 'application/json' }
+        headers: { Accept: 'application/json' },
+        signal: ctrl.signal
       });
+      clearTimeout(timer);
       const data = await res.json();
       if (!data?.success || !Array.isArray(data.cocktails)) {
         throw new Error(data?.error || 'bootstrap failed');
