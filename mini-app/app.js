@@ -39,7 +39,7 @@
     cocktails: [],
     stoplist: new Set(),
     ratings: {},
-    category: 'all',
+    category: 'classic',
     bonusBalance: 0,
     totalEarned: 0,
     totalSpent: 0,
