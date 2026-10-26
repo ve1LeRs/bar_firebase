@@ -480,45 +480,80 @@ button.danger.is-pressed:not(:disabled) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 8px;
+  gap: 6px;
+  padding: 10px 8px;
   text-align: center;
   background:
-    linear-gradient(145deg, rgba(212, 163, 92, 0.18), rgba(36, 28, 22, 0.95));
-  color: var(--muted);
+    radial-gradient(120% 90% at 30% 15%, rgba(212, 163, 92, 0.22), transparent 55%),
+    linear-gradient(160deg, #2a231c 0%, #171310 100%);
+  color: rgba(212, 163, 92, 0.72);
+  border: 0;
 }
 
 .thumb-placeholder[hidden] {
   display: none !important;
 }
 
-.thumb-placeholder-ico {
-  font-size: var(--text-lg);
+.thumb-placeholder-mark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 2.35rem;
+  font-weight: 600;
   line-height: 1;
+  letter-spacing: -0.04em;
+  color: rgba(212, 163, 92, 0.14);
+  pointer-events: none;
+  user-select: none;
+}
+
+.thumb-placeholder-glass {
+  position: relative;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
   opacity: 0.9;
 }
 
 .thumb-placeholder-text {
+  display: none; /* menu thumbs stay clean — label only in sheet */
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-body);
   font-size: var(--text-2xs);
-  line-height: 1.25;
-  max-width: 9.5em;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  color: var(--muted);
+  max-width: 9em;
 }
 
 .sheet-media .sheet-placeholder {
   position: relative;
   width: 100%;
+  min-height: 132px;
   height: 100%;
   border-radius: 16px;
+  gap: 10px;
+  padding: 22px 16px;
+}
+
+.sheet-media .thumb-placeholder-mark {
+  font-size: clamp(3.5rem, 18vw, 5rem);
+  color: rgba(212, 163, 92, 0.12);
+}
+
+.sheet-media .thumb-placeholder-glass {
+  width: 40px;
+  height: 40px;
 }
 
 .sheet-media .thumb-placeholder-text {
-  font-size: var(--text-md);
-  max-width: 16em;
-}
-
-.sheet-media .thumb-placeholder-ico {
-  font-size: var(--text-xl);
-  margin-bottom: 4px;
+  font-size: var(--text-sm);
+  max-width: 18em;
+  color: rgba(185, 169, 154, 0.9);
 }
 
 .cocktail-body {
@@ -1457,14 +1492,9 @@ body.field-focused {
 }
 
 .sheet-media.is-empty {
-  min-height: 110px;
+  min-height: 132px;
   overflow: hidden;
-  background:
-    linear-gradient(145deg, rgba(212, 163, 92, 0.18), rgba(40, 28, 18, 0.95));
-}
-
-.sheet-media .sheet-placeholder {
-  width: 100%;
+  background: transparent;
 }
 
 .sheet h3 {
