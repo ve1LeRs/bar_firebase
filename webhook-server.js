@@ -1684,17 +1684,115 @@ async function loadIngredientStockMap() {
   return byName;
 }
 
+function getCocktailStockGaps(cocktailData, stockByName) {
+  const recipe = Array.isArray(cocktailData?.stockRecipe) ? cocktailData.stockRecipe : [];
+  const gaps = [];
+  for (const item of recipe) {
+    const rawName = String(item.ingredientName || '').trim();
+    const ingName = rawName.toLowerCase();
+    const needed = Number(item.amount) || 0;
+    if (!ingName || needed <= 0) continue;
+    const have = stockByName.has(ingName) ? Number(stockByName.get(ingName)) || 0 : 0;
+    if (have < needed) {
+      gaps.push({
+        ingredientName: rawName,
+        needed,
+        have,
+        missing: !stockByName.has(ingName)
+      });
+    }
+  }
+  return gaps;
+}
+
 function cocktailHasEnoughStock(cocktailData, stockByName) {
   const recipe = Array.isArray(cocktailData?.stockRecipe) ? cocktailData.stockRecipe : [];
   if (!recipe.length) return false;
-  for (const item of recipe) {
-    const ingName = String(item.ingredientName || '').trim().toLowerCase();
-    const needed = Number(item.amount) || 0;
-    if (!ingName || needed <= 0) continue;
-    const have = stockByName.has(ingName) ? stockByName.get(ingName) : 0;
-    if (have < needed) return false;
+  return getCocktailStockGaps(cocktailData, stockByName).length === 0;
+}
+
+function formatStockGapsReason(gaps) {
+  if (!gaps?.length) return 'Недостаточно ингредиентов';
+  const parts = gaps.slice(0, 4).map((g) => {
+    if (g.missing) return `${g.ingredientName} (нет на складе, нужно: ${g.needed})`;
+    return `${g.ingredientName} (остаток: ${g.have}, нужно: ${g.needed})`;
+  });
+  const more = gaps.length > 4 ? ` и ещё ${gaps.length - 4}` : '';
+  return `Недостаточно ингредиентов: ${parts.join('; ')}${more}`;
+}
+
+/**
+ * Put cocktail on auto-stoplist when stockRecipe can't be fulfilled
+ * (zero stock OR ingredient missing from warehouse). Remove if stock is OK.
+ */
+async function syncCocktailStoplist(cocktailData, stockByName, stopDocsByName) {
+  const cocktailName = String(cocktailData?.name || '').trim();
+  if (!cocktailName) return { added: false, removed: false };
+  const recipe = Array.isArray(cocktailData?.stockRecipe) ? cocktailData.stockRecipe : [];
+  if (!recipe.length) return { added: false, removed: false };
+
+  const gaps = getCocktailStockGaps(cocktailData, stockByName);
+  const autoEntries = stopDocsByName?.get(cocktailName) || [];
+
+  if (gaps.length) {
+    const reason = formatStockGapsReason(gaps);
+    if (!autoEntries.length) {
+      const didAdd = await ensureCocktailInStoplist(cocktailName, reason);
+      return { added: didAdd, removed: false, reason };
+    }
+    // Refresh reason on existing auto entry
+    const first = autoEntries[0];
+    if (first && String(first.reason || '') !== reason) {
+      await db.collection('stoplist').doc(first.id).set({ reason }, { merge: true });
+    }
+    return { added: false, removed: false, reason };
   }
-  return true;
+
+  if (autoEntries.length) {
+    for (const entry of autoEntries) {
+      await db.collection('stoplist').doc(entry.id).delete();
+    }
+    return { added: false, removed: true };
+  }
+  return { added: false, removed: false };
+}
+
+async function syncAllCocktailsStoplist() {
+  const [cocktailsSnap, stopSnap, stockByName] = await Promise.all([
+    db.collection('cocktails').get(),
+    db.collection('stoplist').get(),
+    loadIngredientStockMap()
+  ]);
+
+  const stopDocsByName = new Map();
+  stopSnap.docs.forEach((doc) => {
+    const d = doc.data() || {};
+    const name = String(d.cocktailName || '').trim();
+    if (!name || !isAutoStockStoplistEntry(d)) return;
+    const list = stopDocsByName.get(name) || [];
+    list.push({ id: doc.id, reason: d.reason || '' });
+    stopDocsByName.set(name, list);
+  });
+
+  let added = 0;
+  let removed = 0;
+  const addedNames = [];
+  const removedNames = [];
+  for (const doc of cocktailsSnap.docs) {
+    const data = doc.data() || {};
+    const result = await syncCocktailStoplist(data, stockByName, stopDocsByName);
+    if (result.added) {
+      added += 1;
+      addedNames.push(String(data.name || '').trim());
+    }
+    if (result.removed) {
+      removed += 1;
+      removedNames.push(String(data.name || '').trim());
+    }
+  }
+  if (added || removed) invalidateStoplistCache();
+  invalidateMenuBootstrapCache();
+  return { added, removed, addedNames, removedNames };
 }
 
 /**
@@ -3769,11 +3867,18 @@ app.post('/api/mini-app/admin/cocktails', async (req, res) => {
       if (c.id) {
         await db.collection('cocktails').doc(String(c.id)).set(payload, { merge: true });
         invalidateMenuBootstrapCache();
+        // New/updated recipes must re-check warehouse (missing ings count as 0)
+        try { await syncAllCocktailsStoplist(); } catch (e) {
+          console.warn('stoplist sync after cocktail upsert:', e.message);
+        }
         return res.json({ success: true, id: String(c.id) });
       }
       payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
       const ref = await db.collection('cocktails').add(payload);
       invalidateMenuBootstrapCache();
+      try { await syncAllCocktailsStoplist(); } catch (e) {
+        console.warn('stoplist sync after cocktail add:', e.message);
+      }
       return res.json({ success: true, id: ref.id });
     }
 
@@ -3941,17 +4046,16 @@ app.post('/api/mini-app/admin/purchases', async (req, res) => {
       if (ing.id) {
         await db.collection('ingredients').doc(String(ing.id)).set(payload, { merge: true });
         let stoplist = { added: 0, removed: 0, names: [], restored: [] };
-        if (stock <= 0) {
-          const stopped = await stoplistCocktailsForIngredient(name);
-          stoplist = { ...stoplist, ...stopped, restored: [] };
-        } else {
-          const restored = await unstoplistCocktailsAfterRestock(name);
+        try {
+          const synced = await syncAllCocktailsStoplist();
           stoplist = {
-            added: 0,
-            names: [],
-            removed: restored.removed,
-            restored: restored.names
+            added: synced.added,
+            names: synced.addedNames,
+            removed: synced.removed,
+            restored: synced.removedNames
           };
+        } catch (e) {
+          console.warn('stoplist sync after ingredient upsert:', e.message);
         }
         return res.json({ success: true, id: String(ing.id), stoplist });
       }
@@ -3962,17 +4066,16 @@ app.post('/api/mini-app/admin/purchases', async (req, res) => {
       payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
       const ref = await db.collection('ingredients').add(payload);
       let stoplist = { added: 0, removed: 0, names: [], restored: [] };
-      if (stock <= 0) {
-        const stopped = await stoplistCocktailsForIngredient(name);
-        stoplist = { ...stoplist, ...stopped, restored: [] };
-      } else {
-        const restored = await unstoplistCocktailsAfterRestock(name);
+      try {
+        const synced = await syncAllCocktailsStoplist();
         stoplist = {
-          added: 0,
-          names: [],
-          removed: restored.removed,
-          restored: restored.names
+          added: synced.added,
+          names: synced.addedNames,
+          removed: synced.removed,
+          restored: synced.removedNames
         };
+      } catch (e) {
+        console.warn('stoplist sync after ingredient add:', e.message);
       }
       return res.json({ success: true, id: ref.id, stoplist });
     }
