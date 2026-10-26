@@ -58,6 +58,7 @@
     sessionOk: false,
     uid: null,
     authError: null,
+    authPromise: null,
     ordersPollTimer: null,
     role: 'user',
     adminOrdersTimer: null,
@@ -616,104 +617,115 @@
 
   async function authenticate(options = {}) {
     const { manual: _manual = false } = options;
-    const initData = tg?.initData || '';
+    // Single-flight: reopen sheet / placeOrder share one in-flight auth
+    if (state.authPromise) return state.authPromise;
 
-    if (!initData) {
-      state.authError = 'no_init_data';
-      setAuthStatus(
-        'Нет данных Telegram. Откройте Mini App кнопкой меню бота (не через браузер).',
-        { error: true }
-      );
-      setAuthRetryVisible(false);
-      updateProfileUI();
-      return false;
-    }
+    state.authPromise = (async () => {
+      const initData = tg?.initData || '';
 
-    setAuthRetryVisible(false);
-    setAuthStatus('');
-
-    // Auth directly — no long wake wait
-    const maxAttempts = 3;
-    let lastErr = null;
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-      setAuthStatus('');
-      try {
-        const res = await fetchWithTimeout(
-          `${state.apiBase}/api/mini-app/auth`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData })
-          },
-          20000
+      if (!initData) {
+        state.authError = 'no_init_data';
+        setAuthStatus(
+          'Нет данных Telegram. Откройте Mini App кнопкой меню бота (не через браузер).',
+          { error: true }
         );
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.success) {
-          const reason = data.reason ? ` (${data.reason})` : '';
-          throw new Error((data.error || `Ошибка авторизации ${res.status}`) + reason);
-        }
-
-        state.user = data.user || state.user;
-        state.uid = data.user?.uid || null;
-        state.sessionOk = Boolean(data.session || data.success);
-        state.authReady = state.sessionOk;
-        state.authError = null;
-
-        if (typeof data.bonusBalance === 'number') {
-          state.bonusBalance = data.bonusBalance;
-        }
-        if (typeof data.openBillTotal === 'number') {
-          state.openBillTotal = data.openBillTotal;
-        }
-        if (Array.isArray(data.openBillItems)) {
-          state.openBillItems = data.openBillItems;
-        }
-        if (data.role) state.role = data.role;
-        applyAdminUi();
-
-        // Firebase custom token is optional — never block session on it
-        if (data.customToken) {
-          const token = data.customToken;
-          void (async () => {
-            try {
-              await waitForFirebase(5000);
-              initFirebase();
-              const cred = await auth.signInWithCustomToken(token);
-              state.firebaseUser = cred.user;
-            } catch (firebaseErr) {
-              console.warn('Firebase custom token skipped:', firebaseErr?.message || firebaseErr);
-              state.firebaseUser = null;
-            }
-          })();
-        }
-
-        setAuthStatus('');
         setAuthRetryVisible(false);
         updateProfileUI();
-        startOrdersPolling();
-        startKeepAlive();
-        return true;
-      } catch (err) {
-        lastErr = err;
-        console.error('auth attempt failed', attempt, err);
-        if (attempt < maxAttempts) {
-          await sleep(800 * attempt);
-          continue;
+        return false;
+      }
+
+      if (state.sessionOk) return true;
+
+      setAuthRetryVisible(false);
+      setAuthStatus('');
+
+      const maxAttempts = 2;
+      let lastErr = null;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          const res = await fetchWithTimeout(
+            `${state.apiBase}/api/mini-app/auth`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ initData })
+            },
+            10000
+          );
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.success) {
+            const reason = data.reason ? ` (${data.reason})` : '';
+            throw new Error((data.error || `Ошибка авторизации ${res.status}`) + reason);
+          }
+
+          state.user = data.user || state.user;
+          state.uid = data.user?.uid || null;
+          state.sessionOk = Boolean(data.session || data.success);
+          state.authReady = state.sessionOk;
+          state.authError = null;
+
+          if (typeof data.bonusBalance === 'number') {
+            state.bonusBalance = data.bonusBalance;
+          }
+          if (typeof data.openBillTotal === 'number') {
+            state.openBillTotal = data.openBillTotal;
+          }
+          if (Array.isArray(data.openBillItems)) {
+            state.openBillItems = data.openBillItems;
+          }
+          if (data.role) state.role = data.role;
+          applyAdminUi();
+
+          // Firebase custom token is optional — never block session on it
+          if (data.customToken) {
+            const token = data.customToken;
+            void (async () => {
+              try {
+                await waitForFirebase(5000);
+                initFirebase();
+                const cred = await auth.signInWithCustomToken(token);
+                state.firebaseUser = cred.user;
+              } catch (firebaseErr) {
+                console.warn('Firebase custom token skipped:', firebaseErr?.message || firebaseErr);
+                state.firebaseUser = null;
+              }
+            })();
+          }
+
+          setAuthStatus('');
+          setAuthRetryVisible(false);
+          updateProfileUI();
+          startOrdersPolling();
+          startKeepAlive();
+          return true;
+        } catch (err) {
+          lastErr = err;
+          console.error('auth attempt failed', attempt, err);
+          if (attempt < maxAttempts) {
+            await sleep(500 * attempt);
+            continue;
+          }
         }
       }
-    }
 
-    state.sessionOk = false;
-    state.authReady = false;
-    state.authError = lastErr?.name === 'AbortError' ? 'timeout' : 'auth_failed';
-    const msg =
-      lastErr?.name === 'AbortError'
-        ? 'Сервер не ответил вовремя'
-        : (lastErr?.message || 'Не удалось войти');
-    setAuthStatus(`Не удалось войти: ${msg}`, { error: true });
-    setAuthRetryVisible(true);
-    updateProfileUI();
-    return false;
+      state.sessionOk = false;
+      state.authReady = false;
+      state.authError = lastErr?.name === 'AbortError' ? 'timeout' : 'auth_failed';
+      const msg =
+        lastErr?.name === 'AbortError'
+          ? 'Сервер не ответил вовремя'
+          : (lastErr?.message || 'Не удалось войти');
+      setAuthStatus(`Не удалось войти: ${msg}`, { error: true });
+      setAuthRetryVisible(true);
+      updateProfileUI();
+      return false;
+    })();
+
+    try {
+      return await state.authPromise;
+    } finally {
+      state.authPromise = null;
+    }
   }
 
   function canOrder() {
@@ -3029,10 +3041,20 @@
       return;
     }
     if (!state.sessionOk) {
-      showToast('Подключаем сессию…');
+      showToast('Подключаем сессию…', 8000);
       authenticate({ manual: true }).then((ok) => {
-        if (ok) showToast('Сессия готова');
-      }).catch(() => {});
+        if (ok) showToast('Готово — можно заказывать', 1800);
+        else {
+          showToast(
+            state.authError === 'timeout'
+              ? 'Сервер не ответил — закройте VPN или попробуйте ещё раз'
+              : 'Не удалось подключить сессию',
+            4200
+          );
+        }
+      }).catch(() => {
+        showToast('Не удалось подключить сессию', 4200);
+      });
     }
 
     closeWheelSheet();
@@ -3188,12 +3210,12 @@
       return;
     }
     if (!state.sessionOk) {
-      showToast('Подключаем сессию…');
+      showToast('Подключаем сессию…', 8000);
       const ok = await authenticate({ manual: true });
       if (!ok || !canOrder()) {
         showToast(state.authError === 'timeout'
-          ? 'Сервер не ответил — попробуйте ещё раз'
-          : 'Не удалось подключить сессию');
+          ? 'Сервер не ответил — закройте VPN или попробуйте ещё раз'
+          : 'Не удалось подключить сессию', 4200);
         return;
       }
     }
