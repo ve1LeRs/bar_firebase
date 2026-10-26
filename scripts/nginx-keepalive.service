@@ -1,0 +1,7 @@
+[Unit]
+Description=Ensure nginx Mini App API is running
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/root/nginx-keepalive.sh
