@@ -104,6 +104,131 @@ textarea {
   color: inherit;
 }
 
+/* Clear press feedback on touch (Telegram WebView has no default highlight) */
+button,
+.cta,
+.ghost,
+.filter,
+.tab,
+.cocktail,
+.order-rate-btn,
+.rating-stars button,
+.admin-actions button,
+.stoplist-row button,
+.bill-accordion-head,
+.promo-row button,
+.wheel-spin-btn,
+.auth-retry {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition:
+    transform 0.12s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.12s ease,
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease,
+    opacity 0.12s ease,
+    color 0.12s ease;
+}
+
+button:active:not(:disabled),
+button.is-pressed:not(:disabled),
+.cta:active:not(:disabled),
+.cta.is-pressed:not(:disabled),
+.ghost:active:not(:disabled),
+.ghost.is-pressed:not(:disabled),
+.filter:active,
+.filter.is-pressed,
+.tab:active,
+.tab.is-pressed,
+.cocktail:active,
+.cocktail.is-pressed,
+.order-rate-btn:active,
+.order-rate-btn.is-pressed,
+.rating-stars button:active,
+.rating-stars button.is-pressed,
+.admin-actions button:active:not(:disabled),
+.admin-actions button.is-pressed:not(:disabled),
+.stoplist-row button:active:not(:disabled),
+.stoplist-row button.is-pressed:not(:disabled),
+.bill-accordion-head:active,
+.bill-accordion-head.is-pressed,
+.auth-retry:active,
+.auth-retry.is-pressed {
+  transform: scale(0.96);
+  filter: brightness(1.18);
+}
+
+.cta:active:not(:disabled),
+.cta.is-pressed:not(:disabled) {
+  transform: scale(0.97);
+  filter: brightness(1.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+.ghost:active:not(:disabled),
+.ghost.is-pressed:not(:disabled),
+.order-rate-btn:active,
+.order-rate-btn.is-pressed,
+.auth-retry:active,
+.auth-retry.is-pressed {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(244, 238, 230, 0.28);
+}
+
+.filter:active,
+.filter.is-pressed {
+  background: rgba(212, 163, 92, 0.22);
+  border-color: rgba(212, 163, 92, 0.55);
+  color: var(--ink);
+}
+
+.filter.active:active,
+.filter.active.is-pressed {
+  background: var(--accent-deep);
+  color: #1a1208;
+  filter: brightness(1.08);
+}
+
+.tab:active,
+.tab.is-pressed {
+  color: var(--ink);
+  transform: scale(0.94);
+}
+
+.tab.active:active,
+.tab.active.is-pressed {
+  color: var(--accent);
+}
+
+.cocktail:active,
+.cocktail.is-pressed {
+  transform: scale(0.975);
+  border-color: rgba(212, 163, 92, 0.45);
+  background: rgba(212, 163, 92, 0.08);
+  filter: none;
+}
+
+.admin-actions button.primary:active:not(:disabled),
+.admin-actions button.primary.is-pressed:not(:disabled) {
+  background: var(--accent-deep);
+  filter: brightness(1.1);
+}
+
+.admin-actions button.danger:active:not(:disabled),
+.admin-actions button.danger.is-pressed:not(:disabled),
+button.danger:active:not(:disabled),
+button.danger.is-pressed:not(:disabled) {
+  background: rgba(216, 122, 106, 0.32);
+  filter: brightness(1.12);
+}
+
+.rating-stars button:active,
+.rating-stars button.is-pressed {
+  transform: scale(1.08);
+  filter: brightness(1.25);
+}
+
 .ambient {
   position: fixed;
   inset: 0;
@@ -305,11 +430,6 @@ textarea {
   border: 1px solid var(--line);
   text-align: left;
   width: 100%;
-  transition: transform 0.18s ease, border-color 0.18s ease;
-}
-
-.cocktail:active {
-  transform: scale(0.985);
 }
 
 .cocktail.stopped {
@@ -1424,16 +1544,19 @@ body.field-focused {
   letter-spacing: var(--tracking-normal);
   line-height: var(--leading-tight);
   min-height: 48px;
+  cursor: pointer;
 }
 
 .cta {
   background: linear-gradient(135deg, var(--accent), var(--accent-deep));
   color: #1a1208;
   margin-bottom: 8px;
+  box-shadow: 0 8px 20px rgba(165, 107, 43, 0.28);
 }
 
 .cta:disabled {
   opacity: 0.55;
+  box-shadow: none;
 }
 
 .ghost {
