@@ -233,14 +233,17 @@
 
   function resolveApiBase() {
     try {
-      localStorage.removeItem('mini_app_api_url'); const saved = null;
-      if (saved) return saved.replace(/\/$/, '');
+      // Drop stale/wrong cached API hosts (old Render / wrong VPS)
+      localStorage.removeItem('mini_app_api_url');
     } catch (_) { /* private mode */ }
 
     try {
       const host = String(window.location?.hostname || '');
       if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3000';
       if (host.includes('onrender.com')) return `https://${host}`;
+      // GitHub Pages hosts only the UI — API stays on DuckDNS/VPS
+      if (host.includes('github.io')) return DEFAULT_API;
+      if (host.includes('duckdns.org')) return `https://${host}`;
     } catch (_) { /* ignore */ }
     return DEFAULT_API;
   }
@@ -630,7 +633,9 @@
     setAuthStatus('');
 
     // Auth directly — no long wake wait
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const maxAttempts = 3;
+    let lastErr = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       setAuthStatus('');
       try {
         const res = await fetchWithTimeout(
@@ -642,9 +647,10 @@
           },
           20000
         );
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.success) {
-          throw new Error(data.error || `Ошибка авторизации (${data.reason || res.status})`);
+          const reason = data.reason ? ` (${data.reason})` : '';
+          throw new Error((data.error || `Ошибка авторизации ${res.status}`) + reason);
         }
 
         state.user = data.user || state.user;
@@ -665,15 +671,20 @@
         if (data.role) state.role = data.role;
         applyAdminUi();
 
+        // Firebase custom token is optional — never block session on it
         if (data.customToken) {
-          try {
-            initFirebase();
-            const cred = await auth.signInWithCustomToken(data.customToken);
-            state.firebaseUser = cred.user;
-          } catch (firebaseErr) {
-            console.warn('Firebase custom token skipped:', firebaseErr.message);
-            state.firebaseUser = null;
-          }
+          const token = data.customToken;
+          void (async () => {
+            try {
+              await waitForFirebase(5000);
+              initFirebase();
+              const cred = await auth.signInWithCustomToken(token);
+              state.firebaseUser = cred.user;
+            } catch (firebaseErr) {
+              console.warn('Firebase custom token skipped:', firebaseErr?.message || firebaseErr);
+              state.firebaseUser = null;
+            }
+          })();
         }
 
         setAuthStatus('');
@@ -683,23 +694,25 @@
         startKeepAlive();
         return true;
       } catch (err) {
+        lastErr = err;
         console.error('auth attempt failed', attempt, err);
-        if (attempt < 3) {
-          await sleep(1500 * attempt);
+        if (attempt < maxAttempts) {
+          await sleep(800 * attempt);
           continue;
         }
-        state.sessionOk = false;
-        state.authReady = false;
-        state.authError = err.name === 'AbortError' ? 'timeout' : 'auth_failed';
-        const msg =
-          err.name === 'AbortError'
-            ? 'Сервер ещё прогревается'
-            : err.message;
-        setAuthStatus(`Не удалось войти: ${msg}`, { error: true });
-        setAuthRetryVisible(true);
-        return false;
       }
     }
+
+    state.sessionOk = false;
+    state.authReady = false;
+    state.authError = lastErr?.name === 'AbortError' ? 'timeout' : 'auth_failed';
+    const msg =
+      lastErr?.name === 'AbortError'
+        ? 'Сервер не ответил вовремя'
+        : (lastErr?.message || 'Не удалось войти');
+    setAuthStatus(`Не удалось войти: ${msg}`, { error: true });
+    setAuthRetryVisible(true);
+    updateProfileUI();
     return false;
   }
 
@@ -3016,7 +3029,10 @@
       return;
     }
     if (!state.sessionOk) {
-      authenticate({ manual: true }).catch(() => {});
+      showToast('Подключаем сессию…');
+      authenticate({ manual: true }).then((ok) => {
+        if (ok) showToast('Сессия готова');
+      }).catch(() => {});
     }
 
     closeWheelSheet();
@@ -3166,7 +3182,25 @@
   }
 
   async function placeOrder() {
-    if (!state.selected || !canOrder()) return;
+    if (!state.selected) return;
+    if (!tg?.initData) {
+      showToast('Откройте Mini App из бота');
+      return;
+    }
+    if (!state.sessionOk) {
+      showToast('Подключаем сессию…');
+      const ok = await authenticate({ manual: true });
+      if (!ok || !canOrder()) {
+        showToast(state.authError === 'timeout'
+          ? 'Сервер не ответил — попробуйте ещё раз'
+          : 'Не удалось подключить сессию');
+        return;
+      }
+    }
+    if (!canOrder()) {
+      showToast('Нет сессии — нажмите «Повторить вход» в профиле');
+      return;
+    }
     if (state.placingOrder) return;
 
     const cocktail = state.selected;
@@ -3784,17 +3818,10 @@
         });
       }
 
-      try {
-        await waitForFirebase();
-        initFirebase();
-      } catch (err) {
-        console.error(err);
-        setAuthStatus('Не удалось загрузить SDK. Проверьте сеть.', { error: true });
-        if (!state.cocktails.length && els.menuGrid) {
-          els.menuGrid.innerHTML = '<div class="empty-state">Нет сети для загрузки меню</div>';
-        }
-        return;
-      }
+      // Firebase is optional (stoplist watch). Menu/auth go through API.
+      void waitForFirebase(6000)
+        .then(() => { try { initFirebase(); } catch (_) { /* ignore */ } })
+        .catch((err) => console.warn('Firebase SDK optional fail:', err?.message || err));
 
       // Menu and auth in parallel — UI stays interactive
       await Promise.all([loadMenu(), authenticate()]);
