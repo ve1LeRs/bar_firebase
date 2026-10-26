@@ -1489,7 +1489,20 @@
         </div>
         <div class="ing-stock-row">
           <button type="button" data-stock-delta="-1" data-ing-id="${escapeAttr(item.id)}" aria-label="Минус">−</button>
-          <div class="ing-stock-val">остаток ${item.stock}${unit}</div>
+          <label class="ing-stock-field">
+            <span class="ing-stock-prefix">остаток</span>
+            <input
+              class="ing-stock-input"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              step="any"
+              value="${Number(item.stock) || 0}"
+              data-stock-input="${escapeAttr(item.id)}"
+              aria-label="Остаток ${escapeAttr(item.name)}"
+            >
+            <span class="ing-stock-unit">${escapeHtml((item.unit || '').trim())}</span>
+          </label>
           <button type="button" data-stock-delta="1" data-ing-id="${escapeAttr(item.id)}" aria-label="Плюс">+</button>
         </div>
         <div class="admin-actions">
@@ -1498,6 +1511,31 @@
           <button type="button" class="danger" data-del-ing="${escapeAttr(item.id)}">Удалить</button>
         </div>
       `;
+      const stockInput = card.querySelector('[data-stock-input]');
+      const commitStockInput = async () => {
+        if (!stockInput) return;
+        const raw = String(stockInput.value ?? '').trim().replace(',', '.');
+        const next = Number(raw);
+        if (!Number.isFinite(next) || next < 0) {
+          stockInput.value = String(Number(item.stock) || 0);
+          showToast('Укажите остаток числом');
+          return;
+        }
+        if (next === Number(item.stock)) return;
+        await quickUpdateIngredientStock(item, next);
+      };
+      stockInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          stockInput.blur();
+        }
+      });
+      stockInput?.addEventListener('blur', () => {
+        commitStockInput().catch(() => {});
+      });
+      stockInput?.addEventListener('focus', () => {
+        stockInput.select();
+      });
       card.querySelector('[data-edit-ing]')?.addEventListener('click', () => {
         fillIngredientForm(item);
         showToast(`Редактируем: ${item.name}`);
@@ -1515,7 +1553,10 @@
         btn.addEventListener('click', async () => {
           const delta = Number(btn.dataset.stockDelta) || 0;
           const step = item.unit === 'шт' ? 1 : Math.max(1, Math.round((Number(item.minStock) || 100) * 0.1));
-          const next = Math.max(0, Number(item.stock) + delta * step);
+          const current = Number(stockInput?.value);
+          const base = Number.isFinite(current) ? current : Number(item.stock);
+          const next = Math.max(0, base + delta * step);
+          if (stockInput) stockInput.value = String(next);
           await quickUpdateIngredientStock(item, next);
         });
       });
