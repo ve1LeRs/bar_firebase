@@ -629,22 +629,8 @@
     setAuthRetryVisible(false);
     setAuthStatus('');
 
-    const awake = await ensureApiAwake(() => {});
-
-    if (!awake) {
-      state.sessionOk = false;
-      state.authReady = false;
-      state.authError = 'timeout';
-      setAuthStatus(
-        'Сервер долго просыпается. Нажмите «Повторить вход» через несколько секунд.',
-        { error: true }
-      );
-      setAuthRetryVisible(true);
-      return false;
-    }
-
-    // A few auth attempts after wake (first request can still be slow)
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
+    // Auth directly — no long wake wait
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
       setAuthStatus('');
       try {
         const res = await fetchWithTimeout(
