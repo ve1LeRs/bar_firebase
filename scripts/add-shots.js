@@ -45,7 +45,7 @@ const shots = [
   {
     name: 'B-52',
     price: 400,
-    ingredients: 'Гренадин, сливки, ванильная водка',
+    ingredients: 'Гренадин, сливки, водка ваниль',
     mood: 'Слоями, как в кино. Можно поджечь — если осмелишься 🔥',
     alcohol: 20,
     tasteTags: ['sweet'],
@@ -53,19 +53,19 @@ const shots = [
     stockRecipe: [
       { ingredientName: 'Сироп гренадин', amount: 10 },
       { ingredientName: 'Сливки', amount: 15 },
-      { ingredientName: 'Ванильная водка', amount: 15 }
+      { ingredientName: 'Водка ваниль', amount: 15 }
     ]
   },
   {
     name: 'Оргазм',
     price: 380,
-    ingredients: 'Ванильная водка, сливки, сироп ваниль, Трипл Сек',
+    ingredients: 'Водка ваниль, сливки, сироп ваниль, Трипл Сек',
     mood: 'Десертный шот. Название говорит само за себя 😉',
     alcohol: 18,
     tasteTags: ['sweet'],
     image: img('Шот_Оргазм.jpg'),
     stockRecipe: [
-      { ingredientName: 'Ванильная водка', amount: 20 },
+      { ingredientName: 'Водка ваниль', amount: 20 },
       { ingredientName: 'Сливки', amount: 15 },
       { ingredientName: 'Сироп ваниль', amount: 10 },
       { ingredientName: 'Апельсиновый ликёр', amount: 5 }
@@ -159,15 +159,15 @@ const shots = [
   {
     name: 'Апероль-шот',
     price: 320,
-    ingredients: 'Апероль, сок апельсина, просекко',
+    ingredients: 'Ликёр апероль, сок апельсина, шампанское',
     mood: 'Spritz в формате «залпом». Горько-игристо 🧡',
     alcohol: 12,
     tasteTags: ['bitter', 'sweet'],
     image: img('Шот_Апероль.jpg'),
     stockRecipe: [
-      { ingredientName: 'Апероль', amount: 25 },
+      { ingredientName: 'Ликёр апероль', amount: 25 },
       { ingredientName: 'Сок апельсина', amount: 15 },
-      { ingredientName: 'Просекко', amount: 10 }
+      { ingredientName: 'Шампанское', amount: 10 }
     ]
   },
   {
@@ -191,16 +191,16 @@ const shots = [
   {
     name: 'Порнстар-шот',
     price: 400,
-    ingredients: 'Ванильная водка, сироп маракуйя, лимон, просекко',
+    ingredients: 'Водка ваниль, сироп маракуйя, лимон, шампанское',
     mood: 'Твой Порнстар, только быстрее и наглее 🌟',
     alcohol: 22,
     tasteTags: ['sweet', 'sour'],
     image: img('Шот_Порнстар.jpg'),
     stockRecipe: [
-      { ingredientName: 'Ванильная водка', amount: 20 },
+      { ingredientName: 'Водка ваниль', amount: 20 },
       { ingredientName: 'Сироп маракуйя', amount: 15 },
       { ingredientName: 'Сок лайма', amount: 8 },
-      { ingredientName: 'Просекко', amount: 8 }
+      { ingredientName: 'Шампанское', amount: 8 }
     ]
   },
   {
