@@ -701,6 +701,11 @@ body[data-view='admin'] #ratingBackdrop {
   background: rgba(0, 0, 0, 0.18);
 }
 
+.order-rate-btn {
+  margin-top: 10px;
+  width: 100%;
+}
+
 .order-top {
   display: flex;
   justify-content: space-between;
