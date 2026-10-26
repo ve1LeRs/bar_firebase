@@ -223,12 +223,31 @@ function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
 }
 
+function resolveAlertChatIds(explicitChatId) {
+  const ids = [];
+  const push = (v) => {
+    String(v || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .forEach((id) => {
+        if (!ids.includes(id)) ids.push(id);
+      });
+  };
+  push(explicitChatId);
+  push(TELEGRAM_CHAT_ID);
+  push(process.env.TELEGRAM_ADMIN_IDS);
+  // Hard fallback: known owner chat from project defaults
+  if (!ids.length) push('1743362083');
+  return ids;
+}
+
 /** Outbound Telegram helper — logs + blocks junk keep-alive dots */
 async function sendTelegramAlert(text, options = {}) {
   const token = options.token || alertsBotToken();
-  const chatId = options.chatId || TELEGRAM_CHAT_ID;
+  const chatIds = resolveAlertChatIds(options.chatId);
   const trimmed = String(text ?? '').trim();
-  if (!token || !chatId) {
+  if (!token || !chatIds.length) {
     console.error('❌ Telegram send skipped: missing token/chatId');
     return { ok: false, error: 'missing_token_or_chat' };
   }
@@ -237,23 +256,33 @@ async function sendTelegramAlert(text, options = {}) {
     console.warn('🛑 Blocked junk Telegram message:', JSON.stringify(trimmed));
     return { ok: false, error: 'blocked_junk' };
   }
-  const payload = {
-    chat_id: chatId,
-    text: trimmed,
-    ...(options.parse_mode ? { parse_mode: options.parse_mode } : {}),
-    ...(options.reply_markup ? { reply_markup: options.reply_markup } : {})
-  };
-  console.log('📤 Telegram send:', trimmed.slice(0, 80).replace(/\n/g, ' '));
-  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-  const result = await response.json().catch(() => ({ ok: false }));
-  if (!result.ok) {
-    console.error('❌ Telegram API error:', result);
+
+  let last = { ok: false, error: 'no_recipients' };
+  for (const chatId of chatIds) {
+    const payload = {
+      chat_id: chatId,
+      text: trimmed,
+      ...(options.parse_mode ? { parse_mode: options.parse_mode } : {}),
+      ...(options.reply_markup ? { reply_markup: options.reply_markup } : {})
+    };
+    console.log('📤 Telegram send →', chatId, ':', trimmed.slice(0, 80).replace(/\n/g, ' '));
+    try {
+      const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json().catch(() => ({ ok: false }));
+      last = result;
+      if (!result.ok) {
+        console.error('❌ Telegram API error:', chatId, result);
+      }
+    } catch (err) {
+      last = { ok: false, error: err.message };
+      console.error('❌ Telegram send failed:', chatId, err.message);
+    }
   }
-  return result;
+  return last;
 }
 
 // Root endpoint
