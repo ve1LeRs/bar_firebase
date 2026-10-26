@@ -787,7 +787,8 @@ app.post('/send-purchase-list', async (req, res) => {
 });
 
 function getMiniAppPublicUrl() {
-  return 'https://ve1lers.github.io/bar_firebase/mini-app/';
+  // Query bust helps Telegram WebView drop a stale Mini App shell cache
+  return 'https://ve1lers.github.io/bar_firebase/mini-app/?v=ph1027a';
 }
 
 const MINIAPP_BOT_DESCRIPTION =

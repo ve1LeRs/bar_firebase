@@ -480,13 +480,13 @@ button.danger.is-pressed:not(:disabled) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 8px 6px;
+  gap: 4px;
+  padding: 6px 5px;
   text-align: center;
   background:
-    radial-gradient(120% 90% at 28% 12%, rgba(212, 163, 92, 0.2), transparent 58%),
+    radial-gradient(120% 90% at 28% 12%, rgba(212, 163, 92, 0.22), transparent 58%),
     linear-gradient(160deg, #2c241c 0%, #161310 100%);
-  color: rgba(212, 163, 92, 0.88);
+  color: rgba(212, 163, 92, 0.9);
   border: 0;
 }
 
@@ -497,8 +497,8 @@ button.danger.is-pressed:not(:disabled) {
 .thumb-placeholder-cam {
   position: relative;
   z-index: 1;
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   flex: 0 0 auto;
   shape-rendering: geometricPrecision;
 }
@@ -508,12 +508,12 @@ button.danger.is-pressed:not(:disabled) {
   z-index: 1;
   display: block;
   font-family: var(--font-body);
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 500;
   letter-spacing: 0.01em;
   line-height: 1.2;
-  color: var(--muted);
-  max-width: 11em;
+  color: rgba(185, 169, 154, 0.95);
+  max-width: 100%;
 }
 
 .sheet-media .sheet-placeholder {
