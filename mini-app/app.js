@@ -3703,7 +3703,59 @@
     return escapeHtml(str).replace(/'/g, '&#39;');
   }
 
+  function bindPressFeedback() {
+    // Pointer press class — :active alone is flaky in Telegram iOS WebView
+    if (bindPressFeedback._bound) return;
+    bindPressFeedback._bound = true;
+    const clear = (el) => el?.classList.remove('is-pressed');
+    const pressable = (el) =>
+      el?.closest?.(
+        'button, .cta, .ghost, .filter, .tab, .cocktail, .order-rate-btn, .bill-accordion-head, .auth-retry'
+      );
+
+    document.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (e.button != null && e.button !== 0) return;
+        const el = pressable(e.target);
+        if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return;
+        el.classList.add('is-pressed');
+      },
+      { passive: true }
+    );
+    document.addEventListener(
+      'pointerup',
+      (e) => clear(pressable(e.target)),
+      { passive: true }
+    );
+    document.addEventListener(
+      'pointercancel',
+      (e) => clear(pressable(e.target)),
+      { passive: true }
+    );
+    document.addEventListener(
+      'pointerleave',
+      (e) => {
+        if (e.target?.classList?.contains('is-pressed')) clear(e.target);
+      },
+      { passive: true, capture: true }
+    );
+    document.addEventListener(
+      'click',
+      (e) => {
+        const el = pressable(e.target);
+        if (el) {
+          // Keep flash visible briefly after tap
+          el.classList.add('is-pressed');
+          setTimeout(() => clear(el), 140);
+        }
+      },
+      true
+    );
+  }
+
   function bindUi() {
+    bindPressFeedback();
     document.querySelectorAll('.tab').forEach((tab) => {
       tab.addEventListener('click', () => switchView(tab.dataset.nav));
     });
