@@ -11,7 +11,8 @@
   };
 
   const DEFAULT_API = 'https://asafievbar.duckdns.org:8443';
-  const MENU_CACHE_KEY = 'asafiev_mini_menu_v4';
+  const MENU_CACHE_KEY = 'asafiev_mini_menu_v5';
+  const MENU_IMAGE_BUST = 'en1';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
   const STATUS_LABELS = {
     pending: 'Ожидание',
@@ -2527,9 +2528,16 @@
       .map((k) => `${k}:${state.ratings[k]}`).join('|');
     const cats = state.category;
     const cocktails = (state.cocktails || []).map((c) =>
-      `${c.id}:${c.name}:${c.price}:${(c.tasteTags || []).join(',')}`
+      `${c.id}:${c.name}:${c.price}:${c.image || ''}:${(c.tasteTags || []).join(',')}`
     ).join(';');
     return `${cats}#${stop}#${rates}#${cocktails}`;
+  }
+
+  function cocktailImageSrc(url) {
+    const raw = String(url || '').trim();
+    if (!raw) return '';
+    if (/[?&]v=/.test(raw)) return raw;
+    return `${raw}${raw.includes('?') ? '&' : '?'}v=${MENU_IMAGE_BUST}`;
   }
 
   function scheduleRenderMenu({ animate = false } = {}) {
@@ -2791,13 +2799,13 @@
         }, { once: true });
       }
 
-      const imageUrl = (cocktail.image || '').trim();
+      const imageUrl = cocktailImageSrc(cocktail.image);
       const hasImage = Boolean(imageUrl);
       const rating = state.ratings[cocktail.name];
       btn.innerHTML = `
         <div class="thumb-wrap">
           ${hasImage
-            ? `<img class="cocktail-thumb" src="${escapeAttr(imageUrl)}" alt="" loading="${index < 6 ? 'eager' : 'lazy'}" decoding="async">`
+            ? `<img class="cocktail-thumb" src="${escapeAttr(imageUrl)}" alt="" loading="${index < 6 ? 'eager' : 'lazy'}" decoding="async" referrerpolicy="no-referrer">`
             : ''}
           ${cocktailPlaceholderHtml({ name: cocktail.name, hidden: hasImage })}
         </div>
@@ -2827,6 +2835,12 @@
       const placeholder = btn.querySelector('.thumb-placeholder');
       if (img && placeholder) {
         img.addEventListener('error', () => {
+          // One retry with a hard bust — Telegram often caches a transient 404
+          if (!img.dataset.retried && imageUrl) {
+            img.dataset.retried = '1';
+            img.src = `${imageUrl}${imageUrl.includes('?') ? '&' : '?'}r=${Date.now()}`;
+            return;
+          }
           img.remove();
           placeholder.hidden = false;
         });
@@ -3140,16 +3154,22 @@
     els.sheetIngredients.textContent = cocktail.ingredients || 'Состав уточнит бармен';
     els.sheetMood.textContent = cocktail.mood || cocktail.description || '';
 
-    if (cocktail.image) {
+    const sheetImageUrl = cocktailImageSrc(cocktail.image);
+    if (sheetImageUrl) {
       els.sheetMedia.classList.remove('is-empty');
       els.sheetMedia.innerHTML = `
-        <img src="${escapeAttr(cocktail.image)}" alt="${escapeAttr(cocktail.name)}" decoding="async">
+        <img src="${escapeAttr(sheetImageUrl)}" alt="${escapeAttr(cocktail.name)}" decoding="async" referrerpolicy="no-referrer">
         ${cocktailPlaceholderHtml({ sheet: true, name: cocktail.name, hidden: true })}
       `;
       const sheetImg = els.sheetMedia.querySelector('img');
       const sheetPh = els.sheetMedia.querySelector('.sheet-placeholder');
       sheetImg?.addEventListener('error', () => {
-        sheetImg.remove();
+        if (sheetImg && !sheetImg.dataset.retried) {
+          sheetImg.dataset.retried = '1';
+          sheetImg.src = `${sheetImageUrl}${sheetImageUrl.includes('?') ? '&' : '?'}r=${Date.now()}`;
+          return;
+        }
+        sheetImg?.remove();
         if (sheetPh) sheetPh.hidden = false;
         els.sheetMedia.classList.add('is-empty');
       });
