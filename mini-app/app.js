@@ -3696,18 +3696,21 @@
   }
 
   function cocktailPlaceholderHtml({ sheet = false, name = '', hidden = false } = {}) {
-    const label = sheet ? 'Фото скоро появится' : 'Нет фото';
-    const initial = String(name || 'A').trim().charAt(0).toUpperCase() || 'A';
+    const label = sheet
+      ? 'Коктейль уже делает селфи, скоро выложит сюда'
+      : 'Скоро селфи';
     const cls = sheet
       ? 'thumb-placeholder sheet-placeholder'
       : 'thumb-placeholder';
-    // Inline SVG glass — no emoji, works offline
+    // Crisp SVG camera (emoji looks soft/low-res on retina WebView)
     return `
       <div class="${cls}"${hidden ? ' hidden' : ''} aria-hidden="true">
-        <span class="thumb-placeholder-mark">${escapeHtml(initial)}</span>
-        <svg class="thumb-placeholder-glass" viewBox="0 0 48 48" width="28" height="28" focusable="false">
-          <path fill="currentColor" d="M12.5 6.5h23l-3.2 18.2c-.6 3.4-3.5 5.8-7 5.8h-2.6c-3.5 0-6.4-2.4-7-5.8L12.5 6.5zm4.1 3.2l2.4 13.6c.3 1.6 1.6 2.7 3.2 2.7h2.6c1.6 0 2.9-1.1 3.2-2.7l2.4-13.6H16.6zM22 32.2h4v7.3h-4z"/>
-          <path fill="currentColor" d="M17.5 41.2h13c.7 0 1.3.6 1.3 1.3s-.6 1.3-1.3 1.3h-13c-.7 0-1.3-.6-1.3-1.3s.6-1.3 1.3-1.3z" opacity=".85"/>
+        <svg class="thumb-placeholder-cam" viewBox="0 0 64 64" width="40" height="40" focusable="false">
+          <rect x="6" y="18" width="52" height="36" rx="8" fill="none" stroke="currentColor" stroke-width="3.2"/>
+          <path fill="currentColor" d="M22 18l3.2-6.4A4 4 0 0 1 28.8 9h6.4a4 4 0 0 1 3.6 2.6L42 18H22z"/>
+          <circle cx="32" cy="36" r="11" fill="none" stroke="currentColor" stroke-width="3.2"/>
+          <circle cx="32" cy="36" r="5.5" fill="currentColor" opacity=".9"/>
+          <circle cx="46.5" cy="26.5" r="2.4" fill="currentColor"/>
         </svg>
         <span class="thumb-placeholder-text">${label}</span>
       </div>
