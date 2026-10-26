@@ -14,13 +14,13 @@ function img(file) {
 
 const classics = [
   {
-    name: 'Дайкири',
+    name: 'Daiquiri',
     price: 600,
     ingredients: 'Белый ром, сок лайма, сахар',
     mood: 'Чистая классика: ром, лайм, сахар — ничего лишнего',
     alcohol: 22,
     tasteTags: ['sour'],
-    image: img('Дайкири.jpg'),
+    image: img('Daiquiri.jpg'),
     stockRecipe: [
       { ingredientName: 'Белый ром', amount: 50 },
       { ingredientName: 'Сок лайма', amount: 25 },
@@ -28,13 +28,13 @@ const classics = [
     ]
   },
   {
-    name: 'Куба Либре',
+    name: 'Cuba Libre',
     price: 550,
     ingredients: 'Белый ром, Coca-Cola, лайм',
     mood: 'Хайбол без лишней драмы — ром и кола с лаймом',
     alcohol: 12,
     tasteTags: ['sweet', 'sour'],
-    image: img('Куба_Либре.jpg'),
+    image: img('Cuba_Libre.jpg'),
     stockRecipe: [
       { ingredientName: 'Белый ром', amount: 50 },
       { ingredientName: 'Coca-Cola', amount: 120 },
@@ -42,13 +42,13 @@ const classics = [
     ]
   },
   {
-    name: 'Том Коллинз',
+    name: 'Tom Collins',
     price: 600,
     ingredients: 'Джин, сок лайма, сахар, содовая',
     mood: 'Высокий, сухой, освежающий джин-лонга',
     alcohol: 12,
     tasteTags: ['sour'],
-    image: img('Том_Коллинз.jpg'),
+    image: img('Tom_Collins.jpg'),
     stockRecipe: [
       { ingredientName: 'Джин', amount: 50 },
       { ingredientName: 'Сок лайма', amount: 25 },
@@ -72,13 +72,13 @@ const classics = [
     ]
   },
   {
-    name: 'Лемон Дроп',
+    name: 'Lemon Drop',
     price: 650,
     ingredients: 'Водка, Трипл Сек, сок лайма, сахар',
     mood: 'Цитрусовый sour на водке — ярко и чисто',
     alcohol: 20,
     tasteTags: ['sour', 'sweet'],
-    image: img('Лемон_Дроп.jpg'),
+    image: img('Lemon_Drop.jpg'),
     stockRecipe: [
       { ingredientName: 'Водка', amount: 40 },
       { ingredientName: 'Апельсиновый ликёр', amount: 20 },
@@ -87,13 +87,13 @@ const classics = [
     ]
   },
   {
-    name: 'Белая леди',
+    name: 'White Lady',
     price: 700,
     ingredients: 'Джин, Трипл Сек, сок лайма',
     mood: 'Элегантный sour — джин и апельсин в балансе',
     alcohol: 22,
     tasteTags: ['sour'],
-    image: img('Белая_леди.jpg'),
+    image: img('White_Lady.jpg'),
     stockRecipe: [
       { ingredientName: 'Джин', amount: 40 },
       { ingredientName: 'Апельсиновый ликёр', amount: 20 },
@@ -101,13 +101,13 @@ const classics = [
     ]
   },
   {
-    name: 'Саутсайд',
+    name: 'Southside',
     price: 650,
     ingredients: 'Джин, лайм, сахар, мята',
     mood: 'Как мохито, только на джине — свежо и зелено',
     alcohol: 18,
     tasteTags: ['sour'],
-    image: img('Саутсайд.jpg'),
+    image: img('Southside.jpg'),
     stockRecipe: [
       { ingredientName: 'Джин', amount: 50 },
       { ingredientName: 'Сок лайма', amount: 25 },
@@ -116,13 +116,13 @@ const classics = [
     ]
   },
   {
-    name: 'Виски Смэш',
+    name: 'Whiskey Smash',
     price: 650,
     ingredients: 'Виски, мята, лайм, сахар',
     mood: 'Мятный виски с цитрусом — летний характер',
     alcohol: 20,
     tasteTags: ['sour'],
-    image: img('Виски_Смэш.jpg'),
+    image: img('Whiskey_Smash.jpg'),
     stockRecipe: [
       { ingredientName: 'Виски', amount: 50 },
       { ingredientName: 'Сок лайма', amount: 25 },
@@ -131,13 +131,13 @@ const classics = [
     ]
   },
   {
-    name: 'Электрик Лимонад',
+    name: 'Electric Lemonade',
     price: 650,
     ingredients: 'Водка, блю курасао, сок лайма, содовая',
     mood: 'Неоновый лонг — ярко, кисло, с шипением',
     alcohol: 14,
     tasteTags: ['sour', 'sweet'],
-    image: img('Электрик_Лимонад.jpg'),
+    image: img('Electric_Lemonade.jpg'),
     stockRecipe: [
       { ingredientName: 'Водка', amount: 40 },
       { ingredientName: 'Сироп блю курасао', amount: 20 },

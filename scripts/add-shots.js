@@ -14,13 +14,13 @@ function img(file) {
 
 const shots = [
   {
-    name: 'Камикадзе',
+    name: 'Kamikaze',
     price: 220,
     ingredients: 'Водка, Трипл Сек, сок лайма',
     mood: 'Классика шотов — резко, чисто, по делу 💥',
     alcohol: 28,
     tasteTags: ['sour'],
-    image: img('Шот_Камикадзе.jpg'),
+    image: img('Shot_Kamikaze.jpg'),
     stockRecipe: [
       { ingredientName: 'Водка', amount: 20 },
       { ingredientName: 'Апельсиновый ликёр', amount: 15 },
@@ -28,13 +28,13 @@ const shots = [
     ]
   },
   {
-    name: 'Малиновый удар',
+    name: 'Raspberry Punch',
     price: 220,
     ingredients: 'Водка, сироп малина, сок лимона, гренадин',
     mood: 'Ягодный хук — сладко на входе, кислинка на финише 🍓',
     alcohol: 22,
     tasteTags: ['sweet', 'sour'],
-    image: img('Шот_Малиновый_удар.jpg'),
+    image: img('Shot_Raspberry_Punch.jpg'),
     stockRecipe: [
       { ingredientName: 'Водка', amount: 20 },
       { ingredientName: 'Сироп малина', amount: 10 },
@@ -49,7 +49,7 @@ const shots = [
     mood: 'Слоями, как в кино. Можно поджечь — если осмелишься 🔥',
     alcohol: 20,
     tasteTags: ['sweet'],
-    image: img('Шот_B-52.jpg'),
+    image: img('Shot_B-52.jpg'),
     stockRecipe: [
       { ingredientName: 'Сироп гренадин', amount: 10 },
       { ingredientName: 'Сливки', amount: 15 },
@@ -57,13 +57,13 @@ const shots = [
     ]
   },
   {
-    name: 'Оргазм',
+    name: 'Orgasm',
     price: 240,
     ingredients: 'Водка ваниль, сливки, сироп ваниль, Трипл Сек',
     mood: 'Десертный шот. Название говорит само за себя 😉',
     alcohol: 18,
     tasteTags: ['sweet'],
-    image: img('Шот_Оргазм.jpg'),
+    image: img('Shot_Orgasm.jpg'),
     stockRecipe: [
       { ingredientName: 'Водка ваниль', amount: 20 },
       { ingredientName: 'Сливки', amount: 15 },
@@ -72,26 +72,26 @@ const shots = [
     ]
   },
   {
-    name: 'Текила Сламмер',
+    name: 'Tequila Slammer',
     price: 200,
     ingredients: 'Текила, Спрайт',
     mood: 'Стукни об стол и пей, пока пена жива ⚡',
     alcohol: 25,
     tasteTags: ['sour'],
-    image: img('Шот_Текила_Сламмер.jpg'),
+    image: img('Shot_Tequila_Slammer.jpg'),
     stockRecipe: [
       { ingredientName: 'Текила', amount: 25 },
       { ingredientName: 'Спрайт', amount: 25 }
     ]
   },
   {
-    name: 'Блю Мэджин',
+    name: 'Blue Magin',
     price: 220,
     ingredients: 'Водка, блю курасао, сок лимона',
     mood: 'Неоновый синий — выглядит как химия, пьётся как праздник 💙',
     alcohol: 24,
     tasteTags: ['sour', 'sweet'],
-    image: img('Шот_Блю_Мэджин.jpg'),
+    image: img('Shot_Blue_Magin.jpg'),
     stockRecipe: [
       { ingredientName: 'Водка', amount: 20 },
       { ingredientName: 'Сироп блю курасао', amount: 15 },
@@ -99,13 +99,13 @@ const shots = [
     ]
   },
   {
-    name: 'Пассион-бомба',
+    name: 'Passion Bomb',
     price: 230,
     ingredients: 'Водка, сироп маракуйя, сок лимона, содовая',
     mood: 'Тропический взрыв с шипением сверху 💥🥭',
     alcohol: 22,
     tasteTags: ['sweet', 'sour'],
-    image: img('Шот_Пассион-бомба.jpg'),
+    image: img('Shot_Passion_Bomb.jpg'),
     stockRecipe: [
       { ingredientName: 'Водка', amount: 20 },
       { ingredientName: 'Сироп маракуйя', amount: 15 },
@@ -114,13 +114,13 @@ const shots = [
     ]
   },
   {
-    name: 'Чёрная смородина',
+    name: 'Blackcurrant',
     price: 220,
     ingredients: 'Джин, сироп чёрная смородина, сок лимона',
     mood: 'Пахнет садом после дождя. Джин + ягода = любовь',
     alcohol: 24,
     tasteTags: ['sour', 'sweet'],
-    image: img('Шот_Чёрная_смородина.jpg'),
+    image: img('Shot_Blackcurrant.jpg'),
     stockRecipe: [
       { ingredientName: 'Джин', amount: 20 },
       { ingredientName: 'Сироп чёрная смородина', amount: 15 },
@@ -128,13 +128,13 @@ const shots = [
     ]
   },
   {
-    name: 'Грейпфрутовый удар',
+    name: 'Grapefruit Punch',
     price: 220,
     ingredients: 'Текила, сок грейпфрута, сироп сахар',
     mood: 'Палома, уменьшенная до одного глотка 🍊',
     alcohol: 24,
     tasteTags: ['bitter', 'sour'],
-    image: img('Шот_Грейпфрутовый_удар.jpg'),
+    image: img('Shot_Grapefruit_Punch.jpg'),
     stockRecipe: [
       { ingredientName: 'Текила', amount: 20 },
       { ingredientName: 'Сок грейпфрута', amount: 20 },
@@ -142,13 +142,13 @@ const shots = [
     ]
   },
   {
-    name: 'Клюква-космо',
+    name: 'Cranberry Cosmo',
     price: 220,
     ingredients: 'Водка, Трипл Сек, сок клюквы, лайм',
     mood: 'Мини-космополитен для тех, кто не ждёт бокал 💋',
     alcohol: 24,
     tasteTags: ['sour', 'sweet'],
-    image: img('Шот_Клюква-космо.jpg'),
+    image: img('Shot_Cranberry_Cosmo.jpg'),
     stockRecipe: [
       { ingredientName: 'Водка', amount: 20 },
       { ingredientName: 'Апельсиновый ликёр', amount: 10 },
@@ -157,13 +157,13 @@ const shots = [
     ]
   },
   {
-    name: 'Апероль-шот',
+    name: 'Aperol Shot',
     price: 200,
     ingredients: 'Ликёр апероль, сок апельсина, шампанское',
     mood: 'Spritz в формате «залпом». Горько-игристо 🧡',
     alcohol: 12,
     tasteTags: ['bitter', 'sweet'],
-    image: img('Шот_Апероль.jpg'),
+    image: img('Shot_Aperol.jpg'),
     stockRecipe: [
       { ingredientName: 'Ликёр апероль', amount: 25 },
       { ingredientName: 'Сок апельсина', amount: 15 },
@@ -171,13 +171,13 @@ const shots = [
     ]
   },
   {
-    name: 'Лонг-Айленд шот',
+    name: 'Long Island Shot',
     price: 250,
     ingredients: 'Водка, джин, ром, текила, Трипл Сек, лимон, кола',
     mood: 'Весь Long Island в одном глотке. Опасно и честно ⚠️',
     alcohol: 32,
     tasteTags: ['sweet', 'sour'],
-    image: img('Шот_Лонг-Айленд.jpg'),
+    image: img('Shot_Long_Island.jpg'),
     stockRecipe: [
       { ingredientName: 'Водка', amount: 8 },
       { ingredientName: 'Джин', amount: 8 },
@@ -189,13 +189,13 @@ const shots = [
     ]
   },
   {
-    name: 'Порнстар-шот',
+    name: 'Pornstar Shot',
     price: 240,
     ingredients: 'Водка ваниль, сироп маракуйя, лимон, шампанское',
     mood: 'Твой Порнстар, только быстрее и наглее 🌟',
     alcohol: 22,
     tasteTags: ['sweet', 'sour'],
-    image: img('Шот_Порнстар.jpg'),
+    image: img('Shot_Pornstar.jpg'),
     stockRecipe: [
       { ingredientName: 'Водка ваниль', amount: 20 },
       { ingredientName: 'Сироп маракуйя', amount: 15 },
@@ -204,13 +204,13 @@ const shots = [
     ]
   },
   {
-    name: 'Мятный удар',
+    name: 'Mint Punch',
     price: 220,
     ingredients: 'Белый ром, сахар, лайм, мята',
     mood: 'Мохито без содовой и без ожидания — сразу в бой 🌿',
     alcohol: 24,
     tasteTags: ['sour'],
-    image: img('Шот_Мятный_удар.jpg'),
+    image: img('Shot_Mint_Punch.jpg'),
     stockRecipe: [
       { ingredientName: 'Белый ром', amount: 20 },
       { ingredientName: 'Сироп сахар', amount: 8 },
@@ -219,13 +219,13 @@ const shots = [
     ]
   },
   {
-    name: 'Виски-лайм',
+    name: 'Whiskey Lime',
     price: 230,
     ingredients: 'Виски, сироп сахар, сок лимона',
     mood: 'Взрослый шот. Без сюсюканья, только характер 🥃',
     alcohol: 28,
     tasteTags: ['sour', 'bitter'],
-    image: img('Шот_Виски-лайм.jpg'),
+    image: img('Shot_Whiskey_Lime.jpg'),
     stockRecipe: [
       { ingredientName: 'Виски', amount: 25 },
       { ingredientName: 'Сироп сахар', amount: 8 },
@@ -233,13 +233,13 @@ const shots = [
     ]
   },
   {
-    name: 'Клубничный поцелуй',
+    name: 'Strawberry Kiss',
     price: 230,
     ingredients: 'Водка, сироп клубника, сливки, лимон',
     mood: 'Розовый, сливочный, опасный для репутации 💕',
     alcohol: 18,
     tasteTags: ['sweet'],
-    image: img('Шот_Клубничный_поцелуй.jpg'),
+    image: img('Shot_Strawberry_Kiss.jpg'),
     stockRecipe: [
       { ingredientName: 'Водка', amount: 20 },
       { ingredientName: 'Сироп клубника', amount: 12 },
@@ -248,13 +248,13 @@ const shots = [
     ]
   },
   {
-    name: 'Ром-гренадин',
+    name: 'Rum Grenadine',
     price: 200,
     ingredients: 'Белый ром, гренадин, лайм',
     mood: 'Мини-дайкири с ягодной помадой 🍒',
     alcohol: 24,
     tasteTags: ['sweet', 'sour'],
-    image: img('Шот_Ром-гренадин.jpg'),
+    image: img('Shot_Rum_Grenadine.jpg'),
     stockRecipe: [
       { ingredientName: 'Белый ром', amount: 25 },
       { ingredientName: 'Сироп гренадин', amount: 10 },
@@ -262,13 +262,13 @@ const shots = [
     ]
   },
   {
-    name: 'Соджу-слам',
+    name: 'Soju Slam',
     price: 190,
     ingredients: 'Соджу, сироп маракуйя, Спрайт',
     mood: 'Лёгкий, игривый, «ещё по одному» гарантирован ✨',
     alcohol: 12,
     tasteTags: ['sweet'],
-    image: img('Шот_Соджу-слам.jpg'),
+    image: img('Shot_Soju_Slam.jpg'),
     stockRecipe: [
       { ingredientName: 'Соджу', amount: 30 },
       { ingredientName: 'Сироп маракуйя', amount: 10 },
