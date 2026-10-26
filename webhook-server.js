@@ -201,7 +201,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ALERTS_BOT_TOKEN = process.env.TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN;
 const TELEGRAM_MINIAPP_BOT_TOKEN = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'type1';
+const MINI_APP_ASSET_VERSION = process.env.MINI_APP_ASSET_VERSION || 'authfix1';
 
 function alertsBotToken() {
   return TELEGRAM_ALERTS_BOT_TOKEN || TELEGRAM_BOT_TOKEN || '';
@@ -1495,12 +1495,38 @@ function validateTelegramWebAppData(initData, botToken) {
   return { ok: true, user, authDate, queryId: params.get('query_id') || null };
 }
 
+function miniAppBotTokens() {
+  // Prefer Mini App bot, but accept alerts/main token too —
+  // after VPS moves, TELEGRAM_MINIAPP_BOT_TOKEN is often missing/wrong.
+  return [...new Set(
+    [TELEGRAM_MINIAPP_BOT_TOKEN, TELEGRAM_ALERTS_BOT_TOKEN, TELEGRAM_BOT_TOKEN]
+      .map((t) => String(t || '').trim())
+      .filter(Boolean)
+  )];
+}
+
+function validateMiniAppInitData(initData) {
+  if (!initData) return { ok: false, reason: 'missing_init_data_or_token' };
+  const tokens = miniAppBotTokens();
+  if (!tokens.length) return { ok: false, reason: 'missing_init_data_or_token' };
+
+  let last = { ok: false, reason: 'bad_hash' };
+  for (const token of tokens) {
+    const parsed = validateTelegramWebAppData(initData, token);
+    if (parsed.ok) return parsed;
+    last = parsed;
+    // Keep trying other tokens only when hash doesn't match this bot
+    if (parsed.reason !== 'bad_hash') return parsed;
+  }
+  return last;
+}
+
 function getTelegramUserFromRequest(req) {
   const initData =
     req.body?.initData ||
     req.headers['x-telegram-init-data'] ||
     '';
-  const parsed = validateTelegramWebAppData(initData, TELEGRAM_MINIAPP_BOT_TOKEN);
+  const parsed = validateMiniAppInitData(initData);
   if (!parsed.ok) return { ok: false, reason: parsed.reason };
   const uid = `tg_${parsed.user.id}`;
   return { ok: true, uid, user: parsed.user, initData };
@@ -2023,10 +2049,13 @@ async function restoreIngredientsAdmin(cocktailName, orderId = null) {
 app.post('/api/mini-app/auth', async (req, res) => {
   try {
     const { initData } = req.body || {};
-    const parsed = validateTelegramWebAppData(initData, TELEGRAM_MINIAPP_BOT_TOKEN);
+    const parsed = validateMiniAppInitData(initData);
 
     if (!parsed.ok) {
-      console.warn(' Mini App auth rejected:', parsed.reason);
+      console.warn('Mini App auth rejected:', parsed.reason, {
+        hasInitData: Boolean(initData),
+        tokenSlots: miniAppBotTokens().length
+      });
       return res.status(401).json({
         success: false,
         error: 'Недействительные данные Telegram WebApp',
