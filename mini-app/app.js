@@ -2805,11 +2805,13 @@
     els.menuGrid.replaceChildren(frag);
   }
 
-  function openRatingSheet(order) {
+  function openRatingSheet(order, { force = false } = {}) {
     if (state.currentView === 'admin') return false;
-    if (!canShowRatingNow()) return false;
+    if (!force && !canShowRatingNow()) return false;
+    if (force && state.currentView !== 'orders') return false;
     if (!order?.id || order.rated) return false;
-    if (wasRatingPrompted(order.id)) return false;
+    if (!isRateableStatus(order.status || 'ready')) return false;
+    if (!force && wasRatingPrompted(order.id)) return false;
     if (els.ratingSheet?.classList.contains('open')) return false;
 
     markRatingPrompted(order.id);
@@ -2912,6 +2914,10 @@
     }
   }
 
+  function isRateableStatus(status) {
+    return status === 'ready' || status === 'completed';
+  }
+
   function canShowRatingNow() {
     return (
       state.currentView === 'orders' &&
@@ -2925,21 +2931,23 @@
   }
 
   function queueRatingCandidate(order) {
-    // Never queue while admin is working — avoids surprise popups later in-session
-    if (state.currentView === 'admin') return;
+    // Always queue (even on admin) — sheet opens only on Orders via flush
     if (!order?.id || order.rated || wasRatingPrompted(order.id)) return;
-    if ((order.status || '') !== 'ready') return;
-    state.pendingRatingOrders.set(String(order.id), {
+    if (!isRateableStatus(order.status || '')) return;
+    const id = String(order.id);
+    const prev = state.pendingRatingOrders.get(id);
+    state.pendingRatingOrders.set(id, {
       ...order,
-      status: 'ready',
-      readyAt: Date.now()
+      id,
+      status: order.status,
+      readyAt: prev?.readyAt || Date.now()
     });
   }
 
   function noteOrderStatusChanges(orders) {
     const list = Array.isArray(orders) ? orders : [];
     const kitchen = new Set(['pending', 'confirmed', 'preparing']);
-    let justBecameReady = null;
+    let justBecameRateable = null;
 
     list.forEach((order) => {
       const id = String(order.id || '');
@@ -2947,9 +2955,14 @@
       if (!id) return;
       const prev = state.knownOrderStatuses.get(id);
 
-      // First time we see an order: seed only — never prompt for already-ready history
+      // First sight: seed status; queue recent ready/completed if still unrated
       if (!prev) {
         state.knownOrderStatuses.set(id, status);
+        const ageMs = Date.now() - (Number(order.createdAtMs) || 0);
+        const recent = !order.createdAtMs || ageMs < 2 * 60 * 60 * 1000;
+        if (recent && isRateableStatus(status) && !order.rated && !wasRatingPrompted(id)) {
+          queueRatingCandidate({ ...order, id, status });
+        }
         return;
       }
 
@@ -2958,11 +2971,18 @@
           showToast(`${order.name || 'Заказ'}: ${STATUS_LABELS[status] || status}`);
           haptic('light');
         }
-        const becameReady = status === 'ready' && kitchen.has(prev);
-        if (becameReady && !order.rated && !wasRatingPrompted(id)) {
-          justBecameReady = { ...order, id, status: 'ready' };
+        // Ready OR jump kitchen→completed (admin pressed «Выдан» without «Готов»)
+        const becameRateable =
+          !order.rated &&
+          !wasRatingPrompted(id) &&
+          (
+            (status === 'ready' && kitchen.has(prev)) ||
+            (status === 'completed' && (kitchen.has(prev) || prev === 'ready'))
+          );
+        if (becameRateable) {
+          justBecameRateable = { ...order, id, status };
         }
-        if (status !== 'ready' || order.rated) {
+        if (order.rated || status === 'cancelled') {
           state.pendingRatingOrders.delete(id);
         }
       }
@@ -2970,21 +2990,35 @@
       state.knownOrderStatuses.set(id, status);
     });
 
-    // Drop stale candidates (older than 15 min or no longer ready)
+    // Drop stale / invalid candidates (keep ready+completed unrated up to 2h)
     const now = Date.now();
     for (const [id, cand] of state.pendingRatingOrders) {
       const live = list.find((o) => String(o.id) === id);
-      if (!live || live.rated || live.status !== 'ready' || now - (cand.readyAt || 0) > 15 * 60 * 1000) {
+      if (
+        !live ||
+        live.rated ||
+        !isRateableStatus(live.status) ||
+        now - (cand.readyAt || 0) > 2 * 60 * 60 * 1000
+      ) {
         state.pendingRatingOrders.delete(id);
+        continue;
       }
+      // Keep status in sync (ready → completed still rateable)
+      cand.status = live.status;
+      cand.rated = live.rated;
     }
 
-    if (!justBecameReady) return;
-
-    if (canShowRatingNow()) {
-      openRatingSheet(justBecameReady);
-    } else {
-      queueRatingCandidate(justBecameReady);
+    if (justBecameRateable) {
+      if (canShowRatingNow()) {
+        openRatingSheet(justBecameRateable);
+      } else {
+        queueRatingCandidate(justBecameRateable);
+        if (state.currentView !== 'orders' && state.currentView !== 'admin') {
+          showToast('Коктейль готов — оцените во вкладке «Заказы»', 3200);
+        }
+      }
+    } else if (canShowRatingNow() && state.pendingRatingOrders.size) {
+      scheduleRatingFlush(400);
     }
   }
 
@@ -3000,11 +3034,11 @@
         state.pendingRatingOrders.delete(id);
         continue;
       }
-      if ((order.status || '') !== 'ready') {
+      if (!isRateableStatus(order.status || '')) {
         state.pendingRatingOrders.delete(id);
         continue;
       }
-      if (now - (order.readyAt || 0) > 15 * 60 * 1000) {
+      if (now - (order.readyAt || 0) > 2 * 60 * 60 * 1000) {
         state.pendingRatingOrders.delete(id);
         continue;
       }
@@ -3466,6 +3500,7 @@
 
   function buildOrderItemCard(order, { compact = false } = {}) {
     const status = order.status || 'pending';
+    const canRate = isRateableStatus(status) && !order.rated;
     const card = document.createElement('article');
     card.className = `order-card${compact ? ' order-card-nested' : ''}`;
     card.innerHTML = `
@@ -3482,7 +3517,26 @@
           : ''
       }
       <div class="queue">${Number(order.price) || 0} ₽</div>
+      ${
+        canRate
+          ? '<button type="button" class="ghost order-rate-btn">Оценить ★</button>'
+          : order.rated
+            ? '<div class="queue">Оценка отправлена</div>'
+            : ''
+      }
     `;
+    const rateBtn = card.querySelector('.order-rate-btn');
+    if (rateBtn) {
+      rateBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        state.ratingQuietUntil = 0;
+        const payload = { ...order, id: order.id, status };
+        if (!openRatingSheet(payload, { force: true })) {
+          showToast('Откройте вкладку «Заказы», чтобы оценить');
+        }
+      });
+    }
     return card;
   }
 
@@ -3595,10 +3649,9 @@
     dismissKeyboard();
     state.currentView = name;
     document.body.dataset.view = name;
-    // Never interrupt admin with guest rating UI
+    // Hide guest rating UI on admin, but keep the queue for later (Orders tab)
     if (name === 'admin') {
       closeRatingSheet({ dismiss: false });
-      state.pendingRatingOrders.clear();
       clearTimeout(flushPendingRating._t);
     }
     document.querySelectorAll('.view').forEach((v) => {
