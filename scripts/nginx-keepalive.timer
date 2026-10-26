@@ -1,0 +1,11 @@
+[Unit]
+Description=Watch nginx every 30s for Mini App API
+
+[Timer]
+OnBootSec=15
+OnUnitActiveSec=30
+AccuracySec=5
+Unit=nginx-keepalive.service
+
+[Install]
+WantedBy=timers.target
