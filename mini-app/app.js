@@ -3696,9 +3696,7 @@
   }
 
   function cocktailPlaceholderHtml({ sheet = false, name = '', hidden = false } = {}) {
-    const label = sheet
-      ? 'Коктейль уже делает селфи, скоро выложит сюда'
-      : 'Скоро селфи';
+    const label = 'Коктейль на фотосессии, скоро выложит фото';
     const cls = sheet
       ? 'thumb-placeholder sheet-placeholder'
       : 'thumb-placeholder';

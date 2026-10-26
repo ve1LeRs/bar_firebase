@@ -508,12 +508,12 @@ button.danger.is-pressed:not(:disabled) {
   z-index: 1;
   display: block;
   font-family: var(--font-body);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 500;
   letter-spacing: 0.01em;
-  line-height: 1.25;
+  line-height: 1.2;
   color: var(--muted);
-  max-width: 9.5em;
+  max-width: 11em;
 }
 
 .sheet-media .sheet-placeholder {
