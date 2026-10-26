@@ -3,7 +3,7 @@ require('dotenv').config();
 // Route Telegram API via local HTTP proxy when HTTPS_PROXY is set (RU VPS blocks Telegram).
 try {
   if (process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.ALL_PROXY) {
-    const undici = require('undici');
+    const undici = require('node:undici');
     if (typeof undici.EnvHttpProxyAgent === 'function' && typeof undici.setGlobalDispatcher === 'function') {
       undici.setGlobalDispatcher(new undici.EnvHttpProxyAgent());
       console.log('🌐 fetch proxy enabled:', process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.ALL_PROXY);
