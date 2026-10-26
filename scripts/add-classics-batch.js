@@ -14,17 +14,18 @@ function img(file) {
 
 const classics = [
   {
-    name: 'Daiquiri',
+    name: 'Strawberry Daiquiri',
     price: 600,
-    ingredients: 'Белый ром, сок лайма, сахар',
-    mood: 'Чистая классика: ром, лайм, сахар — ничего лишнего',
-    alcohol: 22,
-    tasteTags: ['sour'],
-    image: img('Daiquiri.jpg'),
+    ingredients: 'Белый ром, сироп клубника, сок лайма, сахар',
+    mood: 'Ягодный daiquiri — ром, клубника и лайм',
+    alcohol: 20,
+    tasteTags: ['sweet', 'sour'],
+    image: img('Strawberry_Daiquiri.jpg'),
     stockRecipe: [
       { ingredientName: 'Белый ром', amount: 50 },
-      { ingredientName: 'Сок лайма', amount: 25 },
-      { ingredientName: 'Сироп сахар', amount: 15 }
+      { ingredientName: 'Сироп клубника', amount: 20 },
+      { ingredientName: 'Сок лайма', amount: 20 },
+      { ingredientName: 'Сироп сахар', amount: 10 }
     ]
   },
   {
