@@ -3009,23 +3009,14 @@
       showToast('Коктейль временно недоступен');
       return;
     }
-    // Warm API while user fills the sheet
+    // Open sheet immediately; auth finishes in background or on submit
     wakeApi();
-    if (!canOrder()) {
-      if (state.authError === 'timeout' || state.authError === 'auth_failed') {
-        showToast('Сервер ещё не готов — повторяем вход');
-        switchView('profile');
-        authenticate({ manual: true });
-      } else if (!tg?.initData) {
-        showToast('Нет Telegram-сессии');
-        tg?.showAlert?.('Откройте Mini App кнопкой меню внутри бота AsafievBar.');
-      } else {
-        showToast('Подключаем сессию…');
-        authenticate({ manual: true }).then((ok) => {
-          if (ok) openOrderSheet(cocktail);
-        });
-      }
+    if (!tg?.initData) {
+      showToast('Откройте Mini App из бота');
       return;
+    }
+    if (!state.sessionOk) {
+      authenticate({ manual: true }).catch(() => {});
     }
 
     closeWheelSheet();
