@@ -788,7 +788,7 @@ app.post('/send-purchase-list', async (req, res) => {
 
 function getMiniAppPublicUrl() {
   // Query bust helps Telegram WebView drop a stale Mini App shell cache
-  return 'https://ve1lers.github.io/bar_firebase/mini-app/?v=photos1';
+  return 'https://ve1lers.github.io/bar_firebase/mini-app/?v=qty1';
 }
 
 const MINIAPP_BOT_DESCRIPTION =
@@ -2649,12 +2649,15 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       user,
       image = '',
       cocktailId = '',
-      source = 'telegram-mini-app'
+      source = 'telegram-mini-app',
+      quantity: quantityRaw = 1
     } = req.body || {};
 
     if (!name) {
       return res.status(400).json({ success: false, error: 'Не указан коктейль' });
     }
+
+    const quantity = Math.min(10, Math.max(1, Math.floor(Number(quantityRaw) || 1)));
 
     // Fast stoplist via memory cache (refreshed every ~20s)
     if (await isCocktailStoppedCached(name)) {
@@ -2672,6 +2675,7 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       listedPrice = fallback;
     }
 
+    const lineListed = listedPrice * quantity;
     const bonusAmount = Math.max(0, Number(bonusUsed) || 0);
     if (bonusAmount > 0) {
       const [bonusDoc, settingsDoc] = await Promise.all([
@@ -2680,7 +2684,7 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       ]);
       const balance = bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0;
       const maxUsage = settingsDoc.exists ? (Number(settingsDoc.data().maxUsage) || 50) : 50;
-      const maxByPrice = Math.floor(listedPrice * (maxUsage / 100));
+      const maxByPrice = Math.floor(lineListed * (maxUsage / 100));
       const maxBonus = Math.min(balance, maxByPrice);
       if (bonusAmount > maxBonus) {
         const error = bonusAmount > balance
@@ -2689,56 +2693,79 @@ app.post('/api/mini-app/create-order', async (req, res) => {
         return res.status(400).json({ success: false, error, maxBonus, balance });
       }
     }
-    const finalPrice = Math.max(0, listedPrice - bonusAmount);
+
     const now = new Date();
     const displayName = user || session.displayName || 'Гость Telegram';
-    const nextQueue = await getNextQueuePosition();
+    const displayTime = now.toLocaleString('ru-RU');
 
-    const orderData = {
-      name,
-      user: displayName,
-      userId,
-      displayTime: now.toLocaleString('ru-RU'),
-      image: image || '',
-      status: 'pending',
-      price: finalPrice,
-      originalPrice: listedPrice,
-      discount: bonusAmount,
-      bonusUsed: bonusAmount,
-      promoCode: null,
-      queuePosition: nextQueue,
-      cocktailId: cocktailId || '',
-      source,
-      telegramId: session.telegramId || null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
-    };
+    // Spread bonus across items (remainder on the first cups)
+    const baseBonus = Math.floor(bonusAmount / quantity);
+    let bonusRem = bonusAmount - baseBonus * quantity;
 
-    const orderRef = await db.collection('orders').add(orderData);
+    const created = [];
+    let billSnapshot = { totalAmount: 0, items: [] };
 
-    if (bonusAmount > 0) {
+    for (let i = 0; i < quantity; i++) {
+      const itemBonus = baseBonus + (bonusRem > 0 ? 1 : 0);
+      if (bonusRem > 0) bonusRem -= 1;
+      const itemPrice = Math.max(0, listedPrice - itemBonus);
+      const nextQueue = await getNextQueuePosition();
+
+      const orderData = {
+        name,
+        user: displayName,
+        userId,
+        displayTime,
+        image: image || '',
+        status: 'pending',
+        price: itemPrice,
+        originalPrice: listedPrice,
+        discount: itemBonus,
+        bonusUsed: itemBonus,
+        promoCode: null,
+        queuePosition: nextQueue,
+        cocktailId: cocktailId || '',
+        source,
+        telegramId: session.telegramId || null,
+        batchSize: quantity,
+        batchIndex: i + 1,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      const orderRef = await db.collection('orders').add(orderData);
+      created.push({ id: orderRef.id, data: orderData, ref: orderRef });
+
+      if (itemBonus > 0) {
+        try {
+          await spendBonusPointsAdmin(userId, itemBonus, orderRef.id);
+        } catch (bonusError) {
+          // Roll back everything created in this request
+          for (const c of created) {
+            try { await c.ref.delete(); } catch (_) { /* ignore */ }
+          }
+          throw bonusError;
+        }
+      }
+
       try {
-        await spendBonusPointsAdmin(userId, bonusAmount, orderRef.id);
-      } catch (bonusError) {
-        await orderRef.delete();
-        throw bonusError;
+        billSnapshot = await createOrUpdateBillAdmin(userId, displayName, orderData, orderRef.id);
+      } catch (billErr) {
+        console.warn('bill update failed:', billErr.message);
       }
     }
 
-    // Bill must be ready before response — profile reads it immediately
-    let billSnapshot = { totalAmount: finalPrice, items: [] };
-    try {
-      billSnapshot = await createOrUpdateBillAdmin(userId, displayName, orderData, orderRef.id);
-    } catch (billErr) {
-      console.warn('bill update failed:', billErr.message);
-    }
+    const first = created[0];
+    const totalPaid = created.reduce((s, c) => s + (Number(c.data.price) || 0), 0);
 
     res.json({
       success: true,
-      orderId: orderRef.id,
-      queuePosition: orderData.queuePosition,
-      openBillTotal: Number(billSnapshot.totalAmount) || finalPrice,
+      orderId: first.id,
+      orderIds: created.map((c) => c.id),
+      quantity,
+      queuePosition: first.data.queuePosition,
+      openBillTotal: Number(billSnapshot.totalAmount) || totalPaid,
       openBillItems: (billSnapshot.items || []).map((item) => ({
-        orderId: item.orderId || orderRef.id,
+        orderId: item.orderId || first.id,
         cocktailName: item.cocktailName || item.name || name,
         price: Number(item.price) || 0,
         status: item.status || 'pending',
@@ -2746,20 +2773,23 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       }))
     });
 
-    deductIngredientsAdmin(name, orderRef.id).catch((e) => console.warn('deduct ingredients:', e.message));
+    for (const c of created) {
+      deductIngredientsAdmin(name, c.id).catch((e) => console.warn('deduct ingredients:', e.message));
+    }
 
+    const alertName = quantity > 1 ? `${name} ×${quantity}` : name;
     const message = formatOrderAlertHtml({
       mode: 'new',
       status: 'pending',
-      cocktailName: orderData.name,
-      customerName: orderData.user,
-      price: orderData.price,
+      cocktailName: alertName,
+      customerName: displayName,
+      price: totalPaid,
       bonusUsed: bonusAmount,
-      queuePosition: orderData.queuePosition,
-      displayTime: orderData.displayTime,
-      orderId: orderRef.id
+      queuePosition: first.data.queuePosition,
+      displayTime,
+      orderId: first.id
     });
-    const inlineKeyboard = buildOrderActionKeyboard(orderRef.id, 'pending');
+    const inlineKeyboard = buildOrderActionKeyboard(first.id, 'pending');
 
     sendTelegramAlert(message, {
       parse_mode: 'HTML',
