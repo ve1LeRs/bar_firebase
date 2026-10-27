@@ -46,14 +46,29 @@
   --vv-height: 100dvh;
 }
 
-/* Prefer Telegram theme when available, keep brand accents */
-body.tg-themed {
+/*
+ * Only borrow Telegram colors in dark scheme.
+ * Light Telegram themes set dark text_color — if we keep our dark chrome
+ * (setHeaderColor #14110f), titles become unreadable on cocktail cards.
+ */
+body.tg-themed.tg-dark {
   --bg: var(--tg-theme-bg-color, #14110f);
   --bg-elevated: var(--tg-theme-secondary-bg-color, #1c1815);
   --ink: var(--tg-theme-text-color, #f4eee6);
   --muted: var(--tg-theme-hint-color, #b9a99a);
   --accent: var(--tg-theme-button-color, #d4a35c);
   --accent-ink: var(--tg-theme-button-text-color, #1a1208);
+}
+
+/* Light Telegram clients keep brand dark palette for contrast */
+body.tg-themed:not(.tg-dark) {
+  --bg: #14110f;
+  --bg-elevated: #1c1815;
+  --bg-soft: #241f1b;
+  --ink: #f4eee6;
+  --muted: #b9a99a;
+  --accent: #d4a35c;
+  --accent-ink: #1a1208;
 }
 
 * {
@@ -286,6 +301,7 @@ button.danger.is-pressed:not(:disabled) {
   font-weight: 700;
   letter-spacing: var(--tracking-wide);
   line-height: var(--leading-tight);
+  color: #f4eee6;
 }
 
 .brand-line {
@@ -554,6 +570,8 @@ button.danger.is-pressed:not(:disabled) {
   font-weight: 600;
   letter-spacing: var(--tracking-tight);
   line-height: var(--leading-tight);
+  /* Explicit light ink — never inherit a dark Telegram text color */
+  color: #f4eee6;
 }
 
 .cocktail-meta {
@@ -1538,6 +1556,7 @@ body.field-focused {
   font-weight: 700;
   letter-spacing: var(--tracking-tight);
   line-height: var(--leading-tight);
+  color: #f4eee6;
 }
 
 .sheet-ingredients,

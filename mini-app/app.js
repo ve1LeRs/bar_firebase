@@ -338,9 +338,23 @@
     els.loader.hidden = !on;
   }
 
+  function applyTelegramColorScheme() {
+    // Mini App chrome is always dark brand; only mirror Telegram vars in dark scheme
+    const scheme = String(tg?.colorScheme || '').toLowerCase();
+    const tp = tg?.themeParams || {};
+    const bg = String(tp.bg_color || '').toLowerCase();
+    // Heuristic: dark scheme OR dark-ish bg from themeParams
+    const isDark =
+      scheme === 'dark' ||
+      (bg.startsWith('#') && bg.length >= 7 && Number.parseInt(bg.slice(1, 3), 16) < 80);
+    document.body.classList.add('tg-themed');
+    document.body.classList.toggle('tg-dark', Boolean(isDark));
+  }
+
   function initTelegram() {
     if (!tg) {
       document.body.classList.add('tg-themed');
+      document.body.classList.remove('tg-dark');
       els.greeting.textContent = 'Откройте через Telegram-бота';
       return false;
     }
@@ -383,9 +397,11 @@
     };
 
     applySafeArea();
+    applyTelegramColorScheme();
     tg.onEvent?.('fullscreenChanged', applySafeArea);
     tg.onEvent?.('safeAreaChanged', applySafeArea);
     tg.onEvent?.('contentSafeAreaChanged', applySafeArea);
+    tg.onEvent?.('themeChanged', applyTelegramColorScheme);
     tg.onEvent?.('viewportChanged', () => {
       // Don't fight the keyboard — expand() on keyboard resize breaks the order sheet
       if (!document.body.classList.contains('keyboard-open') && document.activeElement?.id !== 'bonusInput') {
@@ -405,8 +421,6 @@
     };
     document.body.addEventListener('touchstart', askFsOnce, { once: true, passive: true });
     document.body.addEventListener('click', askFsOnce, { once: true });
-
-    document.body.classList.add('tg-themed');
 
     const user = tg.initDataUnsafe?.user;
     if (user) {
