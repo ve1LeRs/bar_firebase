@@ -1550,6 +1550,54 @@ body.field-focused {
   line-height: var(--leading-snug);
 }
 
+.qty-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.qty-label {
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.qty-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.qty-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.qty-btn:disabled {
+  opacity: 0.35;
+}
+
+.qty-value {
+  min-width: 1.6em;
+  text-align: center;
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--ink);
+}
+
 .price-block {
   margin: 16px 0 4px;
   padding: 12px;
