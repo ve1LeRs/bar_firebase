@@ -49,6 +49,7 @@
     openBillPromo: null,
     billHistory: [],
     selected: null,
+    orderQty: 1,
     bonusToUse: 0,
     bonusPercentage: 5,
     bonusMinOrder: 300,
@@ -176,6 +177,9 @@
     sheetMood: document.getElementById('sheetMood'),
     sheetPrice: document.getElementById('sheetPrice'),
     sheetTotal: document.getElementById('sheetTotal'),
+    sheetQty: document.getElementById('sheetQty'),
+    qtyMinusBtn: document.getElementById('qtyMinusBtn'),
+    qtyPlusBtn: document.getElementById('qtyPlusBtn'),
     bonusRow: document.getElementById('bonusRow'),
     bonusInput: document.getElementById('bonusInput'),
     bonusEarnRow: document.getElementById('bonusEarnRow'),
@@ -3145,10 +3149,12 @@
 
     closeWheelSheet();
     state.selected = cocktail;
+    state.orderQty = 1;
     state.bonusToUse = 0;
     els.bonusInput.value = '0';
     els.bonusInput.classList.remove('is-invalid');
     updateSheetTotal._overWarned = false;
+    syncOrderQtyUi();
 
     els.sheetName.textContent = cocktail.name;
     els.sheetIngredients.textContent = cocktail.ingredients || 'Состав уточнит бармен';
@@ -3181,27 +3187,35 @@
       });
     }
 
-    const price = Number(cocktail.price) || 0;
-    els.sheetPrice.textContent = `${price} ₽`;
-
-    const maxBonus = Math.min(
-      state.bonusBalance,
-      Math.floor(price * (state.maxBonusUsage / 100))
-    );
-    if (maxBonus > 0) {
-      els.bonusRow.hidden = false;
-      els.bonusInput.max = String(maxBonus);
-      els.bonusInput.placeholder = `До ${maxBonus}`;
-    } else {
-      els.bonusRow.hidden = true;
-    }
-
     updateSheetTotal();
     els.sheetBackdrop.hidden = false;
     els.sheet.classList.add('open');
     els.sheet.setAttribute('aria-hidden', 'false');
     document.body.classList.add('sheet-open');
     tg?.MainButton?.hide?.();
+  }
+
+  function clampOrderQty(n) {
+    const v = Math.floor(Number(n) || 1);
+    return Math.min(10, Math.max(1, v));
+  }
+
+  function syncOrderQtyUi() {
+    const qty = clampOrderQty(state.orderQty);
+    state.orderQty = qty;
+    if (els.sheetQty) els.sheetQty.textContent = String(qty);
+    if (els.qtyMinusBtn) els.qtyMinusBtn.disabled = qty <= 1;
+    if (els.qtyPlusBtn) els.qtyPlusBtn.disabled = qty >= 10;
+    if (els.confirmOrderBtn) {
+      els.confirmOrderBtn.textContent = qty > 1 ? `Заказать · ${qty}` : 'Заказать';
+    }
+  }
+
+  function changeOrderQty(delta) {
+    state.orderQty = clampOrderQty(state.orderQty + delta);
+    syncOrderQtyUi();
+    updateSheetTotal();
+    haptic('light');
   }
 
   function closeOrderSheet() {
@@ -3217,13 +3231,23 @@
 
   function updateSheetTotal() {
     if (!state.selected) return;
-    const price = Number(state.selected.price) || 0;
-    const { maxBonus, raw, overLimit, message } = resolveBonusInput(price);
+    const unitPrice = Number(state.selected.price) || 0;
+    const qty = clampOrderQty(state.orderQty);
+    state.orderQty = qty;
+    const lineTotal = unitPrice * qty;
+    if (els.sheetPrice) {
+      els.sheetPrice.textContent = qty > 1 ? `${unitPrice} ₽ × ${qty}` : `${unitPrice} ₽`;
+    }
+    const { maxBonus, raw, overLimit, message } = resolveBonusInput(lineTotal);
     const bonus = Math.min(raw, maxBonus);
     state.bonusToUse = bonus;
     if (els.bonusInput) {
       els.bonusInput.max = String(maxBonus);
+      els.bonusInput.placeholder = maxBonus > 0 ? `До ${maxBonus}` : '';
       els.bonusInput.classList.toggle('is-invalid', overLimit);
+    }
+    if (els.bonusRow) {
+      els.bonusRow.hidden = maxBonus <= 0;
     }
     // Warn once when the typed value first exceeds the limit (not on every keystroke)
     if (overLimit && !updateSheetTotal._overWarned) {
@@ -3233,8 +3257,9 @@
     } else if (!overLimit) {
       updateSheetTotal._overWarned = false;
     }
-    const payable = Math.max(0, price - bonus);
+    const payable = Math.max(0, lineTotal - bonus);
     els.sheetTotal.textContent = `${payable} ₽`;
+    syncOrderQtyUi();
 
     const earn = (state.bonusActive && payable >= state.bonusMinOrder)
       ? Math.floor(payable * (state.bonusPercentage / 100))
@@ -3313,8 +3338,10 @@
     if (state.placingOrder) return;
 
     const cocktail = state.selected;
-    const price = Number(cocktail.price) || 0;
-    const bonusCheck = resolveBonusInput(price);
+    const unitPrice = Number(cocktail.price) || 0;
+    const qty = clampOrderQty(state.orderQty);
+    const lineTotal = unitPrice * qty;
+    const bonusCheck = resolveBonusInput(lineTotal);
     if (bonusCheck.overLimit) {
       showToast(bonusCheck.message);
       haptic('heavy');
@@ -3327,7 +3354,7 @@
     }
     const bonusUsed = Math.min(bonusCheck.raw, bonusCheck.maxBonus);
     state.bonusToUse = bonusUsed;
-    const finalPrice = Math.max(0, price - bonusUsed);
+    const finalPrice = Math.max(0, lineTotal - bonusUsed);
 
     state.placingOrder = true;
     state.ratingQuietUntil = Date.now() + 4000;
@@ -3345,8 +3372,9 @@
       cocktailId: cocktail.id,
       name: cocktail.name,
       price: finalPrice,
-      originalPrice: price,
+      originalPrice: unitPrice,
       bonusUsed,
+      quantity: qty,
       user: displayName,
       image: cocktail.image || '',
       source: 'telegram-mini-app'
@@ -3359,17 +3387,17 @@
     state.openBillTotal = (Number(state.openBillTotal) || 0) + finalPrice;
     state.openBillItems = [
       ...(Array.isArray(state.openBillItems) ? state.openBillItems : []),
-      {
+      ...Array.from({ length: qty }, (_, i) => ({
         cocktailName: cocktail.name,
-        price: finalPrice,
+        price: unitPrice,
         status: 'pending',
-        orderId: 'optimistic'
-      }
+        orderId: `optimistic-${i}`
+      }))
     ];
     updateProfileUI();
     haptic('medium');
     closeOrderSheet();
-    showToast('Отправляем заказ…');
+    showToast(qty > 1 ? `Отправляем ${qty} шт…` : 'Отправляем заказ…');
     switchView('orders');
     // Optimistic placeholder in orders list
     if (els.ordersList && !els.ordersList.querySelector('[data-optimistic]')) {
@@ -3379,7 +3407,7 @@
       pending.innerHTML = `
         <div class="order-top">
           <div>
-            <p class="order-name">${escapeHtml(cocktail.name)}</p>
+            <p class="order-name">${escapeHtml(cocktail.name)}${qty > 1 ? ` ×${qty}` : ''}</p>
             <p class="order-time">Отправка…</p>
           </div>
           <span class="status pending">Отправка</span>
@@ -3404,7 +3432,8 @@
         throw new Error(data.error || 'Не удалось создать заказ');
       }
 
-      showToast(`Заказ принят · очередь #${data.queuePosition || '—'}`);
+      const qLabel = data.quantity > 1 ? ` · ${data.quantity} шт` : '';
+      showToast(`Заказ принят${qLabel} · очередь #${data.queuePosition || '—'}`);
       if (typeof data.openBillTotal === 'number' || Array.isArray(data.openBillItems)) {
         applyOpenBill(data);
       } else {
@@ -3418,7 +3447,9 @@
         state.bonusBalance += bonusUsed;
       }
       state.openBillTotal = Math.max(0, (Number(state.openBillTotal) || 0) - finalPrice);
-      state.openBillItems = (state.openBillItems || []).filter((item) => item.orderId !== 'optimistic');
+      state.openBillItems = (state.openBillItems || []).filter(
+        (item) => !String(item.orderId || '').startsWith('optimistic')
+      );
       updateProfileUI();
       document.querySelector('[data-optimistic]')?.remove();
       showToast(err.name === 'AbortError' ? 'Сервер долго отвечает, попробуйте ещё раз' : (err.message || 'Ошибка заказа'));
@@ -3783,7 +3814,7 @@
     const clear = (el) => el?.classList.remove('is-pressed');
     const pressable = (el) =>
       el?.closest?.(
-        'button, .cta, .ghost, .filter, .tab, .cocktail, .order-rate-btn, .bill-accordion-head, .auth-retry'
+        'button, .cta, .ghost, .filter, .tab, .cocktail, .order-rate-btn, .bill-accordion-head, .auth-retry, .qty-btn'
       );
 
     document.addEventListener(
@@ -3851,6 +3882,8 @@
     els.bonusInput.addEventListener('input', updateSheetTotal);
     els.bonusInput.addEventListener('focus', focusBonusField);
     els.bonusInput.addEventListener('blur', blurBonusField);
+    els.qtyMinusBtn?.addEventListener('click', () => changeOrderQty(-1));
+    els.qtyPlusBtn?.addEventListener('click', () => changeOrderQty(1));
     els.confirmOrderBtn.addEventListener('click', placeOrder);
     els.ordersPromoBtn?.addEventListener('click', applyOrdersPromo);
     els.ordersPromoInput?.addEventListener('focus', focusOrdersPromoField);
