@@ -802,7 +802,7 @@ app.post('/send-purchase-list', async (req, res) => {
 
 function getMiniAppPublicUrl() {
   // New path (/q) beats Telegram WebView caches that ignore ?v= on /m/
-  return 'https://asafievbar.duckdns.org:8443/q/?v=t2';
+  return 'https://asafievbar.duckdns.org:8443/q/?v=r1';
 }
 
 const MINIAPP_BOT_DESCRIPTION =
@@ -2536,6 +2536,7 @@ app.post('/api/mini-app/my-orders', async (req, res) => {
       name: o.name,
       status: o.status,
       price: o.price,
+      image: o.image || o.cocktailImage || '',
       displayTime: o.displayTime,
       queuePosition: o.queuePosition,
       rated: Boolean(o.rated),
@@ -2560,6 +2561,7 @@ app.post('/api/mini-app/my-orders', async (req, res) => {
             orderId: oid,
             cocktailName: item.cocktailName || item.name || live?.name || 'Коктейль',
             price: Number(item.price) || Number(live?.price) || 0,
+            image: item.cocktailImage || item.image || live?.image || '',
             status,
             displayTime: live?.displayTime || '',
             queuePosition: live?.queuePosition || 0,

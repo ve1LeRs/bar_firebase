@@ -13,9 +13,9 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://telegram.org">
-  <link rel="preload" href="app.t2.css" as="style">
-  <link rel="preload" href="app.t2.js" as="script">
-  <link rel="stylesheet" href="app.t2.css">
+  <link rel="preload" href="app.r1.css" as="style">
+  <link rel="preload" href="app.r1.js" as="script">
+  <link rel="stylesheet" href="app.r1.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
@@ -407,8 +407,13 @@
   <aside class="sheet rating-sheet" id="ratingSheet" aria-hidden="true">
     <div class="sheet-scroll">
       <div class="sheet-handle"></div>
-      <h3 id="ratingTitle">Оцените коктейль</h3>
-      <p class="sheet-mood" id="ratingSubtitle">Как вам напиток?</p>
+      <div class="rating-hero" id="ratingHero">
+        <div class="rating-media" id="ratingMedia" aria-hidden="true"></div>
+        <div class="rating-copy">
+          <h3 id="ratingTitle">Оцените коктейль</h3>
+          <p class="sheet-mood" id="ratingSubtitle">Как вам напиток?</p>
+        </div>
+      </div>
       <div class="rating-stars" id="ratingStars" role="group" aria-label="Оценка">
         <button type="button" data-star="1" aria-label="1">★</button>
         <button type="button" data-star="2" aria-label="2">★</button>
@@ -472,6 +477,6 @@
   </div>
 
   <!-- Firebase loads on demand after first paint (stoplist watch / custom token) -->
-  <script defer src="app.t2.js"></script>
+  <script defer src="app.r1.js"></script>
 </body>
 </html>
