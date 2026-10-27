@@ -2151,33 +2151,33 @@ body.field-focused {
 }
 
 /*
- * Tablets (iPad portrait): one roomy column — phone layout stays <720px.
- * Avoid the old 2-col + 72px thumb combo that left empty cards on iPad.
+ * Tablets / iPad: keep 2 columns (liked), but with larger thumbs + type
+ * than the old 72px cramped cards. Phones (<720px) unchanged.
  */
 @media (min-width: 720px) {
   .shell,
   .topbar,
   .tabbar {
-    max-width: 720px;
+    max-width: 900px;
     margin-left: auto;
     margin-right: auto;
   }
 
   .shell {
-    padding: 0 22px 28px;
+    padding: 0 20px 28px;
   }
 
   .topbar {
-    padding: 16px 22px 10px;
+    padding: 16px 20px 10px;
   }
 
   .hero {
     margin: 10px 0 20px;
-    padding: 28px 24px 24px;
+    padding: 26px 22px 22px;
   }
 
   .hero-title {
-    font-size: clamp(2rem, 4.5vw, 2.4rem);
+    font-size: clamp(1.9rem, 4vw, 2.35rem);
   }
 
   .hero-sub {
@@ -2196,31 +2196,31 @@ body.field-focused {
   }
 
   .menu-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 14px;
   }
 
   .cocktail {
-    grid-template-columns: 128px 1fr;
-    gap: 16px;
-    padding: 14px;
-    border-radius: 20px;
+    grid-template-columns: 100px 1fr;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 18px;
   }
 
   .thumb-wrap {
-    width: 128px;
-    height: 128px;
-    border-radius: 16px;
+    width: 100px;
+    height: 100px;
+    border-radius: 14px;
   }
 
   .cocktail-body h3 {
-    font-size: 1.1875rem;
-    margin-bottom: 6px;
+    font-size: 1.0625rem;
+    margin-bottom: 5px;
   }
 
   .cocktail-meta {
-    font-size: 0.9375rem;
-    -webkit-line-clamp: 3;
+    font-size: 0.875rem;
+    -webkit-line-clamp: 2;
     color: #ddd0c0;
   }
 
@@ -2230,7 +2230,7 @@ body.field-focused {
   }
 
   .taste-chip {
-    padding: 3px 10px;
+    padding: 3px 9px;
     font-size: 0.75rem;
   }
 
@@ -2239,7 +2239,7 @@ body.field-focused {
   }
 
   .price {
-    font-size: 1.0625rem;
+    font-size: 1rem;
   }
 
   .cocktail-rating,
@@ -2266,28 +2266,28 @@ body.field-focused {
   }
 }
 
-/* Wide tablets / iPad landscape: two balanced columns */
+/* iPad landscape / wide: a bit more room per card */
 @media (min-width: 1024px) {
   .shell,
   .topbar,
   .tabbar {
-    max-width: 980px;
+    max-width: 1040px;
   }
 
   .menu-grid {
-    grid-template-columns: 1fr 1fr;
     gap: 16px;
   }
 
   .cocktail {
     grid-template-columns: 112px 1fr;
     gap: 14px;
-    padding: 12px;
+    padding: 14px;
   }
 
   .thumb-wrap {
     width: 112px;
     height: 112px;
+    border-radius: 16px;
   }
 
   .cocktail-body h3 {
@@ -2295,7 +2295,7 @@ body.field-focused {
   }
 
   .cocktail-meta {
-    -webkit-line-clamp: 2;
+    font-size: 0.9375rem;
   }
 }
 
