@@ -788,8 +788,8 @@ app.post('/send-purchase-list', async (req, res) => {
 
 function getMiniAppPublicUrl() {
   // Query bust helps Telegram WebView drop a stale Mini App shell cache
-  // Served from VPS while GH Pages push is unavailable; same Mini App assets.
-  return 'https://asafievbar.duckdns.org:8443/mini-app/?v=qty2';
+  // /m/ is a cache-bust alias of /mini-app/ for stubborn Telegram WebViews
+  return 'https://asafievbar.duckdns.org:8443/m/?v=qty3';
 }
 
 const MINIAPP_BOT_DESCRIPTION =
