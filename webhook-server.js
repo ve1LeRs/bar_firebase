@@ -68,28 +68,36 @@ app.use(cors({
 
 app.use(express.json());
 
-// Telegram Mini App static files + shared brand assets
-app.use('/mini-app', express.static(path.join(__dirname, 'mini-app'), {
-  extensions: ['html'],
-  etag: false,
-  lastModified: false,
-  setHeaders: (res, filePath) => {
-    // Revalidate — but NEVER Clear-Site-Data: it blanks Telegram WebView loads
+function setMiniAppStaticHeaders(res, filePath) {
+  // index.html must stay uncached so ?v= bumps pick up new JS/CSS.
+  // Fingerprinted assets (app.js?v=…, images) can be cached hard in Telegram WebView.
+  const base = path.basename(filePath || '');
+  if (!base || base === 'index.html' || base.endsWith('.html')) {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
+    return;
   }
+  if (/\.(?:js|css|png|jpe?g|webp|gif|svg|ico|woff2?)$/i.test(base)) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    return;
+  }
+  res.setHeader('Cache-Control', 'no-cache');
+}
+
+// Telegram Mini App static files + shared brand assets
+app.use('/mini-app', express.static(path.join(__dirname, 'mini-app'), {
+  extensions: ['html'],
+  etag: true,
+  lastModified: true,
+  setHeaders: setMiniAppStaticHeaders
 }));
 // Fresh alias path to bust stubborn Telegram WebView caches
 app.use('/m', express.static(path.join(__dirname, 'mini-app'), {
   extensions: ['html'],
-  etag: false,
-  lastModified: false,
-  setHeaders: (res, filePath) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-  }
+  etag: true,
+  lastModified: true,
+  setHeaders: setMiniAppStaticHeaders
 }));
 app.get('/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'logo.png')));
 app.get('/favicon.ico', (req, res) => res.sendFile(path.join(__dirname, 'favicon.ico')));
@@ -789,7 +797,7 @@ app.post('/send-purchase-list', async (req, res) => {
 function getMiniAppPublicUrl() {
   // Query bust helps Telegram WebView drop a stale Mini App shell cache
   // /m/ is a cache-bust alias of /mini-app/ for stubborn Telegram WebViews
-  return 'https://asafievbar.duckdns.org:8443/m/?v=qty3';
+  return 'https://asafievbar.duckdns.org:8443/m/?v=fast1';
 }
 
 const MINIAPP_BOT_DESCRIPTION =
@@ -2210,6 +2218,30 @@ async function restoreIngredientsAdmin(cocktailName, orderId = null) {
   }
 }
 
+async function upsertMiniAppFirebaseAuthUser(uid, displayName, photoUrl) {
+  const updatePayload = { displayName };
+  if (photoUrl) updatePayload.photoURL = photoUrl;
+  try {
+    await admin.auth().updateUser(uid, updatePayload);
+    return;
+  } catch (error) {
+    if (error.code !== 'auth/user-not-found') {
+      console.warn('Firebase user upsert skipped:', error.message);
+      return;
+    }
+  }
+  try {
+    const createPayload = { uid, displayName };
+    if (photoUrl) createPayload.photoURL = photoUrl;
+    await admin.auth().createUser(createPayload);
+  } catch (createErr) {
+    // Race: another request created the user between update and create
+    if (createErr.code !== 'auth/uid-already-exists') {
+      console.warn('Firebase user create skipped:', createErr.message);
+    }
+  }
+}
+
 // Auth: validate Telegram initData → session (+ optional Firebase custom token)
 app.post('/api/mini-app/auth', async (req, res) => {
   try {
@@ -2240,78 +2272,58 @@ app.post('/api/mini-app/auth', async (req, res) => {
     // Owner chat id from project defaults
     adminIds.add('1743362083');
     const isAdmin = adminIds.has(String(tgUser.id));
-
-    try {
-      const updatePayload = { displayName };
-      if (tgUser.photo_url) updatePayload.photoURL = tgUser.photo_url;
-      await admin.auth().updateUser(uid, updatePayload);
-    } catch (error) {
-      if (error.code === 'auth/user-not-found') {
-        const createPayload = { uid, displayName };
-        if (tgUser.photo_url) createPayload.photoURL = tgUser.photo_url;
-        await admin.auth().createUser(createPayload);
-      } else {
-        console.warn('Firebase user upsert skipped:', error.message);
-      }
-    }
-
     const userRef = db.collection('users').doc(uid);
-    const existingUser = await userRef.get();
+
+    // Auth user upsert is optional for session — don't block the response on it
+    void upsertMiniAppFirebaseAuthUser(uid, displayName, tgUser.photo_url || null);
+
+    // Parallel critical path: user/bonus/bill reads + custom token
+    const [existingUser, bonusDoc, billsSnap, customToken] = await Promise.all([
+      userRef.get(),
+      db.collection('bonusAccounts').doc(uid).get(),
+      db.collection('bills')
+        .where('userId', '==', uid)
+        .where('status', '==', 'open')
+        .limit(1)
+        .get()
+        .catch(() => ({ empty: true, docs: [] })),
+      admin.auth().createCustomToken(uid, {
+        telegramId: tgUser.id,
+        provider: 'telegram-mini-app'
+      }).catch((tokenError) => {
+        console.warn('Custom token unavailable:', tokenError.message);
+        return null;
+      })
+    ]);
+
     const existingRole = existingUser.exists ? (existingUser.data().role || 'user') : 'user';
-    await userRef.set({
+    const role = isAdmin ? 'admin' : (existingRole || 'user');
+
+    // Profile write is best-effort and must not block the session response
+    userRef.set({
       displayName,
       telegramId: tgUser.id,
       telegramUsername: tgUser.username || null,
       photoURL: tgUser.photo_url || null,
-      role: isAdmin ? 'admin' : existingRole,
+      role,
       source: 'telegram-mini-app',
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       ...(existingUser.exists ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() })
-    }, { merge: true });
+    }, { merge: true }).catch((err) => {
+      console.warn('Mini App user profile write skipped:', err.message);
+    });
 
-    let customToken = null;
-    try {
-      customToken = await admin.auth().createCustomToken(uid, {
-        telegramId: tgUser.id,
-        provider: 'telegram-mini-app'
-      });
-    } catch (tokenError) {
-      console.warn('Custom token unavailable:', tokenError.message);
-    }
-
-    const bonusDoc = await db.collection('bonusAccounts').doc(uid).get();
     const bonusBalance = bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0;
 
+    // Fast path: use stored bill totals/statuses. Live hydrate happens in /me + my-orders.
     let openBillTotal = 0;
     let openBillItems = [];
-    try {
-      const billsSnap = await db.collection('bills')
-        .where('userId', '==', uid)
-        .where('status', '==', 'open')
-        .limit(1)
-        .get();
-      if (!billsSnap.empty) {
-        const billDoc = billsSnap.docs[0];
-        const bill = billDoc.data();
-        openBillItems = await hydrateBillItemsWithOrderStatus(bill.items);
-        openBillTotal = billTotalFromItems(openBillItems);
-        // Repair stale item statuses / total in Firestore (best-effort)
-        const stale = (Array.isArray(bill.items) ? bill.items : []).some((it, idx) => {
-          const live = openBillItems[idx];
-          return live && it.status !== live.status;
-        }) || Number(bill.totalAmount || 0) !== openBillTotal;
-        if (stale) {
-          billDoc.ref.update({
-            items: openBillItems.map((it, idx) => ({
-              ...(Array.isArray(bill.items) ? bill.items[idx] : {}),
-              ...it
-            })),
-            totalAmount: openBillTotal,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-          }).catch(() => {});
-        }
-      }
-    } catch (_) { /* index optional */ }
+    if (billsSnap && !billsSnap.empty) {
+      const bill = billsSnap.docs[0].data() || {};
+      openBillItems = mapBillItemsForClient(bill.items);
+      openBillTotal = Number(bill.totalAmount);
+      if (!Number.isFinite(openBillTotal)) openBillTotal = billTotalFromItems(openBillItems);
+    }
 
     res.json({
       success: true,
@@ -2321,7 +2333,7 @@ app.post('/api/mini-app/auth', async (req, res) => {
       bonusBalance,
       openBillTotal,
       openBillItems,
-      role: isAdmin ? 'admin' : (existingRole || 'user'),
+      role,
       user: {
         id: tgUser.id,
         first_name: tgUser.first_name,

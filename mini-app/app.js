@@ -112,6 +112,45 @@
     return state.promptedRatingOrders.has(String(id || ''));
   }
 
+  const FIREBASE_SDK_URLS = [
+    'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js',
+    'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js',
+    'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js'
+  ];
+
+  function loadScriptOnce(src) {
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[data-src="${src}"]`);
+      if (existing) {
+        if (existing.dataset.loaded === '1') return resolve();
+        existing.addEventListener('load', () => resolve(), { once: true });
+        existing.addEventListener('error', () => reject(new Error(`Failed ${src}`)), { once: true });
+        return;
+      }
+      const s = document.createElement('script');
+      s.src = src;
+      s.async = true;
+      s.dataset.src = src;
+      s.onload = () => {
+        s.dataset.loaded = '1';
+        resolve();
+      };
+      s.onerror = () => reject(new Error(`Failed ${src}`));
+      document.head.appendChild(s);
+    });
+  }
+
+  function loadFirebaseSdk() {
+    if (typeof firebase !== 'undefined') return Promise.resolve();
+    if (loadFirebaseSdk._p) return loadFirebaseSdk._p;
+    loadFirebaseSdk._p = (async () => {
+      for (const url of FIREBASE_SDK_URLS) {
+        await loadScriptOnce(url);
+      }
+    })();
+    return loadFirebaseSdk._p;
+  }
+
   function initFirebase() {
     if (auth && db) return;
     if (typeof firebase === 'undefined') {
@@ -251,7 +290,10 @@
       if (host.includes('onrender.com')) return `https://${host}`;
       // GitHub Pages hosts only the UI — API stays on DuckDNS/VPS
       if (host.includes('github.io')) return DEFAULT_API;
-      if (host.includes('duckdns.org')) return `https://${host}`;
+      // Same origin preserves :8443 and skips an extra TLS hop
+      if (host.includes('duckdns.org')) {
+        return String(window.location.origin || DEFAULT_API);
+      }
     } catch (_) { /* ignore */ }
     return DEFAULT_API;
   }
@@ -688,7 +730,7 @@
             const token = data.customToken;
             void (async () => {
               try {
-                await waitForFirebase(5000);
+                await waitForFirebase(8000);
                 initFirebase();
                 const cred = await auth.signInWithCustomToken(token);
                 state.firebaseUser = cred.user;
@@ -702,7 +744,8 @@
           setAuthStatus('');
           setAuthRetryVisible(false);
           updateProfileUI();
-          startOrdersPolling();
+          // Defer orders/profile storm — auth payload already seeded bonus/bill
+          startOrdersPolling({ deferMs: 2500 });
           startKeepAlive();
           return true;
         } catch (err) {
@@ -2575,6 +2618,11 @@
     }
   }
 
+  function isMenuCacheFresh(cached) {
+    const ts = Number(cached?.ts) || 0;
+    return Boolean(cached?.cocktails?.length && ts && (Date.now() - ts) < MENU_CACHE_TTL_MS);
+  }
+
   function writeMenuCache(cocktails, stoplistNames, ratings) {
     try {
       localStorage.setItem(MENU_CACHE_KEY, JSON.stringify({
@@ -2676,6 +2724,35 @@
     return false;
   }
 
+  async function fetchMenuBootstrap({ timeoutMs = 8000 } = {}) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(`${state.apiBase}/api/mini-app/menu-bootstrap`, {
+        cache: 'default',
+        headers: { Accept: 'application/json' },
+        signal: ctrl.signal
+      });
+      const data = await res.json();
+      if (!data?.success || !Array.isArray(data.cocktails)) {
+        throw new Error(data?.error || 'bootstrap failed');
+      }
+      return data;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function applyBootstrapPayload(data, { animate = false } = {}) {
+    writeMenuCache(data.cocktails, data.stoplist || [], data.ratings || {});
+    applyMenuData(data.cocktails, data.stoplist || [], {
+      fromCache: false,
+      ratings: data.ratings || {},
+      animate,
+      render: true
+    });
+  }
+
   async function loadMenu() {
     const cached = readMenuCache();
     if (cached?.cocktails?.length) {
@@ -2687,36 +2764,28 @@
       });
     }
 
-    try {
-      // Single bootstrap request: cocktails + stoplist + ratings
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 8000);
-      const res = await fetch(`${state.apiBase}/api/mini-app/menu-bootstrap`, {
-        cache: 'default',
-        headers: { Accept: 'application/json' },
-        signal: ctrl.signal
-      });
-      clearTimeout(timer);
-      const data = await res.json();
-      if (!data?.success || !Array.isArray(data.cocktails)) {
-        throw new Error(data?.error || 'bootstrap failed');
-      }
+    // Fresh local cache: paint instantly, refresh in background
+    if (isMenuCacheFresh(cached)) {
+      void fetchMenuBootstrap({ timeoutMs: 10000 })
+        .then((data) => {
+          applyBootstrapPayload(data, { animate: false });
+          void ensureFirebaseReady().then(() => watchStoplist()).catch(() => {});
+        })
+        .catch((err) => console.warn('menu background refresh', err));
+      void ensureFirebaseReady().then(() => watchStoplist()).catch(() => {});
+      return;
+    }
 
-      writeMenuCache(data.cocktails, data.stoplist || [], data.ratings || {});
-      applyMenuData(data.cocktails, data.stoplist || [], {
-        fromCache: false,
-        ratings: data.ratings || {},
-        animate: !cached?.cocktails?.length,
-        render: true
-      });
+    try {
+      const data = await fetchMenuBootstrap({ timeoutMs: 8000 });
+      applyBootstrapPayload(data, { animate: !cached?.cocktails?.length });
 
       // Live stoplist updates after first full paint
-      initFirebase();
-      watchStoplist();
+      void ensureFirebaseReady().then(() => watchStoplist()).catch(() => {});
     } catch (err) {
       console.warn('menu bootstrap failed, fallback Firestore', err);
       try {
-        initFirebase();
+        await ensureFirebaseReady();
         const [cocktailsSnap, stopSnap, ratingsOk] = await Promise.all([
           db.collection('cocktails').get({ source: 'server' }),
           db.collection('stoplist').get({ source: 'server' }).catch(() => null),
@@ -3763,14 +3832,19 @@
     }
   }
 
-  function startOrdersPolling() {
-    refreshOrders();
-    refreshProfile();
+  function startOrdersPolling({ deferMs = 0 } = {}) {
     if (state.ordersPollTimer) clearInterval(state.ordersPollTimer);
-    state.ordersPollTimer = setInterval(() => {
+    clearTimeout(startOrdersPolling._defer);
+    const kick = () => {
       refreshOrders();
       refreshProfile();
-    }, 5000);
+    };
+    if (deferMs > 0) {
+      startOrdersPolling._defer = setTimeout(kick, deferMs);
+    } else {
+      kick();
+    }
+    state.ordersPollTimer = setInterval(kick, 5000);
   }
 
   function subscribeOrders() {
@@ -4092,18 +4166,19 @@
 
   async function waitForFirebase(timeoutMs = 8000) {
     if (typeof firebase !== 'undefined') return;
-    const start = Date.now();
-    await new Promise((resolve, reject) => {
-      const timer = setInterval(() => {
-        if (typeof firebase !== 'undefined') {
-          clearInterval(timer);
-          resolve();
-        } else if (Date.now() - start > timeoutMs) {
-          clearInterval(timer);
-          reject(new Error('Firebase SDK не загрузился'));
-        }
-      }, 30);
+    const load = loadFirebaseSdk();
+    const timeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Firebase SDK не загрузился')), timeoutMs);
     });
+    await Promise.race([load, timeout]);
+    if (typeof firebase === 'undefined') {
+      throw new Error('Firebase SDK не загрузился');
+    }
+  }
+
+  async function ensureFirebaseReady(timeoutMs = 8000) {
+    await waitForFirebase(timeoutMs);
+    initFirebase();
   }
 
   async function boot() {
@@ -4126,10 +4201,13 @@
         });
       }
 
-      // Firebase is optional (stoplist watch). Menu/auth go through API.
-      void waitForFirebase(6000)
-        .then(() => { try { initFirebase(); } catch (_) { /* ignore */ } })
-        .catch((err) => console.warn('Firebase SDK optional fail:', err?.message || err));
+      // Prefetch Firebase in idle time — not on the critical menu/auth path
+      const scheduleIdle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1200));
+      scheduleIdle(() => {
+        void ensureFirebaseReady(10000).catch((err) => {
+          console.warn('Firebase SDK optional fail:', err?.message || err);
+        });
+      });
 
       // Menu and auth in parallel — UI stays interactive
       await Promise.all([loadMenu(), authenticate()]);
