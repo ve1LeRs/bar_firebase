@@ -92,8 +92,14 @@ app.use('/mini-app', express.static(path.join(__dirname, 'mini-app'), {
   lastModified: true,
   setHeaders: setMiniAppStaticHeaders
 }));
-// Fresh alias path to bust stubborn Telegram WebView caches
+// Fresh alias paths to bust stubborn Telegram WebView caches
 app.use('/m', express.static(path.join(__dirname, 'mini-app'), {
+  extensions: ['html'],
+  etag: true,
+  lastModified: true,
+  setHeaders: setMiniAppStaticHeaders
+}));
+app.use('/q', express.static(path.join(__dirname, 'mini-app'), {
   extensions: ['html'],
   etag: true,
   lastModified: true,
@@ -795,9 +801,8 @@ app.post('/send-purchase-list', async (req, res) => {
 });
 
 function getMiniAppPublicUrl() {
-  // Query bust helps Telegram WebView drop a stale Mini App shell cache
-  // /m/ is a cache-bust alias of /mini-app/ for stubborn Telegram WebViews
-  return 'https://asafievbar.duckdns.org:8443/m/?v=fast3';
+  // New path (/q) beats Telegram WebView caches that ignore ?v= on /m/
+  return 'https://asafievbar.duckdns.org:8443/q/?v=h1';
 }
 
 const MINIAPP_BOT_DESCRIPTION =
