@@ -11,7 +11,7 @@
   };
 
   const DEFAULT_API = 'https://asafievbar.duckdns.org:8443';
-  const MENU_CACHE_KEY = 'asafiev_mini_menu_v5';
+  const MENU_CACHE_KEY = 'asafiev_mini_menu_v6';
   const MENU_IMAGE_BUST = 'en1';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
   const STATUS_LABELS = {
@@ -3221,13 +3221,15 @@
     closeWheelSheet();
     state.selected = cocktail;
     state.orderQty = 1;
+    // Prefer known stock cap; never default to a free 10
     state.maxOrderQty = resolveCocktailMaxQty(cocktail);
     state.bonusToUse = 0;
     els.bonusInput.value = '0';
     els.bonusInput.classList.remove('is-invalid');
     updateSheetTotal._overWarned = false;
     syncOrderQtyUi();
-    refreshCocktailMaxQty(cocktail).catch(() => {});
+    // Live warehouse cap — must finish before + can invent a higher qty
+    void refreshCocktailMaxQty(cocktail);
 
     els.sheetName.textContent = cocktail.name;
     els.sheetIngredients.textContent = cocktail.ingredients || 'Состав уточнит бармен';
@@ -3270,34 +3272,39 @@
 
   function resolveCocktailMaxQty(cocktail) {
     const raw = Number(cocktail?.maxQty);
-    if (Number.isFinite(raw)) return Math.max(0, Math.min(10, Math.floor(raw)));
-    return 10;
+    // Unknown → 1 until live /max-qty responds (never invent a free “10”)
+    if (!Number.isFinite(raw)) return 1;
+    return Math.max(0, Math.min(10, Math.floor(raw)));
+  }
+
+  /** Hard stock cap. Treat 0 as 0 — do NOT coerce with `|| 10`. */
+  function getOrderQtyCap() {
+    const raw = Number(state.maxOrderQty);
+    if (!Number.isFinite(raw)) return 1;
+    return Math.max(0, Math.min(10, Math.floor(raw)));
   }
 
   function clampOrderQty(n) {
-    const cap = Math.max(0, Math.min(10, Math.floor(Number(state.maxOrderQty) || 10)));
+    const cap = getOrderQtyCap();
     const v = Math.floor(Number(n) || 1);
     if (cap <= 0) return 0;
     return Math.min(cap, Math.max(1, v));
   }
 
   function syncOrderQtyUi() {
-    const cap = Math.max(0, Math.min(10, Math.floor(Number(state.maxOrderQty) || 10)));
+    const cap = getOrderQtyCap();
     const qty = clampOrderQty(state.orderQty);
     state.orderQty = qty;
-    if (els.sheetQty) els.sheetQty.textContent = String(Math.max(qty, cap > 0 ? 1 : 0) || 0);
+    if (els.sheetQty) els.sheetQty.textContent = String(cap <= 0 ? 0 : qty);
     if (els.qtyMinusBtn) els.qtyMinusBtn.disabled = qty <= 1 || cap <= 0;
     if (els.qtyPlusBtn) els.qtyPlusBtn.disabled = cap <= 0 || qty >= cap;
     if (els.qtyHint) {
       if (cap <= 0) {
         els.qtyHint.hidden = false;
         els.qtyHint.textContent = 'Нет остатков на складе';
-      } else if (cap < 10) {
+      } else {
         els.qtyHint.hidden = false;
         els.qtyHint.textContent = `Макс. ${cap} шт по складу`;
-      } else {
-        els.qtyHint.hidden = true;
-        els.qtyHint.textContent = '';
       }
     }
     if (els.confirmOrderBtn) {
@@ -3312,7 +3319,7 @@
   }
 
   function changeOrderQty(delta) {
-    const cap = Math.max(0, Math.min(10, Math.floor(Number(state.maxOrderQty) || 10)));
+    const cap = getOrderQtyCap();
     const prev = clampOrderQty(state.orderQty);
     const next = clampOrderQty(prev + delta);
     if (delta > 0 && prev >= cap) {
@@ -3327,23 +3334,28 @@
   }
 
   async function refreshCocktailMaxQty(cocktail) {
-    if (!cocktail) return;
+    if (!cocktail) return getOrderQtyCap();
     try {
       const q = new URLSearchParams();
       if (cocktail.id) q.set('cocktailId', cocktail.id);
       if (cocktail.name) q.set('name', cocktail.name);
       const res = await fetch(`${state.apiBase}/api/mini-app/max-qty?${q}`, { cache: 'no-store' });
       const data = await res.json();
-      if (!data?.success) return;
+      if (!data?.success) return getOrderQtyCap();
       const maxQty = Math.max(0, Math.min(10, Math.floor(Number(data.maxQty) || 0)));
+      cocktail.maxQty = maxQty;
+      const inState = state.cocktails.find((c) => c.id === cocktail.id || c.name === cocktail.name);
+      if (inState) inState.maxQty = maxQty;
       if (state.selected?.id === cocktail.id || state.selected?.name === cocktail.name) {
         state.maxOrderQty = maxQty;
-        if (cocktail) cocktail.maxQty = maxQty;
         if (state.orderQty > maxQty) state.orderQty = maxQty > 0 ? maxQty : 0;
         syncOrderQtyUi();
         updateSheetTotal();
       }
-    } catch (_) { /* ignore */ }
+      return maxQty;
+    } catch (_) {
+      return getOrderQtyCap();
+    }
   }
 
   function closeOrderSheet() {
@@ -3469,7 +3481,7 @@
     const unitPrice = Number(cocktail.price) || 0;
     // Fresh stock cap right before submit
     await refreshCocktailMaxQty(cocktail);
-    const cap = Math.max(0, Math.min(10, Math.floor(Number(state.maxOrderQty) || 0)));
+    const cap = getOrderQtyCap();
     if (cap <= 0) {
       showToast('Недостаточно ингредиентов');
       haptic('heavy');

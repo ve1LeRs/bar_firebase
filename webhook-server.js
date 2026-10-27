@@ -797,7 +797,7 @@ app.post('/send-purchase-list', async (req, res) => {
 function getMiniAppPublicUrl() {
   // Query bust helps Telegram WebView drop a stale Mini App shell cache
   // /m/ is a cache-bust alias of /mini-app/ for stubborn Telegram WebViews
-  return 'https://asafievbar.duckdns.org:8443/m/?v=fast1';
+  return 'https://asafievbar.duckdns.org:8443/m/?v=fast2';
 }
 
 const MINIAPP_BOT_DESCRIPTION =
@@ -1752,9 +1752,10 @@ function cocktailHasEnoughStock(cocktailData, stockByName) {
 
 /** How many full portions can be made from current warehouse stock (0–10). */
 function getCocktailMaxQuantity(cocktailData, stockByName, hardCap = 10) {
-  const cap = Math.min(10, Math.max(1, Math.floor(Number(hardCap) || 10)));
+  const cap = Math.min(10, Math.max(0, Math.floor(Number(hardCap) || 10)));
   const recipe = Array.isArray(cocktailData?.stockRecipe) ? cocktailData.stockRecipe : [];
-  if (!recipe.length) return cap; // no recipe → don't invent a stock limit
+  // No stock recipe → cannot prove ingredients; allow a single portion only
+  if (!recipe.length) return Math.min(1, cap);
   let max = Infinity;
   let sawNeed = false;
   for (const item of recipe) {
@@ -1766,7 +1767,7 @@ function getCocktailMaxQuantity(cocktailData, stockByName, hardCap = 10) {
     const have = stockByName.has(ingName) ? Number(stockByName.get(ingName)) || 0 : 0;
     max = Math.min(max, Math.floor(have / needed));
   }
-  if (!sawNeed || !Number.isFinite(max)) return cap;
+  if (!sawNeed || !Number.isFinite(max)) return Math.min(1, cap);
   return Math.max(0, Math.min(cap, max));
 }
 
