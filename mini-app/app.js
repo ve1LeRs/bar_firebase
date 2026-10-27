@@ -50,6 +50,7 @@
     billHistory: [],
     selected: null,
     orderQty: 1,
+    maxOrderQty: 10,
     bonusToUse: 0,
     bonusPercentage: 5,
     bonusMinOrder: 300,
@@ -178,6 +179,7 @@
     sheetPrice: document.getElementById('sheetPrice'),
     sheetTotal: document.getElementById('sheetTotal'),
     sheetQty: document.getElementById('sheetQty'),
+    qtyHint: document.getElementById('qtyHint'),
     qtyMinusBtn: document.getElementById('qtyMinusBtn'),
     qtyPlusBtn: document.getElementById('qtyPlusBtn'),
     bonusRow: document.getElementById('bonusRow'),
@@ -3150,11 +3152,13 @@
     closeWheelSheet();
     state.selected = cocktail;
     state.orderQty = 1;
+    state.maxOrderQty = resolveCocktailMaxQty(cocktail);
     state.bonusToUse = 0;
     els.bonusInput.value = '0';
     els.bonusInput.classList.remove('is-invalid');
     updateSheetTotal._overWarned = false;
     syncOrderQtyUi();
+    refreshCocktailMaxQty(cocktail).catch(() => {});
 
     els.sheetName.textContent = cocktail.name;
     els.sheetIngredients.textContent = cocktail.ingredients || 'Состав уточнит бармен';
@@ -3195,27 +3199,82 @@
     tg?.MainButton?.hide?.();
   }
 
+  function resolveCocktailMaxQty(cocktail) {
+    const raw = Number(cocktail?.maxQty);
+    if (Number.isFinite(raw)) return Math.max(0, Math.min(10, Math.floor(raw)));
+    return 10;
+  }
+
   function clampOrderQty(n) {
+    const cap = Math.max(0, Math.min(10, Math.floor(Number(state.maxOrderQty) || 10)));
     const v = Math.floor(Number(n) || 1);
-    return Math.min(10, Math.max(1, v));
+    if (cap <= 0) return 0;
+    return Math.min(cap, Math.max(1, v));
   }
 
   function syncOrderQtyUi() {
+    const cap = Math.max(0, Math.min(10, Math.floor(Number(state.maxOrderQty) || 10)));
     const qty = clampOrderQty(state.orderQty);
     state.orderQty = qty;
-    if (els.sheetQty) els.sheetQty.textContent = String(qty);
-    if (els.qtyMinusBtn) els.qtyMinusBtn.disabled = qty <= 1;
-    if (els.qtyPlusBtn) els.qtyPlusBtn.disabled = qty >= 10;
+    if (els.sheetQty) els.sheetQty.textContent = String(Math.max(qty, cap > 0 ? 1 : 0) || 0);
+    if (els.qtyMinusBtn) els.qtyMinusBtn.disabled = qty <= 1 || cap <= 0;
+    if (els.qtyPlusBtn) els.qtyPlusBtn.disabled = cap <= 0 || qty >= cap;
+    if (els.qtyHint) {
+      if (cap <= 0) {
+        els.qtyHint.hidden = false;
+        els.qtyHint.textContent = 'Нет остатков на складе';
+      } else if (cap < 10) {
+        els.qtyHint.hidden = false;
+        els.qtyHint.textContent = `Макс. ${cap} шт по складу`;
+      } else {
+        els.qtyHint.hidden = true;
+        els.qtyHint.textContent = '';
+      }
+    }
     if (els.confirmOrderBtn) {
-      els.confirmOrderBtn.textContent = qty > 1 ? `Заказать · ${qty}` : 'Заказать';
+      if (cap <= 0) {
+        els.confirmOrderBtn.disabled = true;
+        els.confirmOrderBtn.textContent = 'Нет на складе';
+      } else {
+        els.confirmOrderBtn.disabled = !!state.placingOrder;
+        els.confirmOrderBtn.textContent = qty > 1 ? `Заказать · ${qty}` : 'Заказать';
+      }
     }
   }
 
   function changeOrderQty(delta) {
-    state.orderQty = clampOrderQty(state.orderQty + delta);
+    const cap = Math.max(0, Math.min(10, Math.floor(Number(state.maxOrderQty) || 10)));
+    const prev = clampOrderQty(state.orderQty);
+    const next = clampOrderQty(prev + delta);
+    if (delta > 0 && prev >= cap) {
+      showToast(cap > 0 ? `На складе хватит только на ${cap} шт` : 'Недостаточно ингредиентов');
+      haptic('heavy');
+      return;
+    }
+    state.orderQty = next;
     syncOrderQtyUi();
     updateSheetTotal();
     haptic('light');
+  }
+
+  async function refreshCocktailMaxQty(cocktail) {
+    if (!cocktail) return;
+    try {
+      const q = new URLSearchParams();
+      if (cocktail.id) q.set('cocktailId', cocktail.id);
+      if (cocktail.name) q.set('name', cocktail.name);
+      const res = await fetch(`${state.apiBase}/api/mini-app/max-qty?${q}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (!data?.success) return;
+      const maxQty = Math.max(0, Math.min(10, Math.floor(Number(data.maxQty) || 0)));
+      if (state.selected?.id === cocktail.id || state.selected?.name === cocktail.name) {
+        state.maxOrderQty = maxQty;
+        if (cocktail) cocktail.maxQty = maxQty;
+        if (state.orderQty > maxQty) state.orderQty = maxQty > 0 ? maxQty : 0;
+        syncOrderQtyUi();
+        updateSheetTotal();
+      }
+    } catch (_) { /* ignore */ }
   }
 
   function closeOrderSheet() {
@@ -3339,7 +3398,23 @@
 
     const cocktail = state.selected;
     const unitPrice = Number(cocktail.price) || 0;
-    const qty = clampOrderQty(state.orderQty);
+    // Fresh stock cap right before submit
+    await refreshCocktailMaxQty(cocktail);
+    const cap = Math.max(0, Math.min(10, Math.floor(Number(state.maxOrderQty) || 0)));
+    if (cap <= 0) {
+      showToast('Недостаточно ингредиентов');
+      haptic('heavy');
+      return;
+    }
+    let qty = clampOrderQty(state.orderQty);
+    if (qty > cap) {
+      qty = cap;
+      state.orderQty = cap;
+      syncOrderQtyUi();
+      showToast(`На складе хватит только на ${cap} шт`);
+      haptic('heavy');
+      return;
+    }
     const lineTotal = unitPrice * qty;
     const bonusCheck = resolveBonusInput(lineTotal);
     if (bonusCheck.overLimit) {

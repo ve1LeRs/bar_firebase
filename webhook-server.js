@@ -788,7 +788,8 @@ app.post('/send-purchase-list', async (req, res) => {
 
 function getMiniAppPublicUrl() {
   // Query bust helps Telegram WebView drop a stale Mini App shell cache
-  return 'https://ve1lers.github.io/bar_firebase/mini-app/?v=qty1';
+  // Served from VPS while GH Pages push is unavailable; same Mini App assets.
+  return 'https://asafievbar.duckdns.org:8443/mini-app/?v=qty2';
 }
 
 const MINIAPP_BOT_DESCRIPTION =
@@ -1741,6 +1742,26 @@ function cocktailHasEnoughStock(cocktailData, stockByName) {
   return getCocktailStockGaps(cocktailData, stockByName).length === 0;
 }
 
+/** How many full portions can be made from current warehouse stock (0–10). */
+function getCocktailMaxQuantity(cocktailData, stockByName, hardCap = 10) {
+  const cap = Math.min(10, Math.max(1, Math.floor(Number(hardCap) || 10)));
+  const recipe = Array.isArray(cocktailData?.stockRecipe) ? cocktailData.stockRecipe : [];
+  if (!recipe.length) return cap; // no recipe → don't invent a stock limit
+  let max = Infinity;
+  let sawNeed = false;
+  for (const item of recipe) {
+    const needed = Number(item.amount) || 0;
+    if (needed <= 0) continue;
+    sawNeed = true;
+    const ingName = String(item.ingredientName || '').trim().toLowerCase();
+    if (!ingName) continue;
+    const have = stockByName.has(ingName) ? Number(stockByName.get(ingName)) || 0 : 0;
+    max = Math.min(max, Math.floor(have / needed));
+  }
+  if (!sawNeed || !Number.isFinite(max)) return cap;
+  return Math.max(0, Math.min(cap, max));
+}
+
 function formatStockGapsReason(gaps) {
   if (!gaps?.length) return 'Недостаточно ингредиентов';
   const parts = gaps.slice(0, 4).map((g) => {
@@ -2664,8 +2685,40 @@ app.post('/api/mini-app/create-order', async (req, res) => {
       return res.status(409).json({ success: false, error: 'Коктейль в стоп-листе' });
     }
 
-    const menuPrice = await resolveMenuCocktailPrice({ cocktailId, name });
-    let listedPrice = menuPrice;
+    // Resolve cocktail doc once (price + stock recipe)
+    let cocktailDocData = null;
+    if (cocktailId) {
+      try {
+        const doc = await db.collection('cocktails').doc(String(cocktailId)).get();
+        if (doc.exists) cocktailDocData = doc.data() || {};
+      } catch (_) { /* ignore */ }
+    }
+    if (!cocktailDocData) {
+      const snap = await db.collection('cocktails').where('name', '==', String(name).trim()).limit(1).get();
+      if (!snap.empty) cocktailDocData = snap.docs[0].data() || {};
+    }
+
+    const stockByName = await loadIngredientStockMap();
+    const maxByStock = getCocktailMaxQuantity(cocktailDocData || { stockRecipe: [] }, stockByName, 10);
+    if (maxByStock <= 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'Недостаточно ингредиентов для этого напитка',
+        maxQty: 0
+      });
+    }
+    if (quantity > maxByStock) {
+      return res.status(409).json({
+        success: false,
+        error: `На складе хватит только на ${maxByStock} шт`,
+        maxQty: maxByStock
+      });
+    }
+
+    const menuPrice = cocktailDocData?.price != null
+      ? Number(cocktailDocData.price)
+      : await resolveMenuCocktailPrice({ cocktailId, name });
+    let listedPrice = Number.isFinite(menuPrice) ? menuPrice : null;
     if (listedPrice == null) {
       const fallback = Number(originalPrice != null ? originalPrice : price);
       if (!Number.isFinite(fallback) || fallback < 0) {
@@ -3142,6 +3195,36 @@ app.get('/api/mini-app/stoplist', async (req, res) => {
   }
 });
 
+// How many portions can be made right now (warehouse stock)
+app.get('/api/mini-app/max-qty', async (req, res) => {
+  try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-store');
+    const cocktailId = String(req.query.cocktailId || '').trim();
+    const name = String(req.query.name || '').trim();
+    if (!cocktailId && !name) {
+      return res.status(400).json({ success: false, error: 'name or cocktailId required' });
+    }
+    let data = null;
+    if (cocktailId) {
+      const doc = await db.collection('cocktails').doc(cocktailId).get();
+      if (doc.exists) data = doc.data() || {};
+    }
+    if (!data && name) {
+      const snap = await db.collection('cocktails').where('name', '==', name).limit(1).get();
+      if (!snap.empty) data = snap.docs[0].data() || {};
+    }
+    if (!data) {
+      return res.status(404).json({ success: false, error: 'Коктейль не найден', maxQty: 0 });
+    }
+    const stockByName = await loadIngredientStockMap();
+    const maxQty = getCocktailMaxQuantity(data, stockByName, 10);
+    res.json({ success: true, maxQty, name: String(data.name || name || '').trim() });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message, maxQty: 0 });
+  }
+});
+
 // One-shot menu bootstrap: cocktails + stoplist + ratings (reduces Mini App flicker)
 const menuBootstrapCache = { at: 0, payload: null };
 app.get('/api/mini-app/menu-bootstrap', async (req, res) => {
@@ -3153,10 +3236,11 @@ app.get('/api/mini-app/menu-bootstrap', async (req, res) => {
       return res.json(menuBootstrapCache.payload);
     }
 
-    const [cocktailsSnap, stopNames, ratingsSnap] = await Promise.all([
+    const [cocktailsSnap, stopNames, ratingsSnap, stockByName] = await Promise.all([
       db.collection('cocktails').get(),
       refreshStoplistCache(false),
-      db.collection('ratings').limit(500).get().catch(() => null)
+      db.collection('ratings').limit(500).get().catch(() => null),
+      loadIngredientStockMap()
     ]);
 
     const cocktails = cocktailsSnap.docs.map((doc) => {
@@ -3173,7 +3257,8 @@ app.get('/api/mini-app/menu-bootstrap', async (req, res) => {
         category: data.category || data.type || '',
         isShot: Boolean(data.isShot),
         isSignature: Boolean(data.isSignature),
-        tasteTags: Array.isArray(data.tasteTags) ? data.tasteTags : []
+        tasteTags: Array.isArray(data.tasteTags) ? data.tasteTags : [],
+        maxQty: getCocktailMaxQuantity(data, stockByName, 10)
       };
     }).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'));
 
