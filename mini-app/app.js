@@ -3304,7 +3304,7 @@
         els.qtyHint.textContent = 'Нет остатков на складе';
       } else {
         els.qtyHint.hidden = false;
-        els.qtyHint.textContent = `Макс. ${cap} шт по складу`;
+        els.qtyHint.textContent = `Макс. ${cap} шт`;
       }
     }
     if (els.confirmOrderBtn) {
