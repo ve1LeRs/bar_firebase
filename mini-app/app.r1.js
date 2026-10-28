@@ -257,6 +257,7 @@
     wheelInsideBackBtn: document.getElementById('wheelInsideBackBtn'),
     wheelPrizeCatalog: document.getElementById('wheelPrizeCatalog'),
     wheelHubBtn: document.getElementById('wheelHubBtn'),
+    wheelDisc: document.getElementById('wheelDisc') || document.querySelector('.wheel-disc'),
     wheelHint: document.getElementById('wheelHint'),
     wheelCopyPromoBtn: document.getElementById('wheelCopyPromoBtn'),
     promoVault: document.getElementById('promoVault'),
@@ -277,7 +278,8 @@
     ctx: null,
     lastPrize: null,
     myPromos: [],
-    promosLoaded: false
+    promosLoaded: false,
+    _spinRaf: 0
   };
 
   function resolveApiBase() {
@@ -2167,7 +2169,9 @@
     const blocked = wheelState.spinning || !wheelState.canSpin || !wheelState.active;
     if (els.wheelSpinBtn) {
       els.wheelSpinBtn.disabled = blocked;
-      els.wheelSpinBtn.textContent = wheelState.canSpin ? 'Крутить' : 'Уже крутили сегодня';
+      els.wheelSpinBtn.textContent = wheelState.spinning
+        ? 'Крутим…'
+        : (wheelState.canSpin ? 'Крутить' : 'Уже крутили сегодня');
     }
     if (els.wheelHubBtn) els.wheelHubBtn.disabled = blocked;
     if (els.wheelHint) {
@@ -2217,16 +2221,19 @@
     const radius = size / 2 - 14;
     const n = prizes.length;
     const slice = (Math.PI * 2) / n;
-    // Strict bar palette — ignore flashy Firestore colors
-    const tones = ['#241c16', '#2e251e', '#382e25', '#43362c'];
+    // Higher-contrast bar wedges (still no neon/carnival look)
+    const tones = ['#1b1612', '#2a211a', '#3a2d22', '#4a3828'];
 
-    // Outer matte ring
+    // Outer ring
     ctx.beginPath();
-    ctx.arc(cx, cy, radius + 8, 0, Math.PI * 2);
-    ctx.fillStyle = '#1a1511';
+    ctx.arc(cx, cy, radius + 10, 0, Math.PI * 2);
+    const ringGrad = ctx.createRadialGradient(cx, cy, radius * 0.7, cx, cy, radius + 10);
+    ringGrad.addColorStop(0, '#241c16');
+    ringGrad.addColorStop(1, '#100e0c');
+    ctx.fillStyle = ringGrad;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(212, 163, 92, 0.35)';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(212, 163, 92, 0.55)';
+    ctx.lineWidth = 2;
     ctx.stroke();
 
     prizes.forEach((prize, i) => {
@@ -2238,7 +2245,7 @@
       ctx.closePath();
       ctx.fillStyle = tones[i % tones.length];
       ctx.fill();
-      ctx.strokeStyle = 'rgba(212, 163, 92, 0.18)';
+      ctx.strokeStyle = 'rgba(212, 163, 92, 0.22)';
       ctx.lineWidth = 1;
       ctx.stroke();
 
@@ -2247,43 +2254,42 @@
       ctx.rotate(start + slice / 2);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = i % 2 === 0 ? '#e8dcc8' : '#d4a35c';
-      ctx.shadowColor = 'transparent';
-      const fontSize = n > 10 ? 11 : 12;
+      ctx.fillStyle = i % 2 === 0 ? '#f4eee6' : '#e0b56a';
+      const fontSize = n > 10 ? 11 : 13;
       ctx.font = `600 ${fontSize}px Sora, sans-serif`;
-      ctx.fillText(wheelShortLabel(prize), radius * 0.64, 0);
+      ctx.fillText(wheelShortLabel(prize), radius * 0.62, 0);
       ctx.restore();
     });
 
-    // Thin gold rim
+    // Gold rim
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(212, 163, 92, 0.55)';
-    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = 'rgba(212, 163, 92, 0.7)';
+    ctx.lineWidth = 3;
     ctx.stroke();
 
-    // Subtle divider ticks (not carnival pegs)
+    // Divider ticks
     for (let i = 0; i < n; i += 1) {
       const a = -Math.PI / 2 + wheelState.rotation + i * slice;
-      const x1 = cx + Math.cos(a) * (radius - 2);
-      const y1 = cy + Math.sin(a) * (radius - 2);
-      const x2 = cx + Math.cos(a) * (radius + 2);
-      const y2 = cy + Math.sin(a) * (radius + 2);
+      const x1 = cx + Math.cos(a) * (radius - 4);
+      const y1 = cy + Math.sin(a) * (radius - 4);
+      const x2 = cx + Math.cos(a) * (radius + 3);
+      const y2 = cy + Math.sin(a) * (radius + 3);
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
-      ctx.strokeStyle = 'rgba(212, 163, 92, 0.4)';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(212, 163, 92, 0.55)';
+      ctx.lineWidth = 2;
       ctx.stroke();
     }
 
     // Hub recess (HTML button sits on top)
     ctx.beginPath();
-    ctx.arc(cx, cy, 38, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 40, 0, Math.PI * 2);
     ctx.fillStyle = '#14110f';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(212, 163, 92, 0.28)';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(212, 163, 92, 0.4)';
+    ctx.lineWidth = 2;
     ctx.stroke();
   }
 
@@ -2378,7 +2384,35 @@
     }
   }
 
-  function animateWheelToIndex(prizeIndex) {
+  function stopWheelSpinLoop() {
+    if (wheelState._spinRaf) {
+      cancelAnimationFrame(wheelState._spinRaf);
+      wheelState._spinRaf = 0;
+    }
+    els.wheelSheet?.classList.remove('is-spinning');
+    els.wheelDisc?.classList.remove('is-spinning');
+  }
+
+  function startWheelSpinLoop() {
+    stopWheelSpinLoop();
+    els.wheelSheet?.classList.add('is-spinning');
+    els.wheelDisc?.classList.add('is-spinning');
+    let last = performance.now();
+    // Start already fast so the first frames feel instant
+    let speed = 0.038;
+    const loop = (now) => {
+      const dt = Math.min(34, now - last);
+      last = now;
+      speed = Math.min(0.062, speed + dt * 0.00055);
+      wheelState.rotation += speed * dt;
+      drawWheel();
+      wheelState._spinRaf = requestAnimationFrame(loop);
+    };
+    wheelState._spinRaf = requestAnimationFrame(loop);
+  }
+
+  function animateWheelToIndex(prizeIndex, { duration = 2600, extraTurns = 3 } = {}) {
+    stopWheelSpinLoop();
     return new Promise((resolve) => {
       const n = Math.max(1, wheelState.prizes.length);
       const slice = (Math.PI * 2) / n;
@@ -2387,14 +2421,14 @@
       const currentMod = ((wheelState.rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
       let delta = targetMod - currentMod;
       if (delta <= 0) delta += Math.PI * 2;
-      const extraTurns = 5 + Math.floor(Math.random() * 3);
-      const totalDelta = delta + extraTurns * Math.PI * 2;
+      const turns = Math.max(2, Number(extraTurns) || 3);
+      const totalDelta = delta + turns * Math.PI * 2;
       const start = wheelState.rotation;
-      const duration = 4200;
       const t0 = performance.now();
 
       const tick = (now) => {
         const p = Math.min(1, (now - t0) / duration);
+        // ease-out cubic — already spinning, so settle smoothly
         const ease = 1 - Math.pow(1 - p, 3);
         wheelState.rotation = start + totalDelta * ease;
         drawWheel();
@@ -2406,12 +2440,24 @@
   }
 
   async function spinWheel() {
-    if (wheelState.spinning || !wheelState.canSpin || !canOrder()) return;
+    if (wheelState.spinning || !wheelState.canSpin || !wheelState.active) return;
+    if (!canOrder()) {
+      showToast('Подключаем сессию…');
+      void authenticate().then((ok) => {
+        if (ok) spinWheel();
+      });
+      return;
+    }
     wheelState.spinning = true;
     if (els.wheelResult) els.wheelResult.hidden = true;
     updateWheelSheetChrome();
-    if (els.wheelSpinBtn) els.wheelSpinBtn.disabled = true;
+    if (els.wheelSpinBtn) {
+      els.wheelSpinBtn.disabled = true;
+      els.wheelSpinBtn.textContent = 'Крутим…';
+    }
     haptic('medium');
+    // Visual spin starts immediately — don't wait for the API
+    startWheelSpinLoop();
 
     try {
       const res = await fetch(`${state.apiBase}/api/mini-app/wheel/spin`, {
@@ -2423,7 +2469,11 @@
       if (!data.success) throw new Error(data.error || 'Не удалось крутить');
 
       const prizeIndex = Number(data.prizeIndex) || 0;
-      await animateWheelToIndex(prizeIndex);
+      // Shorter landing — coast already covered the wait
+      await animateWheelToIndex(prizeIndex, {
+        duration: 2400,
+        extraTurns: 2 + Math.floor(Math.random() * 2)
+      });
 
       const prize = data.prize || {};
       wheelState.canSpin = false;
@@ -2462,11 +2512,13 @@
       syncWheelCardUI();
       updateWheelSheetChrome();
     } catch (err) {
+      stopWheelSpinLoop();
       showToast(err.message || 'Ошибка колеса');
       if (err.message?.includes('недоступно') || String(err).includes('429')) {
         await refreshWheelStatus();
       }
     } finally {
+      stopWheelSpinLoop();
       wheelState.spinning = false;
       updateWheelSheetChrome();
     }
