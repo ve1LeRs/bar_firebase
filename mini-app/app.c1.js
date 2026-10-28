@@ -12,7 +12,7 @@
 
   const DEFAULT_API = 'https://asafievbar.duckdns.org:8443';
   const MENU_CACHE_KEY = 'asafiev_mini_menu_v6';
-  const MENU_IMAGE_BUST = 'en1';
+  const MENU_IMAGE_BUST = 'img2';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
   const STATUS_LABELS = {
     pending: 'Ожидание',
@@ -229,6 +229,8 @@
     cancelOrderBtn: document.getElementById('cancelOrderBtn'),
     ratingSheet: document.getElementById('ratingSheet'),
     ratingBackdrop: document.getElementById('ratingBackdrop'),
+    ratingHero: document.getElementById('ratingHero'),
+    ratingMedia: document.getElementById('ratingMedia'),
     ratingTitle: document.getElementById('ratingTitle'),
     ratingSubtitle: document.getElementById('ratingSubtitle'),
     ratingStars: document.getElementById('ratingStars'),
@@ -2946,6 +2948,43 @@
     els.menuGrid.replaceChildren(frag);
   }
 
+  function resolveOrderCocktailImage(order) {
+    const direct = String(order?.image || order?.cocktailImage || '').trim();
+    if (direct) return cocktailImageSrc(direct);
+    const name = String(order?.name || order?.cocktailName || '').trim().toLowerCase();
+    if (!name) return '';
+    const match = (state.cocktails || []).find(
+      (c) => String(c.name || '').trim().toLowerCase() === name
+    );
+    return cocktailImageSrc(match?.image || '');
+  }
+
+  function renderRatingMedia(order) {
+    if (!els.ratingMedia) return;
+    const name = String(order?.name || order?.cocktailName || 'Коктейль').trim() || 'Коктейль';
+    const imageUrl = resolveOrderCocktailImage(order);
+    els.ratingHero?.classList.toggle('is-text-only', false);
+    if (imageUrl) {
+      els.ratingMedia.innerHTML = `
+        <img src="${escapeAttr(imageUrl)}" alt="${escapeAttr(name)}" decoding="async" referrerpolicy="no-referrer">
+        ${cocktailPlaceholderHtml({ name, hidden: true })}
+      `;
+      const img = els.ratingMedia.querySelector('img');
+      const ph = els.ratingMedia.querySelector('.thumb-placeholder');
+      img?.addEventListener('error', () => {
+        if (img && !img.dataset.retried) {
+          img.dataset.retried = '1';
+          img.src = `${imageUrl}${imageUrl.includes('?') ? '&' : '?'}r=${Date.now()}`;
+          return;
+        }
+        img?.remove();
+        if (ph) ph.hidden = false;
+      });
+    } else {
+      els.ratingMedia.innerHTML = cocktailPlaceholderHtml({ name });
+    }
+  }
+
   function openRatingSheet(order, { force = false } = {}) {
     if (state.currentView === 'admin') return false;
     if (!force && !canShowRatingNow()) return false;
@@ -2961,6 +3000,7 @@
     state.ratingValue = 0;
     if (els.ratingTitle) els.ratingTitle.textContent = `Оцените: ${order.name || 'коктейль'}`;
     if (els.ratingSubtitle) els.ratingSubtitle.textContent = 'Поставьте оценку от 1 до 5';
+    renderRatingMedia(order);
     els.ratingStars?.querySelectorAll('button').forEach((b) => b.classList.remove('is-on'));
 
     if (els.ratingBackdrop) {
@@ -2987,6 +3027,7 @@
     }
     state.ratingOrder = null;
     state.ratingValue = 0;
+    if (els.ratingMedia) els.ratingMedia.innerHTML = '';
     els.ratingSheet?.classList.remove('open');
     els.ratingSheet?.setAttribute('aria-hidden', 'true');
     if (els.ratingBackdrop) {
@@ -3147,6 +3188,10 @@
       // Keep status in sync (ready → completed still rateable)
       cand.status = live.status;
       cand.rated = live.rated;
+      if (live.image || live.cocktailImage) {
+        cand.image = live.image || live.cocktailImage;
+      }
+      if (live.name) cand.name = live.name;
     }
 
     if (justBecameRateable) {
@@ -3733,6 +3778,7 @@
           name: item.cocktailName,
           status: item.status,
           price: item.price,
+          image: item.image || item.cocktailImage || '',
           displayTime: item.displayTime,
           queuePosition: item.queuePosition,
           rated: item.rated
