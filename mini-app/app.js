@@ -62,6 +62,8 @@
     uid: null,
     authError: null,
     authPromise: null,
+    sessionRecoverPromise: null,
+    lastSessionToastAt: 0,
     ordersPollTimer: null,
     role: 'user',
     adminOrdersTimer: null,
@@ -682,31 +684,56 @@
     if (els.authRetryBtn) els.authRetryBtn.hidden = !on;
   }
 
+  async function waitForTelegramInitData(timeoutMs = 2500) {
+    if (tg?.initData) return tg.initData;
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      if (tg?.initData) return tg.initData;
+      await sleep(80);
+    }
+    return tg?.initData || '';
+  }
+
+  function markSessionLost(reason = 'auth_failed') {
+    state.sessionOk = false;
+    state.authReady = false;
+    state.authError = reason;
+  }
+
+  function toastSessionOnce(message, durationMs = 3200) {
+    const now = Date.now();
+    if (now - (state.lastSessionToastAt || 0) < 2500) return;
+    state.lastSessionToastAt = now;
+    showToast(message, durationMs);
+  }
+
   async function authenticate(options = {}) {
-    const { manual: _manual = false } = options;
+    const { manual = false, force = false, quiet = false } = options;
     // Single-flight: reopen sheet / placeOrder share one in-flight auth
     if (state.authPromise) return state.authPromise;
 
     state.authPromise = (async () => {
-      const initData = tg?.initData || '';
+      const initData = await waitForTelegramInitData(manual || force ? 3500 : 2500);
 
       if (!initData) {
-        state.authError = 'no_init_data';
-        setAuthStatus(
-          'Нет данных Telegram. Откройте Mini App кнопкой меню бота (не через браузер).',
-          { error: true }
-        );
+        markSessionLost('no_init_data');
+        if (!quiet) {
+          setAuthStatus(
+            'Нет данных Telegram. Откройте Mini App кнопкой меню бота (не через браузер).',
+            { error: true }
+          );
+        }
         setAuthRetryVisible(false);
         updateProfileUI();
         return false;
       }
 
-      if (state.sessionOk) return true;
+      if (state.sessionOk && !force && !manual) return true;
 
       setAuthRetryVisible(false);
-      setAuthStatus('');
+      if (!quiet) setAuthStatus('');
 
-      const maxAttempts = 2;
+      const maxAttempts = 3;
       let lastErr = null;
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         try {
@@ -715,14 +742,17 @@
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ initData })
+              body: JSON.stringify({ initData: tg?.initData || initData })
             },
-            10000
+            12000
           );
           const data = await res.json().catch(() => ({}));
           if (!res.ok || !data.success) {
             const reason = data.reason ? ` (${data.reason})` : '';
-            throw new Error((data.error || `Ошибка авторизации ${res.status}`) + reason);
+            const err = new Error((data.error || `Ошибка авторизации ${res.status}`) + reason);
+            err.reason = data.reason || null;
+            err.status = res.status;
+            throw err;
           }
 
           state.user = data.user || state.user;
@@ -759,7 +789,7 @@
             })();
           }
 
-          setAuthStatus('');
+          if (!quiet) setAuthStatus('');
           setAuthRetryVisible(false);
           updateProfileUI();
           // Defer orders/profile storm — auth payload already seeded bonus/bill
@@ -770,20 +800,18 @@
           lastErr = err;
           console.error('auth attempt failed', attempt, err);
           if (attempt < maxAttempts) {
-            await sleep(500 * attempt);
+            await sleep(450 * attempt);
             continue;
           }
         }
       }
 
-      state.sessionOk = false;
-      state.authReady = false;
-      state.authError = lastErr?.name === 'AbortError' ? 'timeout' : 'auth_failed';
+      markSessionLost(lastErr?.name === 'AbortError' ? 'timeout' : (lastErr?.reason || 'auth_failed'));
       const msg =
         lastErr?.name === 'AbortError'
           ? 'Сервер не ответил вовремя'
           : (lastErr?.message || 'Не удалось войти');
-      setAuthStatus(`Не удалось войти: ${msg}`, { error: true });
+      if (!quiet) setAuthStatus(`Не удалось войти: ${msg}`, { error: true });
       setAuthRetryVisible(true);
       updateProfileUI();
       return false;
@@ -796,8 +824,92 @@
     }
   }
 
+  async function ensureSession(options = {}) {
+    const { manual = false, quiet = false } = options;
+    if (canOrder()) return true;
+    if (!tg?.initData) {
+      await waitForTelegramInitData(manual ? 3500 : 2000);
+    }
+    if (!tg?.initData) {
+      if (!quiet) toastSessionOnce('Откройте Mini App из бота');
+      return false;
+    }
+    if (!quiet) toastSessionOnce('Подключаем сессию…', 5000);
+    const ok = await authenticate({ manual: true, force: true, quiet });
+    if (ok) {
+      if (!quiet) toastSessionOnce('Сессия восстановлена', 1800);
+      return true;
+    }
+    if (!quiet) {
+      toastSessionOnce(
+        state.authError === 'timeout'
+          ? 'Сервер не ответил — попробуйте ещё раз'
+          : 'Не удалось подключить сессию',
+        4200
+      );
+    }
+    return false;
+  }
+
+  async function recoverSessionAfterUnauthorized() {
+    if (state.sessionRecoverPromise) return state.sessionRecoverPromise;
+    state.sessionRecoverPromise = (async () => {
+      markSessionLost('unauthorized');
+      toastSessionOnce('Сессия истекла — переподключаем…', 4000);
+      const ok = await authenticate({ force: true, manual: true, quiet: true });
+      if (ok) toastSessionOnce('Сессия восстановлена', 1800);
+      else {
+        setAuthRetryVisible(true);
+        toastSessionOnce('Не удалось восстановить сессию', 4200);
+      }
+      return ok;
+    })();
+    try {
+      return await state.sessionRecoverPromise;
+    } finally {
+      state.sessionRecoverPromise = null;
+    }
+  }
+
+  async function apiJson(url, options = {}, timeoutMs = 15000) {
+    const res = await fetchWithTimeout(url, options, timeoutMs);
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      const recovered = await recoverSessionAfterUnauthorized();
+      if (recovered && tg?.initData) {
+        // Retry once with fresh session / same initData after re-auth
+        const retryOpts = { ...options };
+        if (retryOpts.body && typeof retryOpts.body === 'string') {
+          try {
+            const parsed = JSON.parse(retryOpts.body);
+            if (parsed && typeof parsed === 'object' && 'initData' in parsed) {
+              parsed.initData = tg.initData;
+              retryOpts.body = JSON.stringify(parsed);
+            }
+          } catch (_) { /* keep original body */ }
+        }
+        const res2 = await fetchWithTimeout(url, retryOpts, timeoutMs);
+        const data2 = await res2.json().catch(() => ({}));
+        return { res: res2, data: data2 };
+      }
+    }
+    return { res, data };
+  }
+
   function canOrder() {
     return Boolean(state.sessionOk && tg?.initData);
+  }
+
+  function onAppBecameVisible() {
+    wakeApi();
+    refreshStoplistFromApi().catch(() => {});
+    if (!tg?.initData) return;
+    if (!state.sessionOk) {
+      void ensureSession({ quiet: true });
+      return;
+    }
+    // Soft check — if server rejects, recoverSessionAfterUnauthorized kicks in
+    void refreshProfile();
   }
 
   function isAdminUser() {
@@ -2352,7 +2464,9 @@
 
   function openWheelSheet() {
     if (!canOrder()) {
-      showToast('Нужна авторизация');
+      void ensureSession({ manual: true }).then((ok) => {
+        if (ok) openWheelSheet();
+      });
       return;
     }
     closeOrderSheet();
@@ -2442,10 +2556,8 @@
   async function spinWheel() {
     if (wheelState.spinning || !wheelState.canSpin || !wheelState.active) return;
     if (!canOrder()) {
-      showToast('Подключаем сессию…');
-      void authenticate().then((ok) => {
-        if (ok) spinWheel();
-      });
+      const ok = await ensureSession({ manual: true });
+      if (ok) spinWheel();
       return;
     }
     wheelState.spinning = true;
@@ -3313,20 +3425,7 @@
       return;
     }
     if (!state.sessionOk) {
-      showToast('Подключаем сессию…', 8000);
-      authenticate({ manual: true }).then((ok) => {
-        if (ok) showToast('Готово — можно заказывать', 1800);
-        else {
-          showToast(
-            state.authError === 'timeout'
-              ? 'Сервер не ответил — закройте VPN или попробуйте ещё раз'
-              : 'Не удалось подключить сессию',
-            4200
-          );
-        }
-      }).catch(() => {
-        showToast('Не удалось подключить сессию', 4200);
-      });
+      void ensureSession({ manual: true });
     }
 
     closeWheelSheet();
@@ -3572,19 +3671,9 @@
       showToast('Откройте Mini App из бота');
       return;
     }
-    if (!state.sessionOk) {
-      showToast('Подключаем сессию…', 8000);
-      const ok = await authenticate({ manual: true });
-      if (!ok || !canOrder()) {
-        showToast(state.authError === 'timeout'
-          ? 'Сервер не ответил — закройте VPN или попробуйте ещё раз'
-          : 'Не удалось подключить сессию', 4200);
-        return;
-      }
-    }
     if (!canOrder()) {
-      showToast('Нет сессии — нажмите «Повторить вход» в профиле');
-      return;
+      const ok = await ensureSession({ manual: true });
+      if (!ok || !canOrder()) return;
     }
     if (state.placingOrder) return;
 
@@ -3684,7 +3773,7 @@
     }
 
     try {
-      const res = await fetchWithTimeout(
+      const { res, data } = await apiJson(
         `${state.apiBase}/api/mini-app/create-order`,
         {
           method: 'POST',
@@ -3693,8 +3782,6 @@
         },
         20000
       );
-
-      const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Не удалось создать заказ');
       }
@@ -3918,12 +4005,15 @@
   async function refreshOrders() {
     if (!canOrder()) return;
     try {
-      const res = await fetch(`${state.apiBase}/api/mini-app/my-orders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initData: tg.initData })
-      });
-      const data = await res.json();
+      const { data } = await apiJson(
+        `${state.apiBase}/api/mini-app/my-orders`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: tg.initData })
+        },
+        12000
+      );
       if (data.success) {
         const orders = data.orders || [];
         const bills = data.bills || [];
@@ -3940,13 +4030,16 @@
   async function refreshProfile() {
     if (!canOrder()) return;
     try {
-      const res = await fetch(`${state.apiBase}/api/mini-app/me`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initData: tg.initData })
-      });
-      const data = await res.json();
-      if (!data.success) return;
+      const { res, data } = await apiJson(
+        `${state.apiBase}/api/mini-app/me`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: tg.initData })
+        },
+        12000
+      );
+      if (!res.ok || !data.success) return;
       state.bonusBalance = Number(data.bonusBalance) || 0;
       if (data.maxBonusUsage) state.maxBonusUsage = Number(data.maxBonusUsage) || 50;
       applyOpenBill(data);
@@ -4213,7 +4306,7 @@
     });
     els.authRetryBtn?.addEventListener('click', () => {
       haptic('light');
-      authenticate({ manual: true });
+      void ensureSession({ manual: true });
     });
     els.adminStopAddBtn?.addEventListener('click', addToAdminStoplist);
     document.getElementById('adminCocktailSaveBtn')?.addEventListener('click', saveAdminCocktail);
@@ -4256,12 +4349,16 @@
     document.getElementById('adminIngSearch')?.addEventListener('input', () => renderAdminPurchasesList());
 
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        refreshStoplistFromApi().catch(() => {});
-      }
+      if (document.visibilityState === 'visible') onAppBecameVisible();
     });
     window.addEventListener('focus', () => {
-      refreshStoplistFromApi().catch(() => {});
+      onAppBecameVisible();
+    });
+    document.addEventListener('resume', () => {
+      onAppBecameVisible();
+    });
+    tg?.onEvent?.('activated', () => {
+      onAppBecameVisible();
     });
     els.adminSubtabs?.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-admin-tab]');
