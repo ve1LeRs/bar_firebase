@@ -64,6 +64,10 @@
     authPromise: null,
     sessionRecoverPromise: null,
     lastSessionToastAt: 0,
+    authCooldownUntil: 0,
+    authFailCount: 0,
+    authConnectingShown: false,
+    lastVisibilityAuthAt: 0,
     ordersPollTimer: null,
     role: 'user',
     adminOrdersTimer: null,
@@ -700,9 +704,23 @@
     state.authError = reason;
   }
 
+  function armAuthCooldown(baseMs = 20000) {
+    const fails = Math.min(5, (state.authFailCount || 0) + 1);
+    state.authFailCount = fails;
+    const wait = Math.min(90000, baseMs * (2 ** (fails - 1)));
+    state.authCooldownUntil = Date.now() + wait;
+  }
+
+  function clearAuthCooldown() {
+    state.authFailCount = 0;
+    state.authCooldownUntil = 0;
+  }
+
   function toastSessionOnce(message, durationMs = 3200) {
     const now = Date.now();
-    if (now - (state.lastSessionToastAt || 0) < 2500) return;
+    // Keep connecting toast from being re-fired while still visible
+    const gap = String(message || '').includes('Подключаем') ? 8000 : 3500;
+    if (now - (state.lastSessionToastAt || 0) < gap) return;
     state.lastSessionToastAt = now;
     showToast(message, durationMs);
   }
@@ -713,17 +731,18 @@
     if (state.authPromise) return state.authPromise;
 
     state.authPromise = (async () => {
-      const initData = await waitForTelegramInitData(manual || force ? 3500 : 2500);
+      const initData = await waitForTelegramInitData(manual || force ? 2500 : 1800);
 
       if (!initData) {
         markSessionLost('no_init_data');
+        armAuthCooldown(15000);
         if (!quiet) {
           setAuthStatus(
             'Нет данных Telegram. Откройте Mini App кнопкой меню бота (не через браузер).',
             { error: true }
           );
         }
-        setAuthRetryVisible(false);
+        setAuthRetryVisible(true);
         updateProfileUI();
         return false;
       }
@@ -733,7 +752,8 @@
       setAuthRetryVisible(false);
       if (!quiet) setAuthStatus('');
 
-      const maxAttempts = 3;
+      // One retry max — long multi-attempt loops felt like endless «Подключаем сессию»
+      const maxAttempts = 2;
       let lastErr = null;
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         try {
@@ -744,7 +764,7 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ initData: tg?.initData || initData })
             },
-            12000
+            9000
           );
           const data = await res.json().catch(() => ({}));
           if (!res.ok || !data.success) {
@@ -760,6 +780,8 @@
           state.sessionOk = Boolean(data.session || data.success);
           state.authReady = state.sessionOk;
           state.authError = null;
+          clearAuthCooldown();
+          state.authConnectingShown = false;
 
           if (typeof data.bonusBalance === 'number') {
             state.bonusBalance = data.bonusBalance;
@@ -800,13 +822,15 @@
           lastErr = err;
           console.error('auth attempt failed', attempt, err);
           if (attempt < maxAttempts) {
-            await sleep(450 * attempt);
+            await sleep(400 * attempt);
             continue;
           }
         }
       }
 
       markSessionLost(lastErr?.name === 'AbortError' ? 'timeout' : (lastErr?.reason || 'auth_failed'));
+      armAuthCooldown(20000);
+      state.authConnectingShown = false;
       const msg =
         lastErr?.name === 'AbortError'
           ? 'Сервер не ответил вовремя'
@@ -827,24 +851,46 @@
   async function ensureSession(options = {}) {
     const { manual = false, quiet = false } = options;
     if (canOrder()) return true;
-    if (!tg?.initData) {
-      await waitForTelegramInitData(manual ? 3500 : 2000);
+
+    // Already connecting — join in-flight promise, do not re-toast
+    if (state.authPromise) {
+      if (!quiet && !state.authConnectingShown) {
+        state.authConnectingShown = true;
+        toastSessionOnce('Подключаем сессию…', 4000);
+      }
+      return state.authPromise;
     }
-    if (!tg?.initData) {
-      if (!quiet) toastSessionOnce('Откройте Mini App из бота');
+
+    if (!manual && Date.now() < (state.authCooldownUntil || 0)) {
       return false;
     }
-    if (!quiet) toastSessionOnce('Подключаем сессию…', 5000);
-    const ok = await authenticate({ manual: true, force: true, quiet });
+
+    if (!tg?.initData) {
+      await waitForTelegramInitData(manual ? 2500 : 1500);
+    }
+    if (!tg?.initData) {
+      armAuthCooldown(15000);
+      if (!quiet) toastSessionOnce('Откройте Mini App из бота');
+      setAuthRetryVisible(true);
+      return false;
+    }
+
+    if (!quiet && !state.authConnectingShown) {
+      state.authConnectingShown = true;
+      toastSessionOnce('Подключаем сессию…', 4000);
+    }
+
+    const ok = await authenticate({ manual: true, force: true, quiet: true });
+    state.authConnectingShown = false;
     if (ok) {
-      if (!quiet) toastSessionOnce('Сессия восстановлена', 1800);
+      if (!quiet) toastSessionOnce('Готово', 1600);
       return true;
     }
     if (!quiet) {
       toastSessionOnce(
         state.authError === 'timeout'
-          ? 'Сервер не ответил — попробуйте ещё раз'
-          : 'Не удалось подключить сессию',
+          ? 'Сеть тормозит — нажмите «Повторить вход» в профиле'
+          : 'Не удалось подключить сессию — повторите вход',
         4200
       );
     }
@@ -853,9 +899,11 @@
 
   async function recoverSessionAfterUnauthorized() {
     if (state.sessionRecoverPromise) return state.sessionRecoverPromise;
+    if (Date.now() < (state.authCooldownUntil || 0)) return false;
+
     state.sessionRecoverPromise = (async () => {
       markSessionLost('unauthorized');
-      toastSessionOnce('Сессия истекла — переподключаем…', 4000);
+      toastSessionOnce('Сессия истекла — переподключаем…', 3500);
       const ok = await authenticate({ force: true, manual: true, quiet: true });
       if (ok) toastSessionOnce('Сессия восстановлена', 1800);
       else {
@@ -875,6 +923,9 @@
     const res = await fetchWithTimeout(url, options, timeoutMs);
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) {
+      if (Date.now() < (state.authCooldownUntil || 0)) {
+        return { res, data };
+      }
       const recovered = await recoverSessionAfterUnauthorized();
       if (recovered && tg?.initData) {
         // Retry once with fresh session / same initData after re-auth
@@ -890,6 +941,7 @@
         }
         const res2 = await fetchWithTimeout(url, retryOpts, timeoutMs);
         const data2 = await res2.json().catch(() => ({}));
+        if (res2.status === 401) armAuthCooldown(30000);
         return { res: res2, data: data2 };
       }
     }
@@ -904,7 +956,14 @@
     wakeApi();
     refreshStoplistFromApi().catch(() => {});
     if (!tg?.initData) return;
+
+    const now = Date.now();
+    // iOS WebView fires focus/visibility often — never storm auth from that
+    if (now - (state.lastVisibilityAuthAt || 0) < 12000) return;
+    state.lastVisibilityAuthAt = now;
+
     if (!state.sessionOk) {
+      if (now < (state.authCooldownUntil || 0)) return;
       void ensureSession({ quiet: true });
       return;
     }
@@ -2556,10 +2615,8 @@
   async function spinWheel() {
     if (wheelState.spinning || !wheelState.canSpin || !wheelState.active) return;
     if (!canOrder()) {
-      showToast('Подключаем сессию…');
-      void authenticate().then((ok) => {
-        if (ok) spinWheel();
-      });
+      const ok = await ensureSession({ manual: true });
+      if (ok) spinWheel();
       return;
     }
     wheelState.spinning = true;
@@ -4308,6 +4365,8 @@
     });
     els.authRetryBtn?.addEventListener('click', () => {
       haptic('light');
+      clearAuthCooldown();
+      state.authConnectingShown = false;
       void ensureSession({ manual: true });
     });
     els.adminStopAddBtn?.addEventListener('click', addToAdminStoplist);
