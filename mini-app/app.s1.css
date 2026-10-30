@@ -995,6 +995,85 @@ body[data-view='admin'] #ratingBackdrop {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--line);
   margin-bottom: 12px;
+  position: relative;
+}
+
+.session-chip {
+  margin-left: auto;
+  align-self: flex-start;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  border: 1px solid rgba(232, 120, 98, 0.45);
+  color: #f0b4a4;
+  background: rgba(232, 120, 98, 0.12);
+  white-space: nowrap;
+}
+
+.session-chip.is-ok {
+  border-color: rgba(110, 180, 120, 0.45);
+  color: #b6e0bc;
+  background: rgba(110, 180, 120, 0.12);
+}
+
+.session-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px;
+  margin-bottom: 14px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(232, 120, 98, 0.35);
+  background:
+    linear-gradient(135deg, rgba(232, 120, 98, 0.14), rgba(20, 17, 15, 0.2)),
+    rgba(255, 255, 255, 0.03);
+}
+
+.session-banner[hidden] {
+  display: none !important;
+}
+
+.session-banner-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.session-banner-copy strong {
+  display: block;
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 4px;
+}
+
+.session-banner-copy p {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.session-banner-btn {
+  flex: 0 0 auto;
+  min-width: 108px;
+  padding: 10px 14px;
+  font-size: var(--text-sm);
+}
+
+.session-banner.is-connecting {
+  border-color: rgba(212, 163, 92, 0.4);
+  background:
+    linear-gradient(135deg, rgba(212, 163, 92, 0.14), rgba(20, 17, 15, 0.2)),
+    rgba(255, 255, 255, 0.03);
+}
+
+.session-banner.is-connecting .session-banner-btn {
+  opacity: 0.72;
+  pointer-events: none;
 }
 
 .avatar {
@@ -1138,6 +1217,11 @@ body[data-view='admin'] #ratingBackdrop {
 
 .auth-retry {
   margin-top: 10px;
+}
+
+.session-banner-btn.auth-retry,
+.session-banner .auth-retry {
+  margin-top: 0;
 }
 
 .tabbar {

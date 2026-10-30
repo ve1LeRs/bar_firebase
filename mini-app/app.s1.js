@@ -200,6 +200,10 @@
     ordersPromoBtn: document.getElementById('ordersPromoBtn'),
     ordersPromoHint: document.getElementById('ordersPromoHint'),
     authRetryBtn: document.getElementById('authRetryBtn'),
+    sessionBanner: document.getElementById('sessionBanner'),
+    sessionBannerTitle: document.getElementById('sessionBannerTitle'),
+    sessionBannerHint: document.getElementById('sessionBannerHint'),
+    sessionChip: document.getElementById('sessionChip'),
     avatar: document.getElementById('avatar'),
     adminTabBtn: document.getElementById('adminTabBtn'),
     adminOrdersList: document.getElementById('adminOrdersList'),
@@ -679,19 +683,122 @@
   }
 
   function setAuthStatus(text, { error = false } = {}) {
-    // Persistent auth plaque removed — surface problems as toast only
+    // Persistent status lives in the profile session banner; toast only for errors
     const msg = String(text || '').trim();
     if (error && msg) showToast(msg);
+    syncSessionStatusUI();
+  }
+
+  function sessionStatusCopy() {
+    const hasUnsafeUser = Boolean(tg?.initDataUnsafe?.user);
+    const hasInitData = Boolean(tg?.initData);
+    if (state.authPromise || state.authConnectingShown) {
+      return {
+        title: 'Подключаем сессию…',
+        hint: 'Подождите пару секунд',
+        connecting: true,
+        btn: 'Ждём…'
+      };
+    }
+    if (!tg) {
+      return {
+        title: 'Сессия не подключена',
+        hint: 'Откройте Mini App из Telegram-бота',
+        connecting: false,
+        btn: 'Подключить'
+      };
+    }
+    if (!hasInitData && hasUnsafeUser) {
+      return {
+        title: 'Сессия не подключена',
+        hint: 'Telegram не передал данные входа. Закройте Mini App крестиком и откройте снова кнопкой «Открыть» в боте.',
+        connecting: false,
+        btn: 'Повторить'
+      };
+    }
+    if (!hasInitData) {
+      return {
+        title: 'Сессия не подключена',
+        hint: 'Откройте Mini App кнопкой меню бота (не через браузер).',
+        connecting: false,
+        btn: 'Повторить'
+      };
+    }
+    if (state.authError === 'timeout') {
+      return {
+        title: 'Сессия не подключена',
+        hint: 'Сервер не ответил вовремя — нажмите «Подключить».',
+        connecting: false,
+        btn: 'Подключить'
+      };
+    }
+    if (state.authError === 'unauthorized' || state.authError === 'auth_failed') {
+      return {
+        title: 'Сессия не подключена',
+        hint: 'Не удалось войти. Нажмите «Подключить» или переоткройте из бота.',
+        connecting: false,
+        btn: 'Подключить'
+      };
+    }
+    return {
+      title: 'Сессия не подключена',
+      hint: 'Бонусы и заказы появятся после входа',
+      connecting: false,
+      btn: 'Подключить'
+    };
+  }
+
+  function syncSessionStatusUI() {
+    const ok = canOrder();
+    if (els.sessionChip) {
+      if (ok) {
+        els.sessionChip.hidden = true;
+        els.sessionChip.classList.add('is-ok');
+        els.sessionChip.textContent = 'онлайн';
+      } else {
+        els.sessionChip.hidden = false;
+        els.sessionChip.classList.remove('is-ok');
+        els.sessionChip.textContent = state.authPromise ? 'вход…' : 'офлайн';
+      }
+    }
+    if (!els.sessionBanner) {
+      if (els.authRetryBtn) els.authRetryBtn.hidden = ok;
+      return;
+    }
+    if (ok) {
+      els.sessionBanner.hidden = true;
+      els.sessionBanner.classList.remove('is-connecting');
+      if (els.authRetryBtn) els.authRetryBtn.hidden = true;
+      return;
+    }
+    const copy = sessionStatusCopy();
+    els.sessionBanner.hidden = false;
+    els.sessionBanner.classList.toggle('is-connecting', Boolean(copy.connecting));
+    if (els.sessionBannerTitle) els.sessionBannerTitle.textContent = copy.title;
+    if (els.sessionBannerHint) els.sessionBannerHint.textContent = copy.hint;
+    if (els.authRetryBtn) {
+      els.authRetryBtn.hidden = false;
+      els.authRetryBtn.textContent = copy.btn;
+      els.authRetryBtn.disabled = Boolean(copy.connecting);
+    }
   }
 
   function setAuthRetryVisible(on) {
-    if (els.authRetryBtn) els.authRetryBtn.hidden = !on;
+    // Banner owns visibility when session is down; keep API for callers
+    if (on) syncSessionStatusUI();
+    else if (canOrder() && els.sessionBanner) {
+      els.sessionBanner.hidden = true;
+      if (els.authRetryBtn) els.authRetryBtn.hidden = true;
+    } else if (els.authRetryBtn) {
+      els.authRetryBtn.hidden = !on;
+    }
   }
 
   async function waitForTelegramInitData(timeoutMs = 2500) {
     if (tg?.initData) return tg.initData;
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
+      try { tg?.ready?.(); } catch (_) { /* ignore */ }
       if (tg?.initData) return tg.initData;
       await sleep(80);
     }
@@ -702,6 +809,7 @@
     state.sessionOk = false;
     state.authReady = false;
     state.authError = reason;
+    syncSessionStatusUI();
   }
 
   function armAuthCooldown(baseMs = 20000) {
@@ -736,9 +844,12 @@
       if (!initData) {
         markSessionLost('no_init_data');
         armAuthCooldown(15000);
+        const hasUnsafe = Boolean(tg?.initDataUnsafe?.user);
         if (!quiet) {
           setAuthStatus(
-            'Нет данных Telegram. Откройте Mini App кнопкой меню бота (не через браузер).',
+            hasUnsafe
+              ? 'Telegram не передал данные входа — закройте Mini App и откройте снова из бота'
+              : 'Нет данных Telegram. Откройте Mini App кнопкой меню бота (не через браузер).',
             { error: true }
           );
         }
@@ -870,26 +981,37 @@
     }
     if (!tg?.initData) {
       armAuthCooldown(15000);
-      if (!quiet) toastSessionOnce('Откройте Mini App из бота');
+      markSessionLost('no_init_data');
+      if (!quiet) {
+        toastSessionOnce(
+          tg?.initDataUnsafe?.user
+            ? 'Закройте Mini App крестиком и откройте снова из бота'
+            : 'Откройте Mini App из бота'
+        );
+      }
       setAuthRetryVisible(true);
+      updateProfileUI();
       return false;
     }
 
     if (!quiet && !state.authConnectingShown) {
       state.authConnectingShown = true;
       toastSessionOnce('Подключаем сессию…', 4000);
+      syncSessionStatusUI();
     }
 
     const ok = await authenticate({ manual: true, force: true, quiet: true });
     state.authConnectingShown = false;
     if (ok) {
       if (!quiet) toastSessionOnce('Готово', 1600);
+      syncSessionStatusUI();
       return true;
     }
+    syncSessionStatusUI();
     if (!quiet) {
       toastSessionOnce(
         state.authError === 'timeout'
-          ? 'Сеть тормозит — нажмите «Повторить вход» в профиле'
+          ? 'Сеть тормозит — нажмите «Подключить» в профиле'
           : 'Не удалось подключить сессию — повторите вход',
         4200
       );
@@ -2105,6 +2227,7 @@
     renderProfileBillHistory();
     syncOrdersPromoUI();
     syncWheelCardUI();
+    syncSessionStatusUI();
   }
 
   function formatWheelCountdown(ms) {
@@ -4175,8 +4298,20 @@
       switchAdminTab(state.adminTab || 'cocktails');
     }
     if (name === 'profile') {
-      refreshProfile();
-      refreshWheelStatus();
+      if (!canOrder()) {
+        syncSessionStatusUI();
+        void ensureSession({ manual: true }).then((ok) => {
+          if (ok) {
+            refreshProfile();
+            refreshWheelStatus();
+          } else {
+            updateProfileUI();
+          }
+        });
+      } else {
+        refreshProfile();
+        refreshWheelStatus();
+      }
     }
     if (name === 'orders') {
       refreshOrders();
@@ -4367,7 +4502,14 @@
       haptic('light');
       clearAuthCooldown();
       state.authConnectingShown = false;
-      void ensureSession({ manual: true });
+      syncSessionStatusUI();
+      void ensureSession({ manual: true }).then((ok) => {
+        updateProfileUI();
+        if (ok) {
+          refreshProfile();
+          refreshWheelStatus();
+        }
+      });
     });
     els.adminStopAddBtn?.addEventListener('click', addToAdminStoplist);
     document.getElementById('adminCocktailSaveBtn')?.addEventListener('click', saveAdminCocktail);

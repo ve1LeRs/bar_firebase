@@ -802,7 +802,7 @@ app.post('/send-purchase-list', async (req, res) => {
 
 function getMiniAppPublicUrl() {
   // New path (/q) beats Telegram WebView caches that ignore ?v= on /m/
-  return 'https://asafievbar.duckdns.org:8443/q/?v=r1';
+  return 'https://asafievbar.duckdns.org:8443/q/?v=s3';
 }
 
 const MINIAPP_BOT_DESCRIPTION =
@@ -2258,8 +2258,21 @@ app.post('/api/mini-app/auth', async (req, res) => {
     const parsed = validateMiniAppInitData(initData);
 
     if (!parsed.ok) {
+      let tgIdHint = null;
+      let tgUserHint = null;
+      try {
+        const rawUser = new URLSearchParams(String(initData || '')).get('user');
+        if (rawUser) {
+          const u = JSON.parse(rawUser);
+          tgIdHint = u?.id ?? null;
+          tgUserHint = u?.username || null;
+        }
+      } catch (_) { /* ignore */ }
       console.warn('Mini App auth rejected:', parsed.reason, {
         hasInitData: Boolean(initData),
+        initDataLen: initData ? String(initData).length : 0,
+        tgIdHint,
+        tgUserHint,
         tokenSlots: miniAppBotTokens().length
       });
       return res.status(401).json({
@@ -2271,6 +2284,9 @@ app.post('/api/mini-app/auth', async (req, res) => {
 
     const tgUser = parsed.user;
     const uid = `tg_${tgUser.id}`;
+    console.log('Mini App auth ok:', uid, tgUser.username || '(no username)', {
+      id: tgUser.id
+    });
     const displayName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Гость Telegram';
     const adminIds = new Set(
       String(process.env.TELEGRAM_ADMIN_IDS || TELEGRAM_CHAT_ID || '')
