@@ -2286,23 +2286,33 @@ app.post('/api/mini-app/auth', async (req, res) => {
     // Auth user upsert is optional for session — don't block the response on it
     void upsertMiniAppFirebaseAuthUser(uid, displayName, tgUser.photo_url || null);
 
-    // Parallel critical path: user/bonus/bill reads + custom token
+    // Don't let slow Firestore / token mint hang the whole session (clients abort ~10s → infinite «Подключаем сессию»)
+    const withDeadline = (promise, ms, fallback) => Promise.race([
+      promise.catch(() => fallback),
+      new Promise((resolve) => setTimeout(() => resolve(fallback), ms))
+    ]);
+
+    // Critical path stays short: user + bonus. Bills/token enrich with a hard deadline.
     const [existingUser, bonusDoc, billsSnap, customToken] = await Promise.all([
-      userRef.get(),
-      db.collection('bonusAccounts').doc(uid).get(),
-      db.collection('bills')
-        .where('userId', '==', uid)
-        .where('status', '==', 'open')
-        .limit(1)
-        .get()
-        .catch(() => ({ empty: true, docs: [] })),
-      admin.auth().createCustomToken(uid, {
-        telegramId: tgUser.id,
-        provider: 'telegram-mini-app'
-      }).catch((tokenError) => {
-        console.warn('Custom token unavailable:', tokenError.message);
-        return null;
-      })
+      withDeadline(userRef.get(), 2500, { exists: false, data: () => ({}) }),
+      withDeadline(db.collection('bonusAccounts').doc(uid).get(), 2500, { exists: false, data: () => ({}) }),
+      withDeadline(
+        db.collection('bills')
+          .where('userId', '==', uid)
+          .where('status', '==', 'open')
+          .limit(1)
+          .get(),
+        2500,
+        { empty: true, docs: [] }
+      ),
+      withDeadline(
+        admin.auth().createCustomToken(uid, {
+          telegramId: tgUser.id,
+          provider: 'telegram-mini-app'
+        }),
+        2500,
+        null
+      )
     ]);
 
     const existingRole = existingUser.exists ? (existingUser.data().role || 'user') : 'user';
