@@ -1540,7 +1540,10 @@ function validateTelegramWebAppData(initData, botToken) {
   const params = new URLSearchParams(initData);
   const authDate = Number(params.get('auth_date') || 0);
   const ageSec = Math.floor(Date.now() / 1000) - authDate;
-  if (!authDate || ageSec > 86400) {
+  // Mini App often stays open overnight; 24h was dropping live sessions.
+  // Still reject missing/absurd timestamps, but allow up to 7 days.
+  const MAX_INIT_DATA_AGE_SEC = 7 * 24 * 60 * 60;
+  if (!authDate || ageSec < -120 || ageSec > MAX_INIT_DATA_AGE_SEC) {
     return { ok: false, reason: 'expired', ageSec };
   }
 
