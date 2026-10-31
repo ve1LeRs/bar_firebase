@@ -1,14 +1,9 @@
 (() => {
   'use strict';
 
-  // Stale GitHub Pages builds caused endless «Подключаем сессию» — always use live /q/
-  try {
-    const host = String(window.location.hostname || '');
-    if (host.includes('github.io')) {
-      window.location.replace('https://asafievbar.duckdns.org:8443/q/?v=x2');
-      return;
-    }
-  } catch (_) { /* continue local boot */ }
+  // Do NOT redirect github.io → duckdns. Cross-origin navigation inside the
+  // Telegram WebView strips initData and breaks auth («Нет данных Telegram»).
+  // GitHub Pages shell talks to DEFAULT_API (duckdns) via resolveApiBase().
 
   const firebaseConfig = {
     apiKey: 'AIzaSyB4bD8UAu0Aj5IRK5H-uZg6kxNAIbkZc9k',
@@ -725,7 +720,7 @@
     if (!currentInitData() && tg.initDataUnsafe?.user) {
       return {
         title: 'Сессия не подключена',
-        hint: 'Telegram не передал данные входа. Закройте Mini App крестиком и откройте снова кнопкой «Открыть».',
+        hint: 'Telegram не передал данные входа. Закройте Mini App крестиком ✕ и откройте снова кнопкой «Открыть».',
         connecting: false,
         btn: 'Повторить'
       };
@@ -733,7 +728,7 @@
     if (!currentInitData()) {
       return {
         title: 'Сессия не подключена',
-        hint: 'Откройте Mini App кнопкой меню бота (не через браузер / не со старой ссылки).',
+        hint: 'Закройте Mini App крестиком ✕ и откройте кнопкой «Открыть» у бота.',
         connecting: false,
         btn: 'Повторить'
       };
@@ -800,15 +795,16 @@
     return String(state.lastInitData || '').trim();
   }
 
-  async function waitForTelegramInitData(timeoutMs = 2500) {
+  async function waitForTelegramInitData(timeoutMs = 4000) {
     const existing = currentInitData();
     if (existing) return existing;
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
       try { tg?.ready?.(); } catch (_) { /* ignore */ }
+      try { tg?.expand?.(); } catch (_) { /* ignore */ }
       const next = currentInitData();
       if (next) return next;
-      await sleep(80);
+      await sleep(100);
     }
     return currentInitData();
   }
@@ -858,20 +854,19 @@
     syncSessionStatusUI();
 
     state.authPromise = (async () => {
-      const initData = await waitForTelegramInitData(manual || force || userRetry ? 2000 : 1200);
+      const initData = await waitForTelegramInitData(manual || force || userRetry ? 4500 : 3500);
 
       if (!initData) {
         markSessionLost('no_init_data');
         armAuthCooldown(30000);
         state.authConnectingShown = false;
         dismissSessionToast();
+        // Boot uses quiet:true — avoid scary toast when WebView is still warming up
         if (!quiet) {
-          setAuthStatus(
-            tg?.initDataUnsafe?.user
-              ? 'Закройте Mini App крестиком и откройте снова из бота'
-              : 'Нет данных Telegram. Откройте Mini App кнопкой меню бота.',
-            { error: true }
-          );
+          const hint = tg?.initDataUnsafe?.user
+            ? 'Закройте Mini App крестиком и откройте снова из бота'
+            : 'Закройте Mini App крестиком и откройте кнопкой «Открыть» у бота';
+          setAuthStatus(hint, { error: true });
         }
         setAuthRetryVisible(true);
         updateProfileUI();
@@ -1000,17 +995,13 @@
     }
     if (userRetry) clearAuthCooldown();
 
-    const initData = await waitForTelegramInitData(userRetry ? 2000 : 1200);
+    const initData = await waitForTelegramInitData(userRetry ? 4500 : 3500);
     if (!initData) {
       armAuthCooldown(30000);
       markSessionLost('no_init_data');
       dismissSessionToast();
       if (!quiet) {
-        toastSessionOnce(
-          tg?.initDataUnsafe?.user
-            ? 'Закройте Mini App крестиком и откройте снова из бота'
-            : 'Откройте Mini App из бота'
-        );
+        toastSessionOnce('Закройте Mini App крестиком и откройте кнопкой «Открыть»');
       }
       setAuthRetryVisible(true);
       updateProfileUI();
@@ -4665,8 +4656,9 @@
         });
       });
 
-      // Menu and auth in parallel — UI stays interactive
-      await Promise.all([loadMenu(), authenticate()]);
+      // Menu and auth in parallel — UI stays interactive.
+      // quiet auth on boot: missing initData must NOT spam a toast (banner handles it)
+      await Promise.all([loadMenu(), authenticate({ quiet: true })]);
     } catch (err) {
       console.error('boot failed', err);
       try {
