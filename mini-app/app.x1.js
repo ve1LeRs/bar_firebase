@@ -2431,7 +2431,7 @@
       const res = await fetch(`${state.apiBase}/api/mini-app/wheel/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initData: tg.initData })
+        body: JSON.stringify({ initData: currentInitData() })
       });
       const data = await res.json();
       if (!data.success) return;
@@ -2777,7 +2777,7 @@
       const res = await fetch(`${state.apiBase}/api/mini-app/wheel/spin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initData: tg.initData })
+        body: JSON.stringify({ initData: currentInitData() })
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Не удалось крутить');
@@ -3412,7 +3412,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          initData: tg.initData,
+          initData: currentInitData(),
           orderId,
           rating: state.ratingValue,
           skip
@@ -3440,7 +3440,7 @@
       const res = await fetch(`${state.apiBase}/api/mini-app/apply-promo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initData: tg.initData, promoCode: code })
+        body: JSON.stringify({ initData: currentInitData(), promoCode: code })
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Промокод не применён');
@@ -3929,7 +3929,7 @@
       'Гость Telegram';
 
     const payload = {
-      initData: tg.initData,
+      initData: currentInitData(),
       cocktailId: cocktail.id,
       name: cocktail.name,
       price: finalPrice,
@@ -4215,7 +4215,7 @@
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ initData: tg.initData })
+          body: JSON.stringify({ initData: currentInitData() })
         },
         12000
       );
@@ -4240,7 +4240,7 @@
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ initData: tg.initData })
+          body: JSON.stringify({ initData: currentInitData() })
         },
         12000
       );
