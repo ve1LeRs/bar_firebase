@@ -2249,7 +2249,10 @@
   function showWheelPrizeResult(prize, { showCopy = true } = {}) {
     if (!els.wheelResult || !prize) {
       if (els.wheelResult) els.wheelResult.hidden = true;
-      if (els.wheelCopyPromoBtn) els.wheelCopyPromoBtn.hidden = true;
+      if (els.wheelCopyPromoBtn) {
+        els.wheelCopyPromoBtn.hidden = true;
+        els.wheelCopyPromoBtn.dataset.code = '';
+      }
       if (els.wheelResultCode) {
         els.wheelResultCode.hidden = true;
         els.wheelResultCode.textContent = '';
@@ -2257,13 +2260,19 @@
       return;
     }
     els.wheelResult.hidden = false;
-    const isPromo = Boolean(prize.promoCode) && prize.type !== 'bonus' && prize.type !== 'nothing';
+    // Bonuses land on the balance automatically — never show promo copy CTA
+    const isBonus = prize.type === 'bonus';
+    const isPromo = prize.type === 'promo' && Boolean(prize.promoCode);
+    const isNothing = prize.type === 'nothing';
     let title = prize.name || 'Готово';
     let desc = prize.description || '';
     if (isPromo) {
       title = prize.name || `Скидка ${prize.value || ''}%`;
       desc = 'Сохранён в Профиле · примените во вкладке Заказы';
-    } else if (prize.type === 'nothing') {
+    } else if (isBonus) {
+      title = prize.name || `${prize.value || ''} бонусов`;
+      desc = 'Уже на вашем бонусном счёте';
+    } else if (isNothing) {
       desc = 'Загляните завтра — удача любит упорных';
     }
     if (els.wheelResultTitle) els.wheelResultTitle.textContent = title;
@@ -2280,7 +2289,8 @@
     if (els.wheelCopyPromoBtn) {
       const canCopy = showCopy && isPromo;
       els.wheelCopyPromoBtn.hidden = !canCopy;
-      els.wheelCopyPromoBtn.dataset.code = isPromo ? (prize.promoCode || '') : '';
+      els.wheelCopyPromoBtn.dataset.code = canCopy ? (prize.promoCode || '') : '';
+      els.wheelCopyPromoBtn.textContent = 'Скопировать промокод';
     }
   }
 

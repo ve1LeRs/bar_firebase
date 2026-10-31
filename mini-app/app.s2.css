@@ -1933,7 +1933,14 @@ body.field-focused {
   width: auto;
   margin: 10px auto 0;
   padding: 10px 14px;
+}
+
+.wheel-result .ghost:not([hidden]) {
   display: inline-block;
+}
+
+.wheel-result .ghost[hidden] {
+  display: none !important;
 }
 
 .wheel-sheet {
