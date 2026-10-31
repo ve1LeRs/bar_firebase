@@ -803,7 +803,7 @@ app.post('/send-purchase-list', async (req, res) => {
 function getMiniAppPublicUrl() {
   // New path (/q) beats Telegram WebView caches that ignore ?v= on /m/
   // Bump ?v= whenever session/auth client logic changes — Telegram caches by full URL
-  return 'https://asafievbar.duckdns.org:8443/q/?v=x3';
+  return 'https://asafievbar.duckdns.org:8443/q/?v=x4';
 }
 
 const MINIAPP_BOT_DESCRIPTION =
@@ -2270,6 +2270,7 @@ app.post('/api/mini-app/auth', async (req, res) => {
       });
     }
 
+    const t0 = Date.now();
     const tgUser = parsed.user;
     const uid = `tg_${tgUser.id}`;
     const displayName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Гость Telegram';
@@ -2287,33 +2288,16 @@ app.post('/api/mini-app/auth', async (req, res) => {
     // Auth user upsert is optional for session — don't block the response on it
     void upsertMiniAppFirebaseAuthUser(uid, displayName, tgUser.photo_url || null);
 
-    // Don't let slow Firestore / token mint hang the whole session (clients abort ~10s → infinite «Подключаем сессию»)
+    // Don't let slow Firestore hang the session response
     const withDeadline = (promise, ms, fallback) => Promise.race([
       promise.catch(() => fallback),
       new Promise((resolve) => setTimeout(() => resolve(fallback), ms))
     ]);
 
-    // Critical path stays short: user + bonus. Bills/token enrich with a hard deadline.
-    const [existingUser, bonusDoc, billsSnap, customToken] = await Promise.all([
-      withDeadline(userRef.get(), 2500, { exists: false, data: () => ({}) }),
-      withDeadline(db.collection('bonusAccounts').doc(uid).get(), 2500, { exists: false, data: () => ({}) }),
-      withDeadline(
-        db.collection('bills')
-          .where('userId', '==', uid)
-          .where('status', '==', 'open')
-          .limit(1)
-          .get(),
-        2500,
-        { empty: true, docs: [] }
-      ),
-      withDeadline(
-        admin.auth().createCustomToken(uid, {
-          telegramId: tgUser.id,
-          provider: 'telegram-mini-app'
-        }),
-        2500,
-        null
-      )
+    // Critical path: only user + bonus. Bills/token hydrate later via /me (keeps mobile auth fast).
+    const [existingUser, bonusDoc] = await Promise.all([
+      withDeadline(userRef.get(), 1800, { exists: false, data: () => ({}) }),
+      withDeadline(db.collection('bonusAccounts').doc(uid).get(), 1800, { exists: false, data: () => ({}) })
     ]);
 
     const existingRole = existingUser.exists ? (existingUser.data().role || 'user') : 'user';
@@ -2335,24 +2319,17 @@ app.post('/api/mini-app/auth', async (req, res) => {
 
     const bonusBalance = bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0;
 
-    // Fast path: use stored bill totals/statuses. Live hydrate happens in /me + my-orders.
-    let openBillTotal = 0;
-    let openBillItems = [];
-    if (billsSnap && !billsSnap.empty) {
-      const bill = billsSnap.docs[0].data() || {};
-      openBillItems = mapBillItemsForClient(bill.items);
-      openBillTotal = Number(bill.totalAmount);
-      if (!Number.isFinite(openBillTotal)) openBillTotal = billTotalFromItems(openBillItems);
-    }
+    console.log(`Mini App auth ok: ${uid} ${tgUser.username || ''} { id: ${tgUser.id} } ${Date.now() - t0}ms`);
 
     res.json({
       success: true,
       // Session works even if client cannot use Firebase Auth domains
       session: true,
-      customToken,
+      // customToken/bills hydrate via /me — keep this response under ~2s on mobile
+      customToken: null,
       bonusBalance,
-      openBillTotal,
-      openBillItems,
+      openBillTotal: 0,
+      openBillItems: [],
       role,
       user: {
         id: tgUser.id,

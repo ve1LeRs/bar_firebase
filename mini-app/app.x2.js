@@ -734,7 +734,7 @@
       };
     }
     if (state.authError === 'timeout') {
-      return { title: 'Сессия не подключена', hint: 'Сервер не ответил вовремя — нажмите «Подключить».', connecting: false, btn: 'Подключить' };
+      return { title: 'Сессия не подключена', hint: 'Связь слабая или сервер отвечает долго — нажмите «Подключить».', connecting: false, btn: 'Подключить' };
     }
     return {
       title: 'Сессия не подключена',
@@ -841,6 +841,73 @@
     showToast(text, durationMs);
   }
 
+  async function postAuthOnce(initData, timeoutMs = 20000) {
+    const res = await fetchWithTimeout(
+      `${state.apiBase}/api/mini-app/auth`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData })
+      },
+      timeoutMs
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const reason = data.reason ? ` (${data.reason})` : '';
+      const err = new Error((data.error || `Ошибка авторизации ${res.status}`) + reason);
+      err.reason = data.reason || null;
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+  function applyAuthSuccess(initData, data) {
+    state.lastInitData = initData;
+    state.user = data.user || state.user;
+    state.uid = data.user?.uid || null;
+    state.sessionOk = Boolean(data.session || data.success);
+    state.authReady = state.sessionOk;
+    state.authError = null;
+    clearAuthCooldown();
+    state.authConnectingShown = false;
+    dismissSessionToast();
+
+    if (typeof data.bonusBalance === 'number') {
+      state.bonusBalance = data.bonusBalance;
+    }
+    if (typeof data.openBillTotal === 'number') {
+      state.openBillTotal = data.openBillTotal;
+    }
+    if (Array.isArray(data.openBillItems)) {
+      state.openBillItems = data.openBillItems;
+    }
+    if (data.role) state.role = data.role;
+    applyAdminUi();
+
+    if (data.customToken) {
+      const token = data.customToken;
+      void (async () => {
+        try {
+          await waitForFirebase(8000);
+          initFirebase();
+          const cred = await auth.signInWithCustomToken(token);
+          state.firebaseUser = cred.user;
+        } catch (firebaseErr) {
+          console.warn('Firebase custom token skipped:', firebaseErr?.message || firebaseErr);
+          state.firebaseUser = null;
+        }
+      })();
+    }
+
+    setAuthRetryVisible(false);
+    updateProfileUI();
+    startOrdersPolling({ deferMs: 2500 });
+    startKeepAlive();
+    // Bills no longer ride on /auth — hydrate profile in background
+    void refreshProfile();
+  }
+
   async function authenticate(options = {}) {
     const { manual = false, force = false, quiet = false, userRetry = false } = options;
     if (state.authPromise) return state.authPromise;
@@ -854,6 +921,7 @@
     syncSessionStatusUI();
 
     state.authPromise = (async () => {
+      // Wait for Telegram FIRST — must not share budget with the auth HTTP timeout
       const initData = await waitForTelegramInitData(manual || force || userRetry ? 4500 : 3500);
 
       if (!initData) {
@@ -861,7 +929,6 @@
         armAuthCooldown(30000);
         state.authConnectingShown = false;
         dismissSessionToast();
-        // Boot uses quiet:true — avoid scary toast when WebView is still warming up
         if (!quiet) {
           const hint = tg?.initDataUnsafe?.user
             ? 'Закройте Mini App крестиком и откройте снова из бота'
@@ -877,77 +944,32 @@
 
       setAuthRetryVisible(false);
       syncSessionStatusUI();
+      void wakeApi();
 
-      // Single attempt — no retry loop that feels like endless connecting
+      // Up to 2 tries on timeout/network — first failure used to false-trigger «Сеть тормозит»
       let lastErr = null;
-      try {
-        const res = await fetchWithTimeout(
-          `${state.apiBase}/api/mini-app/auth`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData })
-          },
-          8000
-        );
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.success) {
-          const reason = data.reason ? ` (${data.reason})` : '';
-          const err = new Error((data.error || `Ошибка авторизации ${res.status}`) + reason);
-          err.reason = data.reason || null;
-          err.status = res.status;
-          throw err;
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        try {
+          const data = await postAuthOnce(initData, 20000);
+          applyAuthSuccess(initData, data);
+          return true;
+        } catch (err) {
+          lastErr = err;
+          console.error(`auth failed attempt ${attempt}`, err);
+          const transient =
+            err?.name === 'AbortError' ||
+            err?.status === 502 ||
+            err?.status === 503 ||
+            err?.status === 504 ||
+            /Failed to fetch|NetworkError|network/i.test(String(err?.message || ''));
+          if (!transient || attempt >= 2) break;
+          await sleep(700);
         }
-
-        state.lastInitData = initData;
-        state.user = data.user || state.user;
-        state.uid = data.user?.uid || null;
-        state.sessionOk = Boolean(data.session || data.success);
-        state.authReady = state.sessionOk;
-        state.authError = null;
-        clearAuthCooldown();
-        state.authConnectingShown = false;
-        dismissSessionToast();
-
-        if (typeof data.bonusBalance === 'number') {
-          state.bonusBalance = data.bonusBalance;
-        }
-        if (typeof data.openBillTotal === 'number') {
-          state.openBillTotal = data.openBillTotal;
-        }
-        if (Array.isArray(data.openBillItems)) {
-          state.openBillItems = data.openBillItems;
-        }
-        if (data.role) state.role = data.role;
-        applyAdminUi();
-
-        if (data.customToken) {
-          const token = data.customToken;
-          void (async () => {
-            try {
-              await waitForFirebase(8000);
-              initFirebase();
-              const cred = await auth.signInWithCustomToken(token);
-              state.firebaseUser = cred.user;
-            } catch (firebaseErr) {
-              console.warn('Firebase custom token skipped:', firebaseErr?.message || firebaseErr);
-              state.firebaseUser = null;
-            }
-          })();
-        }
-
-        setAuthRetryVisible(false);
-        updateProfileUI();
-        startOrdersPolling({ deferMs: 2500 });
-        startKeepAlive();
-        return true;
-      } catch (err) {
-        lastErr = err;
-        console.error('auth failed', err);
       }
 
       markSessionLost(lastErr?.name === 'AbortError' ? 'timeout' : (lastErr?.reason || 'auth_failed'));
-      armAuthCooldown(25000);
+      // Soft cooldown on timeout — user can retry sooner
+      armAuthCooldown(lastErr?.name === 'AbortError' ? 12000 : 25000);
       state.authConnectingShown = false;
       dismissSessionToast();
       const msg =
@@ -960,12 +982,12 @@
       return false;
     })();
 
-    // Absolute watchdog — hung auth must never leave UI in «connecting» forever
-    const watchdog = sleep(12000).then(() => {
-      if (settled) return null;
-      console.warn('auth watchdog: force-stop after 12s');
+    // Watchdog only as last resort (2×20s fetch + waits) — must not race initData wait
+    const watchdog = sleep(50000).then(() => {
+      if (settled) return false;
+      console.warn('auth watchdog: force-stop after 50s');
       markSessionLost('timeout');
-      armAuthCooldown(25000);
+      armAuthCooldown(15000);
       return false;
     });
 
@@ -995,19 +1017,6 @@
     }
     if (userRetry) clearAuthCooldown();
 
-    const initData = await waitForTelegramInitData(userRetry ? 4500 : 3500);
-    if (!initData) {
-      armAuthCooldown(30000);
-      markSessionLost('no_init_data');
-      dismissSessionToast();
-      if (!quiet) {
-        toastSessionOnce('Закройте Mini App крестиком и откройте кнопкой «Открыть»');
-      }
-      setAuthRetryVisible(true);
-      updateProfileUI();
-      return false;
-    }
-
     // Silent connect — no «Подключаем сессию» toast (that copy is banned)
     state.authConnectingShown = true;
     syncSessionStatusUI();
@@ -1023,7 +1032,7 @@
     if (!quiet) {
       toastSessionOnce(
         state.authError === 'timeout'
-          ? 'Сеть тормозит — нажмите «Подключить» в профиле'
+          ? 'Связь слабая — нажмите «Подключить» в профиле'
           : 'Не удалось подключить сессию',
         4200
       );
