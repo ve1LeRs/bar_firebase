@@ -5,7 +5,7 @@
   try {
     const host = String(window.location.hostname || '');
     if (host.includes('github.io')) {
-      window.location.replace('https://asafievbar.duckdns.org:8443/q/?v=x1');
+      window.location.replace('https://asafievbar.duckdns.org:8443/q/?v=x2');
       return;
     }
   } catch (_) { /* continue local boot */ }
@@ -336,6 +336,8 @@
     if (!el) return;
     const text = String(message || '').trim();
     if (!text) return;
+    // Never surface connecting/reconnect toasts — they were the endless-loop UX
+    if (/подключаем сессию|переподключаем/i.test(text)) return;
 
     clearTimeout(showToast._t);
     clearTimeout(showToast._hide);
@@ -715,7 +717,7 @@
 
   function sessionStatusCopy() {
     if (state.authPromise || state.authConnectingShown) {
-      return { title: 'Подключаем сессию…', hint: 'Один запрос — без бесконечных попыток', connecting: true, btn: 'Ждём…' };
+      return { title: 'Вход…', hint: 'Один запрос, без повторов', connecting: true, btn: 'Ждём…' };
     }
     if (!tg) {
       return { title: 'Сессия не подключена', hint: 'Откройте Mini App из Telegram-бота', connecting: false, btn: 'Подключить' };
@@ -834,15 +836,11 @@
 
   function toastSessionOnce(message, durationMs = 3200) {
     const text = String(message || '');
+    // Connecting copy is banned — showToast also filters it
+    if (/подключаем сессию|переподключаем/i.test(text)) return;
     const now = Date.now();
-    // «Подключаем сессию» — максимум один раз за весь запуск приложения
-    if (text.includes('Подключаем')) {
-      if (state.authConnectToastOnce) return;
-      state.authConnectToastOnce = true;
-    } else {
-      const gap = 4000;
-      if (now - (state.lastSessionToastAt || 0) < gap) return;
-    }
+    const gap = 4000;
+    if (now - (state.lastSessionToastAt || 0) < gap) return;
     state.lastSessionToastAt = now;
     showToast(text, durationMs);
   }
@@ -854,6 +852,10 @@
       syncSessionStatusUI();
       return false;
     }
+
+    let settled = false;
+    state.authConnectingShown = true;
+    syncSessionStatusUI();
 
     state.authPromise = (async () => {
       const initData = await waitForTelegramInitData(manual || force || userRetry ? 2000 : 1200);
@@ -963,11 +965,22 @@
       return false;
     })();
 
+    // Absolute watchdog — hung auth must never leave UI in «connecting» forever
+    const watchdog = sleep(12000).then(() => {
+      if (settled) return null;
+      console.warn('auth watchdog: force-stop after 12s');
+      markSessionLost('timeout');
+      armAuthCooldown(25000);
+      return false;
+    });
+
     try {
-      return await state.authPromise;
+      return await Promise.race([state.authPromise, watchdog]);
     } finally {
+      settled = true;
       state.authPromise = null;
       state.authConnectingShown = false;
+      dismissSessionToast();
       syncSessionStatusUI();
     }
   }
@@ -981,7 +994,7 @@
     }
 
     // Cooldown blocks ALL automatic retries; only explicit userRetry clears the stop
-    if (!userRetry && Date.now() < (state.authCooldownUntil || 0)) {
+    if (!userRetry && (state.authHardStopped || Date.now() < (state.authCooldownUntil || 0))) {
       syncSessionStatusUI();
       return false;
     }
@@ -1004,17 +1017,14 @@
       return false;
     }
 
-    if (!quiet && !state.authConnectToastOnce) {
-      state.authConnectingShown = true;
-      toastSessionOnce('Подключаем сессию…', 3500);
-      syncSessionStatusUI();
-    }
+    // Silent connect — no «Подключаем сессию» toast (that copy is banned)
+    state.authConnectingShown = true;
+    syncSessionStatusUI();
 
     const ok = await authenticate({ force: true, quiet: true, userRetry });
     state.authConnectingShown = false;
     dismissSessionToast();
     if (ok) {
-      if (!quiet) toastSessionOnce('Готово', 1400);
       syncSessionStatusUI();
       return true;
     }
@@ -1093,7 +1103,8 @@
     state.lastVisibilityAuthAt = now;
 
     if (!state.sessionOk) {
-      if (now < (state.authCooldownUntil || 0)) return;
+      // Hard-stop / cooldown: never auto-spam auth from focus/visibility
+      if (state.authHardStopped || now < (state.authCooldownUntil || 0)) return;
       void ensureSession({ quiet: true });
       return;
     }
@@ -2754,7 +2765,13 @@
     if (wheelState.spinning || !wheelState.canSpin || !wheelState.active) return;
     if (!canOrder()) {
       if (state.wheelAuthInFlight) return;
-      const ok = await ensureSession({ quiet: false });
+      state.wheelAuthInFlight = true;
+      let ok = false;
+      try {
+        ok = await ensureSession({ quiet: false });
+      } finally {
+        state.wheelAuthInFlight = false;
+      }
       if (ok && canOrder()) spinWheel();
       else {
         showToast('Сначала подключите сессию во вкладке Профиль');
@@ -4517,6 +4534,7 @@
       haptic('light');
       state.authConnectingShown = false;
       state.authConnectToastOnce = false;
+      clearAuthCooldown();
       void ensureSession({ userRetry: true }).then((ok) => {
         updateProfileUI();
         if (ok) {
