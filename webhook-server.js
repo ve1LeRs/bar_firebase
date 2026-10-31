@@ -802,7 +802,8 @@ app.post('/send-purchase-list', async (req, res) => {
 
 function getMiniAppPublicUrl() {
   // New path (/q) beats Telegram WebView caches that ignore ?v= on /m/
-  return 'https://asafievbar.duckdns.org:8443/q/?v=x1';
+  // Bump ?v= whenever session/auth client logic changes — Telegram caches by full URL
+  return 'https://asafievbar.duckdns.org:8443/q/?v=x2';
 }
 
 const MINIAPP_BOT_DESCRIPTION =
