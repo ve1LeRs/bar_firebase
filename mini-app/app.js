@@ -1,6 +1,15 @@
 (() => {
   'use strict';
 
+  // Stale GitHub Pages builds caused endless «Подключаем сессию» — always use live /q/
+  try {
+    const host = String(window.location.hostname || '');
+    if (host.includes('github.io')) {
+      window.location.replace('https://asafievbar.duckdns.org:8443/q/?v=x1');
+      return;
+    }
+  } catch (_) { /* continue local boot */ }
+
   const firebaseConfig = {
     apiKey: 'AIzaSyB4bD8UAu0Aj5IRK5H-uZg6kxNAIbkZc9k',
     authDomain: 'bar-menu-6145c.firebaseapp.com',
@@ -12,7 +21,7 @@
 
   const DEFAULT_API = 'https://asafievbar.duckdns.org:8443';
   const MENU_CACHE_KEY = 'asafiev_mini_menu_v6';
-  const MENU_IMAGE_BUST = 'img2';
+  const MENU_IMAGE_BUST = 'img4';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
   const STATUS_LABELS = {
     pending: 'Ожидание',
@@ -63,11 +72,15 @@
     authError: null,
     authPromise: null,
     sessionRecoverPromise: null,
+    lastInitData: '',
     lastSessionToastAt: 0,
+    authConnectToastOnce: false,
     authCooldownUntil: 0,
     authFailCount: 0,
     authConnectingShown: false,
+    authHardStopped: false,
     lastVisibilityAuthAt: 0,
+    wheelAuthInFlight: false,
     ordersPollTimer: null,
     role: 'user',
     adminOrdersTimer: null,
@@ -200,6 +213,10 @@
     ordersPromoBtn: document.getElementById('ordersPromoBtn'),
     ordersPromoHint: document.getElementById('ordersPromoHint'),
     authRetryBtn: document.getElementById('authRetryBtn'),
+    sessionBanner: document.getElementById('sessionBanner'),
+    sessionBannerTitle: document.getElementById('sessionBannerTitle'),
+    sessionBannerHint: document.getElementById('sessionBannerHint'),
+    sessionChip: document.getElementById('sessionChip'),
     avatar: document.getElementById('avatar'),
     adminTabBtn: document.getElementById('adminTabBtn'),
     adminOrdersList: document.getElementById('adminOrdersList'),
@@ -678,67 +695,179 @@
     return false;
   }
 
+  function dismissSessionToast() {
+    const el = els.toast;
+    if (!el) return;
+    const text = String(el.textContent || '');
+    if (!text.includes('Подключаем') && !text.includes('переподключаем')) return;
+    clearTimeout(showToast._t);
+    clearTimeout(showToast._hide);
+    el.classList.remove('is-on', 'is-leaving');
+    el.hidden = true;
+    el.textContent = '';
+  }
+
   function setAuthStatus(text, { error = false } = {}) {
-    // Persistent auth plaque removed — surface problems as toast only
     const msg = String(text || '').trim();
     if (error && msg) showToast(msg);
+    syncSessionStatusUI();
+  }
+
+  function sessionStatusCopy() {
+    if (state.authPromise || state.authConnectingShown) {
+      return { title: 'Подключаем сессию…', hint: 'Один запрос — без бесконечных попыток', connecting: true, btn: 'Ждём…' };
+    }
+    if (!tg) {
+      return { title: 'Сессия не подключена', hint: 'Откройте Mini App из Telegram-бота', connecting: false, btn: 'Подключить' };
+    }
+    if (!currentInitData() && tg.initDataUnsafe?.user) {
+      return {
+        title: 'Сессия не подключена',
+        hint: 'Telegram не передал данные входа. Закройте Mini App крестиком и откройте снова кнопкой «Открыть».',
+        connecting: false,
+        btn: 'Повторить'
+      };
+    }
+    if (!currentInitData()) {
+      return {
+        title: 'Сессия не подключена',
+        hint: 'Откройте Mini App кнопкой меню бота (не через браузер / не со старой ссылки).',
+        connecting: false,
+        btn: 'Повторить'
+      };
+    }
+    if (state.authError === 'timeout') {
+      return { title: 'Сессия не подключена', hint: 'Сервер не ответил вовремя — нажмите «Подключить».', connecting: false, btn: 'Подключить' };
+    }
+    return {
+      title: 'Сессия не подключена',
+      hint: 'Бонусы и заказы появятся после входа',
+      connecting: false,
+      btn: 'Подключить'
+    };
+  }
+
+  function syncSessionStatusUI() {
+    const ok = canOrder();
+    if (els.sessionChip) {
+      if (ok) {
+        els.sessionChip.hidden = true;
+      } else {
+        els.sessionChip.hidden = false;
+        els.sessionChip.textContent = state.authPromise ? 'вход…' : 'офлайн';
+      }
+    }
+    if (!els.sessionBanner) {
+      if (els.authRetryBtn) els.authRetryBtn.hidden = ok;
+      return;
+    }
+    if (ok) {
+      els.sessionBanner.hidden = true;
+      els.sessionBanner.classList.remove('is-connecting');
+      if (els.authRetryBtn) els.authRetryBtn.hidden = true;
+      return;
+    }
+    const copy = sessionStatusCopy();
+    els.sessionBanner.hidden = false;
+    els.sessionBanner.classList.toggle('is-connecting', Boolean(copy.connecting));
+    if (els.sessionBannerTitle) els.sessionBannerTitle.textContent = copy.title;
+    if (els.sessionBannerHint) els.sessionBannerHint.textContent = copy.hint;
+    if (els.authRetryBtn) {
+      els.authRetryBtn.hidden = false;
+      els.authRetryBtn.textContent = copy.btn;
+      els.authRetryBtn.disabled = Boolean(copy.connecting);
+    }
   }
 
   function setAuthRetryVisible(on) {
-    if (els.authRetryBtn) els.authRetryBtn.hidden = !on;
+    if (on) syncSessionStatusUI();
+    else if (canOrder()) {
+      if (els.sessionBanner) els.sessionBanner.hidden = true;
+      if (els.authRetryBtn) els.authRetryBtn.hidden = true;
+    } else if (els.authRetryBtn) {
+      els.authRetryBtn.hidden = !on;
+    }
+  }
+
+  function currentInitData() {
+    const live = String(tg?.initData || '').trim();
+    if (live) {
+      state.lastInitData = live;
+      return live;
+    }
+    return String(state.lastInitData || '').trim();
   }
 
   async function waitForTelegramInitData(timeoutMs = 2500) {
-    if (tg?.initData) return tg.initData;
+    const existing = currentInitData();
+    if (existing) return existing;
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
-      if (tg?.initData) return tg.initData;
+      try { tg?.ready?.(); } catch (_) { /* ignore */ }
+      const next = currentInitData();
+      if (next) return next;
       await sleep(80);
     }
-    return tg?.initData || '';
+    return currentInitData();
   }
 
   function markSessionLost(reason = 'auth_failed') {
     state.sessionOk = false;
     state.authReady = false;
     state.authError = reason;
+    syncSessionStatusUI();
   }
 
   function armAuthCooldown(baseMs = 20000) {
     const fails = Math.min(5, (state.authFailCount || 0) + 1);
     state.authFailCount = fails;
-    const wait = Math.min(90000, baseMs * (2 ** (fails - 1)));
+    const wait = Math.min(120000, baseMs * (2 ** (fails - 1)));
     state.authCooldownUntil = Date.now() + wait;
+    state.authHardStopped = true;
   }
 
   function clearAuthCooldown() {
     state.authFailCount = 0;
     state.authCooldownUntil = 0;
+    state.authHardStopped = false;
   }
 
   function toastSessionOnce(message, durationMs = 3200) {
+    const text = String(message || '');
     const now = Date.now();
-    // Keep connecting toast from being re-fired while still visible
-    const gap = String(message || '').includes('Подключаем') ? 8000 : 3500;
-    if (now - (state.lastSessionToastAt || 0) < gap) return;
+    // «Подключаем сессию» — максимум один раз за весь запуск приложения
+    if (text.includes('Подключаем')) {
+      if (state.authConnectToastOnce) return;
+      state.authConnectToastOnce = true;
+    } else {
+      const gap = 4000;
+      if (now - (state.lastSessionToastAt || 0) < gap) return;
+    }
     state.lastSessionToastAt = now;
-    showToast(message, durationMs);
+    showToast(text, durationMs);
   }
 
   async function authenticate(options = {}) {
-    const { manual = false, force = false, quiet = false } = options;
-    // Single-flight: reopen sheet / placeOrder share one in-flight auth
+    const { manual = false, force = false, quiet = false, userRetry = false } = options;
     if (state.authPromise) return state.authPromise;
+    if (!userRetry && state.authHardStopped && Date.now() < (state.authCooldownUntil || 0)) {
+      syncSessionStatusUI();
+      return false;
+    }
 
     state.authPromise = (async () => {
-      const initData = await waitForTelegramInitData(manual || force ? 2500 : 1800);
+      const initData = await waitForTelegramInitData(manual || force || userRetry ? 2000 : 1200);
 
       if (!initData) {
         markSessionLost('no_init_data');
-        armAuthCooldown(15000);
+        armAuthCooldown(30000);
+        state.authConnectingShown = false;
+        dismissSessionToast();
         if (!quiet) {
           setAuthStatus(
-            'Нет данных Telegram. Откройте Mini App кнопкой меню бота (не через браузер).',
+            tg?.initDataUnsafe?.user
+              ? 'Закройте Mini App крестиком и откройте снова из бота'
+              : 'Нет данных Telegram. Откройте Mini App кнопкой меню бота.',
             { error: true }
           );
         }
@@ -747,90 +876,83 @@
         return false;
       }
 
-      if (state.sessionOk && !force && !manual) return true;
+      if (state.sessionOk && !force && !manual && !userRetry) return true;
 
       setAuthRetryVisible(false);
-      if (!quiet) setAuthStatus('');
+      syncSessionStatusUI();
 
-      // One retry max — long multi-attempt loops felt like endless «Подключаем сессию»
-      const maxAttempts = 2;
+      // Single attempt — no retry loop that feels like endless connecting
       let lastErr = null;
-      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        try {
-          const res = await fetchWithTimeout(
-            `${state.apiBase}/api/mini-app/auth`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ initData: tg?.initData || initData })
-            },
-            9000
-          );
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || !data.success) {
-            const reason = data.reason ? ` (${data.reason})` : '';
-            const err = new Error((data.error || `Ошибка авторизации ${res.status}`) + reason);
-            err.reason = data.reason || null;
-            err.status = res.status;
-            throw err;
-          }
-
-          state.user = data.user || state.user;
-          state.uid = data.user?.uid || null;
-          state.sessionOk = Boolean(data.session || data.success);
-          state.authReady = state.sessionOk;
-          state.authError = null;
-          clearAuthCooldown();
-          state.authConnectingShown = false;
-
-          if (typeof data.bonusBalance === 'number') {
-            state.bonusBalance = data.bonusBalance;
-          }
-          if (typeof data.openBillTotal === 'number') {
-            state.openBillTotal = data.openBillTotal;
-          }
-          if (Array.isArray(data.openBillItems)) {
-            state.openBillItems = data.openBillItems;
-          }
-          if (data.role) state.role = data.role;
-          applyAdminUi();
-
-          // Firebase custom token is optional — never block session on it
-          if (data.customToken) {
-            const token = data.customToken;
-            void (async () => {
-              try {
-                await waitForFirebase(8000);
-                initFirebase();
-                const cred = await auth.signInWithCustomToken(token);
-                state.firebaseUser = cred.user;
-              } catch (firebaseErr) {
-                console.warn('Firebase custom token skipped:', firebaseErr?.message || firebaseErr);
-                state.firebaseUser = null;
-              }
-            })();
-          }
-
-          if (!quiet) setAuthStatus('');
-          setAuthRetryVisible(false);
-          updateProfileUI();
-          // Defer orders/profile storm — auth payload already seeded bonus/bill
-          startOrdersPolling({ deferMs: 2500 });
-          startKeepAlive();
-          return true;
-        } catch (err) {
-          lastErr = err;
-          console.error('auth attempt failed', attempt, err);
-          if (attempt < maxAttempts) {
-            await sleep(400 * attempt);
-            continue;
-          }
+      try {
+        const res = await fetchWithTimeout(
+          `${state.apiBase}/api/mini-app/auth`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData })
+          },
+          8000
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+          const reason = data.reason ? ` (${data.reason})` : '';
+          const err = new Error((data.error || `Ошибка авторизации ${res.status}`) + reason);
+          err.reason = data.reason || null;
+          err.status = res.status;
+          throw err;
         }
+
+        state.lastInitData = initData;
+        state.user = data.user || state.user;
+        state.uid = data.user?.uid || null;
+        state.sessionOk = Boolean(data.session || data.success);
+        state.authReady = state.sessionOk;
+        state.authError = null;
+        clearAuthCooldown();
+        state.authConnectingShown = false;
+        dismissSessionToast();
+
+        if (typeof data.bonusBalance === 'number') {
+          state.bonusBalance = data.bonusBalance;
+        }
+        if (typeof data.openBillTotal === 'number') {
+          state.openBillTotal = data.openBillTotal;
+        }
+        if (Array.isArray(data.openBillItems)) {
+          state.openBillItems = data.openBillItems;
+        }
+        if (data.role) state.role = data.role;
+        applyAdminUi();
+
+        if (data.customToken) {
+          const token = data.customToken;
+          void (async () => {
+            try {
+              await waitForFirebase(8000);
+              initFirebase();
+              const cred = await auth.signInWithCustomToken(token);
+              state.firebaseUser = cred.user;
+            } catch (firebaseErr) {
+              console.warn('Firebase custom token skipped:', firebaseErr?.message || firebaseErr);
+              state.firebaseUser = null;
+            }
+          })();
+        }
+
+        setAuthRetryVisible(false);
+        updateProfileUI();
+        startOrdersPolling({ deferMs: 2500 });
+        startKeepAlive();
+        return true;
+      } catch (err) {
+        lastErr = err;
+        console.error('auth failed', err);
       }
 
       markSessionLost(lastErr?.name === 'AbortError' ? 'timeout' : (lastErr?.reason || 'auth_failed'));
-      armAuthCooldown(20000);
+      armAuthCooldown(25000);
       state.authConnectingShown = false;
+      dismissSessionToast();
       const msg =
         lastErr?.name === 'AbortError'
           ? 'Сервер не ответил вовремя'
@@ -845,52 +967,63 @@
       return await state.authPromise;
     } finally {
       state.authPromise = null;
+      state.authConnectingShown = false;
+      syncSessionStatusUI();
     }
   }
 
   async function ensureSession(options = {}) {
-    const { manual = false, quiet = false } = options;
+    const { quiet = false, userRetry = false } = options;
     if (canOrder()) return true;
 
-    // Already connecting — join in-flight promise, do not re-toast
     if (state.authPromise) {
-      if (!quiet && !state.authConnectingShown) {
-        state.authConnectingShown = true;
-        toastSessionOnce('Подключаем сессию…', 4000);
-      }
       return state.authPromise;
     }
 
-    if (!manual && Date.now() < (state.authCooldownUntil || 0)) {
+    // Cooldown blocks ALL automatic retries; only explicit userRetry clears the stop
+    if (!userRetry && Date.now() < (state.authCooldownUntil || 0)) {
+      syncSessionStatusUI();
       return false;
     }
+    if (userRetry) clearAuthCooldown();
 
-    if (!tg?.initData) {
-      await waitForTelegramInitData(manual ? 2500 : 1500);
-    }
-    if (!tg?.initData) {
-      armAuthCooldown(15000);
-      if (!quiet) toastSessionOnce('Откройте Mini App из бота');
+    const initData = await waitForTelegramInitData(userRetry ? 2000 : 1200);
+    if (!initData) {
+      armAuthCooldown(30000);
+      markSessionLost('no_init_data');
+      dismissSessionToast();
+      if (!quiet) {
+        toastSessionOnce(
+          tg?.initDataUnsafe?.user
+            ? 'Закройте Mini App крестиком и откройте снова из бота'
+            : 'Откройте Mini App из бота'
+        );
+      }
       setAuthRetryVisible(true);
+      updateProfileUI();
       return false;
     }
 
-    if (!quiet && !state.authConnectingShown) {
+    if (!quiet && !state.authConnectToastOnce) {
       state.authConnectingShown = true;
-      toastSessionOnce('Подключаем сессию…', 4000);
+      toastSessionOnce('Подключаем сессию…', 3500);
+      syncSessionStatusUI();
     }
 
-    const ok = await authenticate({ manual: true, force: true, quiet: true });
+    const ok = await authenticate({ force: true, quiet: true, userRetry });
     state.authConnectingShown = false;
+    dismissSessionToast();
     if (ok) {
-      if (!quiet) toastSessionOnce('Готово', 1600);
+      if (!quiet) toastSessionOnce('Готово', 1400);
+      syncSessionStatusUI();
       return true;
     }
+    syncSessionStatusUI();
     if (!quiet) {
       toastSessionOnce(
         state.authError === 'timeout'
-          ? 'Сеть тормозит — нажмите «Повторить вход» в профиле'
-          : 'Не удалось подключить сессию — повторите вход',
+          ? 'Сеть тормозит — нажмите «Подключить» в профиле'
+          : 'Не удалось подключить сессию',
         4200
       );
     }
@@ -903,13 +1036,11 @@
 
     state.sessionRecoverPromise = (async () => {
       markSessionLost('unauthorized');
-      toastSessionOnce('Сессия истекла — переподключаем…', 3500);
-      const ok = await authenticate({ force: true, manual: true, quiet: true });
-      if (ok) toastSessionOnce('Сессия восстановлена', 1800);
-      else {
-        setAuthRetryVisible(true);
-        toastSessionOnce('Не удалось восстановить сессию', 4200);
-      }
+      // Quiet recover — never spam «переподключаем» toast loops
+      const ok = await authenticate({ force: true, quiet: true });
+      if (!ok) setAuthRetryVisible(true);
+      else dismissSessionToast();
+      syncSessionStatusUI();
       return ok;
     })();
     try {
@@ -927,21 +1058,21 @@
         return { res, data };
       }
       const recovered = await recoverSessionAfterUnauthorized();
-      if (recovered && tg?.initData) {
-        // Retry once with fresh session / same initData after re-auth
+      const initData = currentInitData();
+      if (recovered && initData) {
         const retryOpts = { ...options };
         if (retryOpts.body && typeof retryOpts.body === 'string') {
           try {
             const parsed = JSON.parse(retryOpts.body);
             if (parsed && typeof parsed === 'object' && 'initData' in parsed) {
-              parsed.initData = tg.initData;
+              parsed.initData = initData;
               retryOpts.body = JSON.stringify(parsed);
             }
           } catch (_) { /* keep original body */ }
         }
         const res2 = await fetchWithTimeout(url, retryOpts, timeoutMs);
         const data2 = await res2.json().catch(() => ({}));
-        if (res2.status === 401) armAuthCooldown(30000);
+        if (res2.status === 401) armAuthCooldown(45000);
         return { res: res2, data: data2 };
       }
     }
@@ -949,17 +1080,16 @@
   }
 
   function canOrder() {
-    return Boolean(state.sessionOk && tg?.initData);
+    return Boolean(state.sessionOk && currentInitData());
   }
 
   function onAppBecameVisible() {
     wakeApi();
     refreshStoplistFromApi().catch(() => {});
-    if (!tg?.initData) return;
+    if (!currentInitData()) return;
 
     const now = Date.now();
-    // iOS WebView fires focus/visibility often — never storm auth from that
-    if (now - (state.lastVisibilityAuthAt || 0) < 12000) return;
+    if (now - (state.lastVisibilityAuthAt || 0) < 20000) return;
     state.lastVisibilityAuthAt = now;
 
     if (!state.sessionOk) {
@@ -967,7 +1097,6 @@
       void ensureSession({ quiet: true });
       return;
     }
-    // Soft check — if server rejects, recoverSessionAfterUnauthorized kicks in
     void refreshProfile();
   }
 
@@ -991,13 +1120,13 @@
   }
 
   function adminBody(extra = {}) {
-    return JSON.stringify({ initData: tg?.initData || '', ...extra });
+    return JSON.stringify({ initData: currentInitData(), ...extra });
   }
 
   async function refreshAdminOrders({ silent = false } = {}) {
     if (!isAdminUser()) return;
     if (!els.adminOrdersList) return;
-    if (!tg?.initData) {
+    if (!currentInitData()) {
       els.adminOrdersList.innerHTML = '<div class="empty-state">Нет Telegram-сессии — откройте из бота</div>';
       return;
     }
@@ -2105,6 +2234,7 @@
     renderProfileBillHistory();
     syncOrdersPromoUI();
     syncWheelCardUI();
+    syncSessionStatusUI();
   }
 
   function formatWheelCountdown(ms) {
@@ -2523,8 +2653,16 @@
 
   function openWheelSheet() {
     if (!canOrder()) {
-      void ensureSession({ manual: true }).then((ok) => {
-        if (ok) openWheelSheet();
+      if (state.wheelAuthInFlight) return;
+      state.wheelAuthInFlight = true;
+      void ensureSession({ quiet: false }).then((ok) => {
+        state.wheelAuthInFlight = false;
+        if (ok && canOrder()) openWheelSheet();
+        else {
+          syncSessionStatusUI();
+          showToast('Сначала подключите сессию во вкладке Профиль');
+          switchView('profile');
+        }
       });
       return;
     }
@@ -2615,8 +2753,13 @@
   async function spinWheel() {
     if (wheelState.spinning || !wheelState.canSpin || !wheelState.active) return;
     if (!canOrder()) {
-      const ok = await ensureSession({ manual: true });
-      if (ok) spinWheel();
+      if (state.wheelAuthInFlight) return;
+      const ok = await ensureSession({ quiet: false });
+      if (ok && canOrder()) spinWheel();
+      else {
+        showToast('Сначала подключите сессию во вкладке Профиль');
+        switchView('profile');
+      }
       return;
     }
     wheelState.spinning = true;
@@ -3479,12 +3622,12 @@
     }
     // Open sheet immediately; auth finishes in background or on submit
     wakeApi();
-    if (!tg?.initData) {
+    if (!currentInitData()) {
       showToast('Откройте Mini App из бота');
       return;
     }
     if (!state.sessionOk) {
-      void ensureSession({ manual: true });
+      void ensureSession({ quiet: true });
     }
 
     closeWheelSheet();
@@ -3726,13 +3869,16 @@
 
   async function placeOrder() {
     if (!state.selected) return;
-    if (!tg?.initData) {
+    if (!currentInitData()) {
       showToast('Откройте Mini App из бота');
       return;
     }
     if (!canOrder()) {
-      const ok = await ensureSession({ manual: true });
-      if (!ok || !canOrder()) return;
+      const ok = await ensureSession({ quiet: false });
+      if (!ok || !canOrder()) {
+        showToast('Сессия не подключена — откройте Профиль');
+        return;
+      }
     }
     if (state.placingOrder) return;
 
@@ -4175,8 +4321,12 @@
       switchAdminTab(state.adminTab || 'cocktails');
     }
     if (name === 'profile') {
-      refreshProfile();
-      refreshWheelStatus();
+      syncSessionStatusUI();
+      if (canOrder()) {
+        refreshProfile();
+        refreshWheelStatus();
+      }
+      // Never auto-spam auth from profile tab — user taps «Подключить»
     }
     if (name === 'orders') {
       refreshOrders();
@@ -4365,9 +4515,15 @@
     });
     els.authRetryBtn?.addEventListener('click', () => {
       haptic('light');
-      clearAuthCooldown();
       state.authConnectingShown = false;
-      void ensureSession({ manual: true });
+      state.authConnectToastOnce = false;
+      void ensureSession({ userRetry: true }).then((ok) => {
+        updateProfileUI();
+        if (ok) {
+          refreshProfile();
+          refreshWheelStatus();
+        }
+      });
     });
     els.adminStopAddBtn?.addEventListener('click', addToAdminStoplist);
     document.getElementById('adminCocktailSaveBtn')?.addEventListener('click', saveAdminCocktail);
