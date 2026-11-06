@@ -1,11 +1,11 @@
 (() => {
   'use strict';
-  const UI_BUILD = 'x22';
+  const UI_BUILD = 'x23';
   try { document.documentElement.dataset.uiBuild = UI_BUILD; } catch (_) {}
 
   // Do NOT redirect github.io → duckdns. Cross-origin navigation inside the
   // Telegram WebView strips initData and breaks auth («Нет данных Telegram»).
-  // GitHub Pages shell talks to DEFAULT_API (duckdns :443) via resolveApiBase().
+  // GitHub Pages shell talks to DEFAULT_API (Render :443) via resolveApiBase().
 
   const firebaseConfig = {
     apiKey: 'AIzaSyB4bD8UAu0Aj5IRK5H-uZg6kxNAIbkZc9k',
@@ -16,8 +16,10 @@
     appId: '1:493608422842:web:3b4b6bd8a4cb681c436183'
   };
 
-  // Standard HTTPS :443 (SNI mux on VPS). Avoid :8443 — many mobile carriers filter it.
-  const DEFAULT_API = 'https://asafievbar.duckdns.org';
+  // Public API on standard HTTPS :443 (Render). Avoid VPS :8443 — mobile carriers filter it.
+  // VPS :443 is reserved for VPN SNI mux; duckdns API remains a fallback mirror.
+  const DEFAULT_API = 'https://bar-firebase.onrender.com';
+  const FALLBACK_API = 'https://asafievbar.duckdns.org';
   const MENU_CACHE_KEY = 'asafiev_mini_menu_v7';
   const MENU_IMAGE_BUST = 'img4';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -313,13 +315,14 @@
       const host = String(window.location?.hostname || '');
       if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3000';
       if (host.includes('onrender.com')) return `https://${host}`;
-      // GitHub Pages hosts only the UI — API stays on DuckDNS :443
+      // GitHub Pages hosts only the UI — API on Render :443 (mobile-safe)
       if (host.includes('github.io')) return DEFAULT_API;
-      // Same-origin when UI is served from duckdns (prefer host without non-443 ports)
+      if (host.includes('onrender.com')) return `https://${host}`;
+      // DuckDNS UI mirror: prefer same host on :443, never stick to :8443
       if (host.includes('duckdns.org')) {
         const origin = String(window.location.origin || '');
-        if (/:8443$/i.test(origin)) return DEFAULT_API;
-        return origin || DEFAULT_API;
+        if (/:8443$/i.test(origin)) return FALLBACK_API;
+        return origin || FALLBACK_API;
       }
     } catch (_) { /* ignore */ }
     return DEFAULT_API;
@@ -698,10 +701,10 @@
   }
 
   /** Quick reachability probe — fail fast on dead networks, not 40s+ «Вход…». */
-  async function probeApiReachable(timeoutMs = 3500) {
+  async function probeApiReachable(timeoutMs = 3500, base = state.apiBase) {
     try {
       const res = await fetchWithTimeout(
-        `${state.apiBase}/health`,
+        `${base}/health`,
         { method: 'GET', cache: 'no-store', mode: 'cors' },
         timeoutMs
       );
@@ -712,8 +715,16 @@
   }
 
   async function ensureApiAwake(onStatus) {
-    // Legacy Render cold-start helper — unused on always-on VPS; keep cheap.
-    return probeApiReachable(4000);
+    // Render free tier can cold-start; also fail over to duckdns :443 mirror if needed.
+    if (await probeApiReachable(5000)) return true;
+    try { onStatus?.('Будим сервер…'); } catch (_) { /* ignore */ }
+    // Second longer probe (Render wake)
+    if (await probeApiReachable(12000)) return true;
+    if (state.apiBase !== FALLBACK_API && await probeApiReachable(5000, FALLBACK_API)) {
+      state.apiBase = FALLBACK_API;
+      return true;
+    }
+    return false;
   }
 
   function dismissSessionToast() {

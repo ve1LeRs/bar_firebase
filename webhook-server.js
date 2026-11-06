@@ -852,7 +852,7 @@ function getMiniAppPublicUrl() {
   // «Открыть» uses for most users. Menu Button + /start keyboard must match it,
   // with a fresh ?v= so Telegram does not reuse a stale WebView document.
   // DuckDNS /s is a fallback mirror with the same x9 assets.
-  return 'https://ve1lers.github.io/bar_firebase/mini-app/?v=x22';
+  return 'https://ve1lers.github.io/bar_firebase/mini-app/?v=x23';
 }
 
 const MINIAPP_BOT_DESCRIPTION =
@@ -4639,7 +4639,13 @@ async function ensureAlertsBotWebhook() {
     console.warn('⚠️ Alerts bot token missing — skip alerts webhook');
     return;
   }
-  const publicBase = (process.env.PUBLIC_BASE_URL || 'https://asafievbar.duckdns.org').replace(/\/$/, '');
+  // Bot webhook host can differ from Mini App API host (e.g. Render :443 vs VPS SNI).
+  // TELEGRAM_WEBHOOK_BASE_URL wins; otherwise PUBLIC_BASE_URL.
+  const publicBase = (
+    process.env.TELEGRAM_WEBHOOK_BASE_URL
+    || process.env.PUBLIC_BASE_URL
+    || 'https://asafievbar.duckdns.org'
+  ).replace(/\/$/, '');
   const webhookUrl = `${publicBase}/telegram-webhook`;
   try {
     const setRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
