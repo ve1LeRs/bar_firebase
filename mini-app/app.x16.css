@@ -7,6 +7,8 @@
   --line: rgba(244, 238, 230, 0.1);
   --accent: #d4a35c;
   --accent-deep: #a56b2b;
+  /* Brand gold for menu prices — not remapped by Telegram theme button blue */
+  --brand-gold: #d4a35c;
   --good: #7cb89a;
   --warn: #e0b35c;
   --bad: #d87a6a;
@@ -845,10 +847,11 @@ body[data-view='admin'] #ratingBackdrop {
   flex: 0 0 auto;
 }
 
-/* Menu list card price — larger, scoped so admin/profile prices stay as-is */
+/* Menu list card price — brand gold (not TG button blue via --accent) */
 .cocktail .price {
   font-size: 1.125rem; /* 18 — was 14 */
   line-height: 1.15;
+  color: var(--brand-gold);
 }
 
 .badge {

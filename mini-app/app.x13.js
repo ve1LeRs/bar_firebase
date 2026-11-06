@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const UI_BUILD = 'x17';
+  const UI_BUILD = 'x18';
   try { document.documentElement.dataset.uiBuild = UI_BUILD; } catch (_) {}
 
   // Do NOT redirect github.io → duckdns. Cross-origin navigation inside the
