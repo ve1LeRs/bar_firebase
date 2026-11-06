@@ -17,9 +17,9 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://telegram.org">
-  <link rel="preload" href="app.x20.css?v=x20" as="style">
-  <link rel="preload" href="app.x20.js?v=x20" as="script">
-  <link rel="stylesheet" href="app.x20.css?v=x20">
+  <link rel="preload" href="app.x21.css?v=x21" as="style">
+  <link rel="preload" href="app.x21.js?v=x21" as="script">
+  <link rel="stylesheet" href="app.x21.css?v=x21">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
@@ -43,19 +43,6 @@
     body[data-view='admin'] #ratingBackdrop {
       display: none !important;
     }
-    /* Temporary deploy marker — remove after cache-bust confirmed */
-    .ui-ver {
-      display: inline-block;
-      margin-left: 8px;
-      padding: 1px 6px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      vertical-align: middle;
-      color: #14110f;
-      background: #e8c27a;
-    }
   </style>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
@@ -66,7 +53,7 @@
     <div class="brand-block">
       <img class="brand-mark" src="logo.png" alt="" width="40" height="40" decoding="async" fetchpriority="high">
       <div>
-        <p class="brand-name">AsafievBar <span class="ui-ver" id="uiVer" title="build">x20</span></p>
+        <p class="brand-name">AsafievBar</p>
         <p class="brand-line" id="greeting">Коктейли · заказ из Telegram</p>
       </div>
     </div>
@@ -504,6 +491,6 @@
   </div>
 
   <!-- Firebase loads on demand after first paint (stoplist watch / custom token) -->
-  <script defer src="app.x20.js?v=x20"></script>
+  <script defer src="app.x21.js?v=x21"></script>
 </body>
 </html>
