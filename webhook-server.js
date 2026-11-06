@@ -112,6 +112,13 @@ app.use('/r', express.static(path.join(__dirname, 'mini-app'), {
   lastModified: true,
   setHeaders: setMiniAppStaticHeaders
 }));
+// x9 path — Menu Button /start; Main Mini App still lives on github.io (see getMiniAppPublicUrl)
+app.use('/s', express.static(path.join(__dirname, 'mini-app'), {
+  extensions: ['html'],
+  etag: true,
+  lastModified: true,
+  setHeaders: setMiniAppStaticHeaders
+}));
 app.get('/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'logo.png')));
 app.get('/favicon.ico', (req, res) => res.sendFile(path.join(__dirname, 'favicon.ico')));
 // Main website static files
@@ -808,9 +815,11 @@ app.post('/send-purchase-list', async (req, res) => {
 });
 
 function getMiniAppPublicUrl() {
-  // New path (/q) beats Telegram WebView caches that ignore ?v= on /m/
-  // Bump ?v= whenever session/auth client logic changes — Telegram caches by full URL
-  return 'https://asafievbar.duckdns.org:8443/r/?v=x8';
+  // Main Mini App (BotFather / has_main_web_app) opens github.io — that is what
+  // «Открыть» uses for most users. Menu Button + /start keyboard must match it,
+  // with a fresh ?v= so Telegram does not reuse a stale WebView document.
+  // DuckDNS /s is a fallback mirror with the same x9 assets.
+  return 'https://ve1lers.github.io/bar_firebase/mini-app/?v=x9';
 }
 
 const MINIAPP_BOT_DESCRIPTION =

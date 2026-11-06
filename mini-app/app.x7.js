@@ -1,5 +1,7 @@
 (() => {
   'use strict';
+  const UI_BUILD = 'x9';
+  try { document.documentElement.dataset.uiBuild = UI_BUILD; } catch (_) {}
 
   // Do NOT redirect github.io → duckdns. Cross-origin navigation inside the
   // Telegram WebView strips initData and breaks auth («Нет данных Telegram»).
