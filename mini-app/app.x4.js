@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const UI_BUILD = 'x16';
+  const UI_BUILD = 'x17';
   try { document.documentElement.dataset.uiBuild = UI_BUILD; } catch (_) {}
 
   // Do NOT redirect github.io → duckdns. Cross-origin navigation inside the
@@ -3354,14 +3354,16 @@
             cocktail.mood || cocktail.description || 'Авторский рецепт бара'
           )}</p>
           <div class="cocktail-foot">
-            <span class="price">${Number(cocktail.price) || 0} ₽</span>
             <span>
-              ${rating != null ? `<span class="cocktail-rating">★ ${rating}</span> ` : ''}
               ${stopped
                 ? '<span class="badge stop">Стоп-лист</span>'
                 : cocktail.alcohol != null
                   ? `<span class="badge">${cocktail.alcohol}%</span>`
                   : ''}
+            </span>
+            <span>
+              ${rating != null ? `<span class="cocktail-rating">★ ${rating}</span> ` : ''}
+              <span class="price">${Number(cocktail.price) || 0} ₽</span>
             </span>
           </div>
         </div>
