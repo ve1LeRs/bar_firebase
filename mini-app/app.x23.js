@@ -18,7 +18,7 @@
 
   // Public API on standard HTTPS :443 (Render). Avoid VPS :8443 — mobile carriers filter it.
   // VPS :443 is reserved for VPN SNI mux; duckdns API remains a fallback mirror.
-  const DEFAULT_API = 'https://bar-firebase.onrender.com';
+  const DEFAULT_API = 'https://asafievbar.duckdns.org:2083';
   const MENU_CACHE_KEY = 'asafiev_mini_menu_v7';
   const MENU_IMAGE_BUST = 'img4';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;

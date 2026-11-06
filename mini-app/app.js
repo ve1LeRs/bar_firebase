@@ -1,11 +1,11 @@
 (() => {
   'use strict';
-  const UI_BUILD = 'x24';
+  const UI_BUILD = 'x25';
   try { document.documentElement.dataset.uiBuild = UI_BUILD; } catch (_) {}
 
   // Do NOT redirect github.io → duckdns. Cross-origin navigation inside the
   // Telegram WebView strips initData and breaks auth («Нет данных Telegram»).
-  // GitHub Pages shell talks to DEFAULT_API (Render :443) via resolveApiBase().
+  // GitHub Pages shell talks to DEFAULT_API (VPS HTTPS alt-port) via resolveApiBase().
 
   const firebaseConfig = {
     apiKey: 'AIzaSyB4bD8UAu0Aj5IRK5H-uZg6kxNAIbkZc9k',
@@ -16,9 +16,8 @@
     appId: '1:493608422842:web:3b4b6bd8a4cb681c436183'
   };
 
-  // Public API on standard HTTPS :443 (Render). Never use VPS :8443 (mobile carriers filter it).
-  // Do NOT fall back to duckdns :443 here — that path shares the VPN SNI mux and can hang on LTE.
-  const DEFAULT_API = 'https://bar-firebase.onrender.com';
+  // VPS bar API on Cloudflare-style HTTPS alt-port (not :443 VPN, not :8443 carrier-blocked).
+  const DEFAULT_API = 'https://asafievbar.duckdns.org:2083';
   const MENU_CACHE_KEY = 'asafiev_mini_menu_v7';
   const MENU_IMAGE_BUST = 'img4';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -313,12 +312,10 @@
     try {
       const host = String(window.location?.hostname || '');
       if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3000';
-      if (host.includes('onrender.com')) return `https://${host}`;
-      // GitHub Pages hosts only the UI — API always on Render :443 (mobile-safe)
-      if (host.includes('github.io')) return DEFAULT_API;
-      if (host.includes('onrender.com')) return `https://${host}`;
-      // Even if UI is mirrored on duckdns, talk to Render — never :8443 / flaky VPS SNI
-      if (host.includes('duckdns.org')) return DEFAULT_API;
+      // GitHub Pages / any remote shell — API on VPS :2083 (not Render, not :8443, not VPN :443)
+      if (host.includes('github.io') || host.includes('duckdns.org') || host.includes('onrender.com')) {
+        return DEFAULT_API;
+      }
     } catch (_) { /* ignore */ }
     return DEFAULT_API;
   }
@@ -710,12 +707,10 @@
   }
 
   async function ensureApiAwake(onStatus) {
-    // Render free tier cold-starts — wait for it, do not hop to duckdns/:8443.
+    // VPS is always-on; short probe is enough. Retry once for flaky LTE.
     if (await probeApiReachable(4000)) return true;
-    try { onStatus?.('Будим сервер…'); } catch (_) { /* ignore */ }
-    if (await probeApiReachable(10000)) return true;
-    if (await probeApiReachable(15000)) return true;
-    return false;
+    try { onStatus?.('Проверяем связь…'); } catch (_) { /* ignore */ }
+    return probeApiReachable(8000);
   }
 
   function dismissSessionToast() {
@@ -1072,7 +1067,8 @@
     state.authConnectingShown = true;
     syncSessionStatusUI();
 
-    const ok = await authenticate({ force: true, quiet: true, userRetry });
+    // userRetry: surface real reason (bad_hash / timeout / network) instead of opaque toast
+    const ok = await authenticate({ force: true, quiet: !userRetry, userRetry });
     state.authConnectingShown = false;
     dismissSessionToast();
     if (ok) {
@@ -1080,7 +1076,7 @@
       return true;
     }
     syncSessionStatusUI();
-    if (!quiet) {
+    if (!quiet && !userRetry) {
       toastSessionOnce(
         state.authError === 'timeout'
           ? 'Связь слабая — нажмите «Подключить» в профиле'
