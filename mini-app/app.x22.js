@@ -17,7 +17,7 @@
   };
 
   // Standard HTTPS :443 (SNI mux on VPS). Avoid :8443 — many mobile carriers filter it.
-  const DEFAULT_API = 'https://asafievbar.duckdns.org';
+  const DEFAULT_API = 'https://bar-firebase.onrender.com';
   const MENU_CACHE_KEY = 'asafiev_mini_menu_v7';
   const MENU_IMAGE_BUST = 'img4';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;

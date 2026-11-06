@@ -16,7 +16,7 @@
     appId: '1:493608422842:web:3b4b6bd8a4cb681c436183'
   };
 
-  const DEFAULT_API = 'https://asafievbar.duckdns.org:8443';
+  const DEFAULT_API = 'https://bar-firebase.onrender.com';
   const MENU_CACHE_KEY = 'asafiev_mini_menu_v7';
   const MENU_IMAGE_BUST = 'img4';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;

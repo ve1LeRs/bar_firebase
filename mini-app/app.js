@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const UI_BUILD = 'x23';
+  const UI_BUILD = 'x24';
   try { document.documentElement.dataset.uiBuild = UI_BUILD; } catch (_) {}
 
   // Do NOT redirect github.io → duckdns. Cross-origin navigation inside the
@@ -16,10 +16,9 @@
     appId: '1:493608422842:web:3b4b6bd8a4cb681c436183'
   };
 
-  // Public API on standard HTTPS :443 (Render). Avoid VPS :8443 — mobile carriers filter it.
-  // VPS :443 is reserved for VPN SNI mux; duckdns API remains a fallback mirror.
+  // Public API on standard HTTPS :443 (Render). Never use VPS :8443 (mobile carriers filter it).
+  // Do NOT fall back to duckdns :443 here — that path shares the VPN SNI mux and can hang on LTE.
   const DEFAULT_API = 'https://bar-firebase.onrender.com';
-  const FALLBACK_API = 'https://asafievbar.duckdns.org';
   const MENU_CACHE_KEY = 'asafiev_mini_menu_v7';
   const MENU_IMAGE_BUST = 'img4';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -315,15 +314,11 @@
       const host = String(window.location?.hostname || '');
       if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3000';
       if (host.includes('onrender.com')) return `https://${host}`;
-      // GitHub Pages hosts only the UI — API on Render :443 (mobile-safe)
+      // GitHub Pages hosts only the UI — API always on Render :443 (mobile-safe)
       if (host.includes('github.io')) return DEFAULT_API;
       if (host.includes('onrender.com')) return `https://${host}`;
-      // DuckDNS UI mirror: prefer same host on :443, never stick to :8443
-      if (host.includes('duckdns.org')) {
-        const origin = String(window.location.origin || '');
-        if (/:8443$/i.test(origin)) return FALLBACK_API;
-        return origin || FALLBACK_API;
-      }
+      // Even if UI is mirrored on duckdns, talk to Render — never :8443 / flaky VPS SNI
+      if (host.includes('duckdns.org')) return DEFAULT_API;
     } catch (_) { /* ignore */ }
     return DEFAULT_API;
   }
@@ -715,15 +710,11 @@
   }
 
   async function ensureApiAwake(onStatus) {
-    // Render free tier can cold-start; also fail over to duckdns :443 mirror if needed.
-    if (await probeApiReachable(5000)) return true;
+    // Render free tier cold-starts — wait for it, do not hop to duckdns/:8443.
+    if (await probeApiReachable(4000)) return true;
     try { onStatus?.('Будим сервер…'); } catch (_) { /* ignore */ }
-    // Second longer probe (Render wake)
-    if (await probeApiReachable(12000)) return true;
-    if (state.apiBase !== FALLBACK_API && await probeApiReachable(5000, FALLBACK_API)) {
-      state.apiBase = FALLBACK_API;
-      return true;
-    }
+    if (await probeApiReachable(10000)) return true;
+    if (await probeApiReachable(15000)) return true;
     return false;
   }
 
@@ -986,27 +977,22 @@
 
       setAuthRetryVisible(false);
       syncSessionStatusUI();
-      void wakeApi();
-
-      // Fail fast when API unreachable — avoid 40s «Вход…»
-      const reachable = await probeApiReachable(3500);
+      // Must AWAIT wake — Render cold start otherwise loses the race to a 3.5s probe
+      const reachable = await ensureApiAwake();
       if (!reachable) {
-        const retryProbe = await probeApiReachable(2500);
-        if (!retryProbe) {
-          markSessionLost('timeout');
-          armAuthCooldown(15000);
-          state.authConnectingShown = false;
-          dismissSessionToast();
-          if (!quiet) {
-            setAuthStatus(
-              'Нет связи с сервером бара. Попробуйте Wi‑Fi или другую сеть, затем «Подключить».',
-              { error: true }
-            );
-          }
-          setAuthRetryVisible(true);
-          updateProfileUI();
-          return false;
+        markSessionLost('timeout');
+        armAuthCooldown(15000);
+        state.authConnectingShown = false;
+        dismissSessionToast();
+        if (!quiet) {
+          setAuthStatus(
+            'Нет связи с сервером бара. Попробуйте ещё раз «Подключить» через несколько секунд.',
+            { error: true }
+          );
         }
+        setAuthRetryVisible(true);
+        updateProfileUI();
+        return false;
       }
 
       // One quick retry only for gateway blips — total auth budget stays under ~20s
