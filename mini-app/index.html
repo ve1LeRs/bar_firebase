@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://telegram.org">
   <link rel="preload" href="app.x4.css" as="style">
-  <link rel="preload" href="app.x5.js" as="script">
+  <link rel="preload" href="app.x6.js" as="script">
   <link rel="stylesheet" href="app.x4.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -373,8 +373,9 @@
       <div class="sheet-handle"></div>
       <div class="sheet-media" id="sheetMedia"></div>
       <h3 id="sheetName">Коктейль</h3>
-      <p class="sheet-ingredients" id="sheetIngredients"></p>
       <p class="sheet-mood" id="sheetMood"></p>
+      <div class="taste-tags sheet-taste-tags" id="sheetTasteTags" hidden></div>
+      <p class="sheet-ingredients" id="sheetIngredients"></p>
 
       <div class="qty-row" id="qtyRow">
         <div class="qty-copy">
@@ -491,6 +492,6 @@
   </div>
 
   <!-- Firebase loads on demand after first paint (stoplist watch / custom token) -->
-  <script defer src="app.x5.js"></script>
+  <script defer src="app.x6.js"></script>
 </body>
 </html>

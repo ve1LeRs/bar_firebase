@@ -576,14 +576,14 @@ button.danger.is-pressed:not(:disabled) {
 
 .cocktail-meta {
   margin: 0;
-  /* Lighter than --muted so ingredients stay readable on dark cards / iPad */
+  /* Atmospheric caption (mood) — readable on dark cards / iPad */
   color: #d2c3b3;
   font-family: var(--font-body);
   font-size: var(--text-sm);
   font-weight: 400;
   line-height: var(--leading-snug);
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -1693,6 +1693,19 @@ body.field-focused {
   font-size: var(--text-md);
   font-weight: 400;
   line-height: var(--leading-snug);
+}
+
+.sheet-mood {
+  color: #d2c3b3;
+}
+
+.sheet-taste-tags {
+  margin-top: 10px;
+}
+
+.sheet-ingredients {
+  font-size: var(--text-sm);
+  opacity: 0.92;
 }
 
 .qty-row {

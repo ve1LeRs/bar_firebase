@@ -231,6 +231,7 @@
     sheetBackdrop: document.getElementById('sheetBackdrop'),
     sheetMedia: document.getElementById('sheetMedia'),
     sheetName: document.getElementById('sheetName'),
+    sheetTasteTags: document.getElementById('sheetTasteTags'),
     sheetIngredients: document.getElementById('sheetIngredients'),
     sheetMood: document.getElementById('sheetMood'),
     sheetPrice: document.getElementById('sheetPrice'),
@@ -3340,12 +3341,9 @@
         </div>
         <div class="cocktail-body">
           <h3>${escapeHtml(cocktail.name || 'Коктейль')}</h3>
-          <p class="cocktail-meta">${escapeHtml(cocktail.ingredients || cocktail.description || 'Авторский рецепт бара')}</p>
-          ${Array.isArray(cocktail.tasteTags) && cocktail.tasteTags.length
-            ? `<div class="taste-tags">${cocktail.tasteTags
-                .map((t) => TASTE_LABELS[t] ? `<span class="taste-chip">${TASTE_LABELS[t]}</span>` : '')
-                .join('')}</div>`
-            : ''}
+          <p class="cocktail-meta">${escapeHtml(
+            cocktail.mood || cocktail.description || 'Авторский рецепт бара'
+          )}</p>
           <div class="cocktail-foot">
             <span class="price">${Number(cocktail.price) || 0} ₽</span>
             <span>
@@ -3716,8 +3714,18 @@
     void refreshCocktailMaxQty(cocktail);
 
     els.sheetName.textContent = cocktail.name;
-    els.sheetIngredients.textContent = cocktail.ingredients || 'Состав уточнит бармен';
     els.sheetMood.textContent = cocktail.mood || cocktail.description || '';
+    els.sheetIngredients.textContent = cocktail.ingredients
+      ? `Состав: ${cocktail.ingredients}`
+      : 'Состав уточнит бармен';
+    if (els.sheetTasteTags) {
+      const tags = Array.isArray(cocktail.tasteTags) ? cocktail.tasteTags : [];
+      const chips = tags
+        .map((t) => (TASTE_LABELS[t] ? `<span class="taste-chip">${TASTE_LABELS[t]}</span>` : ''))
+        .join('');
+      els.sheetTasteTags.innerHTML = chips;
+      els.sheetTasteTags.hidden = !chips;
+    }
 
     const sheetImageUrl = cocktailImageSrc(cocktail.image);
     if (sheetImageUrl) {
