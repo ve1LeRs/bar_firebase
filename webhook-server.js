@@ -4592,7 +4592,12 @@ app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
 
   // One Telegram bot token → one webhook URL. ensureMiniAppBotWebhook would overwrite
   // /telegram-webhook (callbacks/buttons) with /telegram-miniapp-webhook (messages only).
-  ensureAlertsBotWebhook().catch((e) => console.warn('Alerts webhook ensure failed:', e.message));
+  // When long-poll is forced, do NOT re-register webhook (conflicts with getUpdates).
+  if (process.env.FORCE_TELEGRAM_POLLING === '1') {
+    console.log('Webhook ensure skipped (FORCE_TELEGRAM_POLLING=1)');
+  } else {
+    ensureAlertsBotWebhook().catch((e) => console.warn('Alerts webhook ensure failed:', e.message));
+  }
   // ensureMiniAppBotWebhook().catch((e) => console.warn('Mini App webhook ensure failed:', e.message));
 });
 
@@ -4603,7 +4608,17 @@ let pollOffset = 0;
 async function startPolling() {
   const token = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_MINIAPP_BOT_TOKEN;
   if (!token) return;
-  console.log("Polling started");
+  try {
+    const del = await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ drop_pending_updates: false })
+    }).then((r) => r.json());
+    console.log('Polling: webhook cleared', del.ok ? 'ok' : del);
+  } catch (e) {
+    console.warn('Polling: deleteWebhook failed:', e.message);
+  }
+  console.log('Polling started');
   while (true) {
     try {
       const res = await fetch("https://api.telegram.org/bot" + token + "/getUpdates?offset=" + pollOffset + "&timeout=25");
