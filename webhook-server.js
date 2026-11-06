@@ -1,14 +1,24 @@
 require('dotenv').config();
 
 // Route Telegram API via local HTTP proxy when HTTPS_PROXY is set (RU VPS blocks Telegram).
-// Important: Node's built-in fetch ignores the undici npm dispatcher unless we replace it.
+// EnvHttpProxyAgent honors NO_PROXY (localhost health/webhook tests must stay direct).
 try {
-  if (process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.ALL_PROXY) {
+  const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.ALL_PROXY;
+  if (proxyUrl) {
     const undici = require('undici');
     if (typeof undici.EnvHttpProxyAgent === 'function' && typeof undici.setGlobalDispatcher === 'function') {
-      undici.setGlobalDispatcher(new undici.EnvHttpProxyAgent());
+      undici.setGlobalDispatcher(new undici.EnvHttpProxyAgent({
+        // getUpdates long-poll must survive idle proxy hops
+        headersTimeout: 90_000,
+        bodyTimeout: 90_000,
+        connect: { timeout: 20_000 }
+      }));
       globalThis.fetch = undici.fetch;
-      console.log('🌐 fetch proxy enabled:', process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.ALL_PROXY);
+      console.log('🌐 fetch proxy enabled:', proxyUrl);
+    } else if (typeof undici.ProxyAgent === 'function') {
+      undici.setGlobalDispatcher(new undici.ProxyAgent({ uri: proxyUrl }));
+      globalThis.fetch = undici.fetch;
+      console.log('🌐 fetch proxy enabled (ProxyAgent):', proxyUrl);
     }
   }
 } catch (e) {
@@ -286,6 +296,7 @@ async function sendTelegramAlert(text, options = {}) {
   }
 
   let last = { ok: false, error: 'no_recipients' };
+  const messages = [];
   for (const chatId of chatIds) {
     const payload = {
       chat_id: chatId,
@@ -304,13 +315,34 @@ async function sendTelegramAlert(text, options = {}) {
       last = result;
       if (!result.ok) {
         console.error('❌ Telegram API error:', chatId, result);
+      } else if (result.result?.message_id != null) {
+        messages.push({
+          chatId: String(result.result.chat?.id || chatId),
+          messageId: result.result.message_id
+        });
       }
     } catch (err) {
       last = { ok: false, error: err.message };
       console.error('❌ Telegram send failed:', chatId, err.message);
     }
   }
+  if (messages.length) last.messages = messages;
   return last;
+}
+
+/** Persist Telegram card message ids on the order (for later editMessageText) */
+async function rememberOrderTelegramMessages(orderId, telegramResult) {
+  const messages = telegramResult?.messages;
+  if (!orderId || !Array.isArray(messages) || !messages.length) return;
+  try {
+    await db.collection('orders').doc(String(orderId)).set({
+      telegramMessages: messages,
+      telegramChatId: messages[0].chatId,
+      telegramMessageId: messages[0].messageId
+    }, { merge: true });
+  } catch (err) {
+    console.warn('⚠️ rememberOrderTelegramMessages:', err.message);
+  }
 }
 
 // Root endpoint
@@ -641,6 +673,7 @@ app.post('/notify-telegram', async (req, res) => {
     
     if (telegramResult.ok) {
       console.log('✅ Уведомление отправлено в Telegram');
+      await rememberOrderTelegramMessages(orderId, telegramResult);
       res.json({
         success: true,
         message: 'Уведомление отправлено'
@@ -819,7 +852,7 @@ function getMiniAppPublicUrl() {
   // «Открыть» uses for most users. Menu Button + /start keyboard must match it,
   // with a fresh ?v= so Telegram does not reuse a stale WebView document.
   // DuckDNS /s is a fallback mirror with the same x9 assets.
-  return 'https://ve1lers.github.io/bar_firebase/mini-app/?v=x21';
+  return 'https://ve1lers.github.io/bar_firebase/mini-app/?v=x22';
 }
 
 const MINIAPP_BOT_DESCRIPTION =
@@ -983,14 +1016,23 @@ async function handleCallbackQuery(callbackQuery) {
     const updateResult = await updateOrderStatus(orderId, status);
 
     if (updateResult.success) {
+      // Answer FIRST so the client spinner stops even if editMessage is slow/fails
       await answerOnce(`✅ Статус: ${getStatusText(status)}`, false);
-      if (message && message.message_id != null) {
-        try {
-          const chatId = message.chat?.id || TELEGRAM_CHAT_ID;
-          await updateTelegramMessage(message.message_id, orderId, status, updateResult.orderData, chatId);
-        } catch (editErr) {
-          console.warn('⚠️ Не удалось обновить текст сообщения в Telegram:', editErr?.message);
+      try {
+        const chatId = message?.chat?.id || updateResult.orderData?.telegramChatId || TELEGRAM_CHAT_ID;
+        const messageId = message?.message_id != null
+          ? message.message_id
+          : updateResult.orderData?.telegramMessageId;
+        if (messageId != null && chatId) {
+          await updateTelegramMessage(messageId, orderId, status, updateResult.orderData, chatId);
         }
+        // Also refresh any other stored card copies (multi-admin chats)
+        await syncStoredTelegramOrderMessages(orderId, status, updateResult.orderData, {
+          skipChatId: chatId,
+          skipMessageId: messageId
+        });
+      } catch (editErr) {
+        console.warn('⚠️ Не удалось обновить текст сообщения в Telegram:', editErr?.message);
       }
       console.log('✅ Статус заказа обновлен:', { orderId, status });
     } else {
@@ -1312,7 +1354,11 @@ async function answerCallbackQuery(callbackQueryId, text, showAlert = false) {
     const token = alertsBotToken();
     if (!token) {
       console.error('❌ Alerts bot token не задан');
-      return;
+      return { ok: false, error: 'missing_token' };
+    }
+    if (!callbackQueryId) {
+      console.error('❌ answerCallbackQuery: нет callback_query.id');
+      return { ok: false, error: 'missing_id' };
     }
     const response = await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
       method: 'POST',
@@ -1323,13 +1369,22 @@ async function answerCallbackQuery(callbackQueryId, text, showAlert = false) {
         show_alert: !!showAlert
       })
     });
-    
-    if (!response.ok) {
-      const errBody = await response.text();
-      console.error('❌ Ошибка ответа на callback query:', response.status, errBody);
+    const result = await response.json().catch(() => ({ ok: false }));
+    if (!result.ok) {
+      // Query timeout / already answered — button UX already settled
+      const desc = String(result.description || '');
+      if (desc.includes('query is too old') || desc.includes('query ID is invalid')) {
+        console.warn('⚠️ answerCallbackQuery skipped:', desc);
+        return { ok: true, skipped: true };
+      }
+      console.error('❌ Ошибка ответа на callback query:', response.status, result);
+      return result;
     }
+    console.log('✅ answerCallbackQuery ok:', (text || 'OK').slice(0, 60));
+    return result;
   } catch (error) {
     console.error('❌ Ошибка отправки ответа на callback query:', error);
+    return { ok: false, error: error.message };
   }
 }
 
@@ -1340,12 +1395,12 @@ async function updateTelegramMessage(messageId, orderId, newStatus, orderData, c
     const updatedMessage = formatOrderAlertHtml({
       mode: 'update',
       status: newStatus,
-      cocktailName: orderData.name,
-      customerName: orderData.user,
-      price: orderData.price,
-      bonusUsed: orderData.bonusUsed || orderData.discount || 0,
-      queuePosition: orderData.queuePosition,
-      displayTime: orderData.displayTime || new Date().toLocaleString('ru-RU'),
+      cocktailName: orderData?.name || orderData?.cocktailName,
+      customerName: orderData?.user || orderData?.userName || orderData?.customerName,
+      price: orderData?.price,
+      bonusUsed: orderData?.bonusUsed || orderData?.discount || 0,
+      queuePosition: orderData?.queuePosition,
+      displayTime: orderData?.displayTime || new Date().toLocaleString('ru-RU'),
       orderId
     });
     const inlineKeyboard = buildOrderActionKeyboard(orderId, newStatus);
@@ -1353,7 +1408,7 @@ async function updateTelegramMessage(messageId, orderId, newStatus, orderData, c
     const token = alertsBotToken();
     if (!token || !chatId) {
       console.error('❌ Alerts bot token или chat_id не заданы');
-      return;
+      return { ok: false, error: 'missing_token_or_chat' };
     }
     const response = await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
       method: 'POST',
@@ -1367,12 +1422,77 @@ async function updateTelegramMessage(messageId, orderId, newStatus, orderData, c
       })
     });
 
-    if (!response.ok) {
-      const errBody = await response.text();
-      console.error('❌ Ошибка обновления сообщения в Telegram:', response.status, errBody);
+    const result = await response.json().catch(() => ({ ok: false }));
+    if (result.ok) {
+      console.log('✏️ Telegram card updated:', { chatId: String(chatId), messageId, status: newStatus });
+      return result;
     }
+
+    const desc = String(result.description || '');
+    // Duplicate tap / already-synced card — not an error for the bartender UX
+    if (desc.includes('message is not modified')) {
+      console.log('ℹ️ Telegram card already up to date:', { chatId: String(chatId), messageId, status: newStatus });
+      return { ok: true, notModified: true };
+    }
+
+    // Text changed but markup stuck — force buttons
+    try {
+      const markupRes = await fetch(`https://api.telegram.org/bot${token}/editMessageReplyMarkup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          message_id: messageId,
+          reply_markup: inlineKeyboard
+        })
+      }).then((r) => r.json()).catch(() => ({ ok: false }));
+      if (markupRes.ok || String(markupRes.description || '').includes('message is not modified')) {
+        console.warn('⚠️ editMessageText failed, reply markup synced:', desc);
+        return { ok: true, markupOnly: true };
+      }
+    } catch (_) { /* fall through */ }
+
+    console.error('❌ Ошибка обновления сообщения в Telegram:', response.status, result);
+    return result;
   } catch (error) {
     console.error('❌ Ошибка обновления сообщения:', error);
+    return { ok: false, error: error.message };
+  }
+}
+
+/** Edit all stored Telegram cards for an order (mini-app admin + multi-chat) */
+async function syncStoredTelegramOrderMessages(orderId, newStatus, orderData, opts = {}) {
+  const skipChatId = opts.skipChatId != null ? String(opts.skipChatId) : null;
+  const skipMessageId = opts.skipMessageId != null ? Number(opts.skipMessageId) : null;
+  let messages = Array.isArray(orderData?.telegramMessages) ? orderData.telegramMessages : [];
+  if (!messages.length && orderData?.telegramMessageId != null) {
+    messages = [{
+      chatId: orderData.telegramChatId || TELEGRAM_CHAT_ID,
+      messageId: orderData.telegramMessageId
+    }];
+  }
+  if (!messages.length && orderId) {
+    try {
+      const snap = await db.collection('orders').doc(String(orderId)).get();
+      const d = snap.data() || {};
+      messages = Array.isArray(d.telegramMessages) ? d.telegramMessages : [];
+      if (!messages.length && d.telegramMessageId != null) {
+        messages = [{ chatId: d.telegramChatId || TELEGRAM_CHAT_ID, messageId: d.telegramMessageId }];
+      }
+      if (!orderData) orderData = d;
+      else orderData = { ...d, ...orderData, status: newStatus };
+    } catch (_) { /* ignore */ }
+  }
+
+  for (const m of messages) {
+    const chatId = m?.chatId;
+    const messageId = m?.messageId;
+    if (chatId == null || messageId == null) continue;
+    if (skipChatId && skipMessageId != null
+      && String(chatId) === skipChatId && Number(messageId) === skipMessageId) {
+      continue;
+    }
+    await updateTelegramMessage(messageId, orderId, newStatus, orderData, chatId);
   }
 }
 
@@ -2877,6 +2997,12 @@ app.post('/api/mini-app/create-order', async (req, res) => {
     sendTelegramAlert(message, {
       parse_mode: 'HTML',
       reply_markup: inlineKeyboard
+    }).then((telegramResult) => {
+      if (telegramResult?.ok) {
+        rememberOrderTelegramMessages(first.id, telegramResult).catch(() => {});
+      } else {
+        console.error('⚠️ Mini App: заказ создан, но Telegram notify failed:', telegramResult);
+      }
     }).catch((notifyError) => {
       console.error('⚠️ Mini App: заказ создан, но Telegram notify failed:', notifyError.message);
     });
@@ -3137,6 +3263,11 @@ app.post('/api/mini-app/admin/order-status', async (req, res) => {
         updatedBy: `mini-app-admin:${session.userId}`
       }, { merge: true });
     } catch (_) { /* ignore */ }
+
+    // Keep Telegram order card in sync (buttons / status text)
+    syncStoredTelegramOrderMessages(String(orderId), status, result.orderData).catch((e) => {
+      console.warn('⚠️ mini-app admin telegram sync:', e.message);
+    });
 
     res.json({ success: true, status, orderId });
   } catch (error) {
@@ -4605,8 +4736,15 @@ module.exports = app;
 
 // Polling
 let pollOffset = 0;
+let pollingStarted = false;
 async function startPolling() {
-  const token = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_MINIAPP_BOT_TOKEN;
+  if (pollingStarted) {
+    console.warn('Polling: already started, skip duplicate');
+    return;
+  }
+  pollingStarted = true;
+  // Same bot handles /start + order-card callbacks (alerts/miniapp tokens are identical in prod)
+  const token = alertsBotToken() || process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_MINIAPP_BOT_TOKEN;
   if (!token) return;
   try {
     const del = await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`, {
@@ -4619,19 +4757,48 @@ async function startPolling() {
     console.warn('Polling: deleteWebhook failed:', e.message);
   }
   console.log('Polling started');
+  let conflictBackoffMs = 2000;
   while (true) {
     try {
-      const res = await fetch("https://api.telegram.org/bot" + token + "/getUpdates?offset=" + pollOffset + "&timeout=25");
-      const data = await res.json();
-      if (!data.ok) { await new Promise(r => setTimeout(r, 3000)); continue; }
+      // POST body avoids huge query strings; timeout=15 is friendlier to HTTP proxies
+      const res = await fetch(`https://api.telegram.org/bot${token}/getUpdates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          offset: pollOffset,
+          timeout: 15,
+          allowed_updates: ['message', 'callback_query']
+        })
+      });
+      const data = await res.json().catch(() => ({ ok: false }));
+      if (!data.ok) {
+        const desc = String(data.description || '');
+        if (desc.includes('Conflict')) {
+          console.warn('Polling conflict (another getUpdates); backing off', conflictBackoffMs, 'ms');
+          await new Promise((r) => setTimeout(r, conflictBackoffMs));
+          conflictBackoffMs = Math.min(20000, Math.floor(conflictBackoffMs * 1.5));
+        } else {
+          console.warn('Polling getUpdates not ok:', data.error_code || '', desc || data);
+          await new Promise((r) => setTimeout(r, 3000));
+        }
+        continue;
+      }
+      conflictBackoffMs = 2000;
       for (const u of (data.result || [])) {
         pollOffset = u.update_id + 1;
-        if (u.message) await handleMiniAppBotMessage(u.message);
-        else if (u.callback_query) await handleCallbackQuery(u.callback_query);
+        try {
+          if (u.message) await handleMiniAppBotMessage(u.message);
+          else if (u.callback_query) {
+            console.log('📨 Polling callback_query:', u.callback_query.data);
+            await handleCallbackQuery(u.callback_query);
+          }
+        } catch (handlerErr) {
+          console.error('Polling handler error:', handlerErr.message);
+        }
       }
     } catch (e) {
-      console.error("poll err", e.message);
-      await new Promise(r => setTimeout(r, 5000));
+      console.error('poll err', e.message, e.cause && (e.cause.code || e.cause.message) || '');
+      await new Promise((r) => setTimeout(r, 5000));
     }
   }
 }

@@ -1,11 +1,11 @@
 (() => {
   'use strict';
-  const UI_BUILD = 'x21';
+  const UI_BUILD = 'x22';
   try { document.documentElement.dataset.uiBuild = UI_BUILD; } catch (_) {}
 
   // Do NOT redirect github.io → duckdns. Cross-origin navigation inside the
   // Telegram WebView strips initData and breaks auth («Нет данных Telegram»).
-  // GitHub Pages shell talks to DEFAULT_API (duckdns) via resolveApiBase().
+  // GitHub Pages shell talks to DEFAULT_API (duckdns :443) via resolveApiBase().
 
   const firebaseConfig = {
     apiKey: 'AIzaSyB4bD8UAu0Aj5IRK5H-uZg6kxNAIbkZc9k',
@@ -16,7 +16,8 @@
     appId: '1:493608422842:web:3b4b6bd8a4cb681c436183'
   };
 
-  const DEFAULT_API = 'https://asafievbar.duckdns.org:8443';
+  // Standard HTTPS :443 (SNI mux on VPS). Avoid :8443 — many mobile carriers filter it.
+  const DEFAULT_API = 'https://asafievbar.duckdns.org';
   const MENU_CACHE_KEY = 'asafiev_mini_menu_v7';
   const MENU_IMAGE_BUST = 'img4';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -312,11 +313,13 @@
       const host = String(window.location?.hostname || '');
       if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3000';
       if (host.includes('onrender.com')) return `https://${host}`;
-      // GitHub Pages hosts only the UI — API stays on DuckDNS/VPS
+      // GitHub Pages hosts only the UI — API stays on DuckDNS :443
       if (host.includes('github.io')) return DEFAULT_API;
-      // Same origin preserves :8443 and skips an extra TLS hop
+      // Same-origin when UI is served from duckdns (prefer host without non-443 ports)
       if (host.includes('duckdns.org')) {
-        return String(window.location.origin || DEFAULT_API);
+        const origin = String(window.location.origin || '');
+        if (/:8443$/i.test(origin)) return DEFAULT_API;
+        return origin || DEFAULT_API;
       }
     } catch (_) { /* ignore */ }
     return DEFAULT_API;
@@ -694,7 +697,7 @@
     ]);
   }
 
-  /** Quick reachability probe — carriers that block :8443 fail here in ~3s, not 40s+. */
+  /** Quick reachability probe — fail fast on dead networks, not 40s+ «Вход…». */
   async function probeApiReachable(timeoutMs = 3500) {
     try {
       const res = await fetchWithTimeout(
@@ -757,7 +760,7 @@
     if (state.authError === 'timeout') {
       return {
         title: 'Сессия не подключена',
-        hint: 'Нет ответа сервера (иногда мобильная сеть режет :8443). Попробуйте Wi‑Fi и «Подключить».',
+        hint: 'Нет ответа сервера. Проверьте интернет и нажмите «Подключить».',
         connecting: false,
         btn: 'Подключить'
       };
@@ -974,7 +977,7 @@
       syncSessionStatusUI();
       void wakeApi();
 
-      // Fail fast when :8443 is filtered (some mobile carriers) — avoid 40s «Вход…»
+      // Fail fast when API unreachable — avoid 40s «Вход…»
       const reachable = await probeApiReachable(3500);
       if (!reachable) {
         const retryProbe = await probeApiReachable(2500);
