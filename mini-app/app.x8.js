@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const UI_BUILD = 'x9';
+  const UI_BUILD = 'x10';
   try { document.documentElement.dataset.uiBuild = UI_BUILD; } catch (_) {}
 
   // Do NOT redirect github.io → duckdns. Cross-origin navigation inside the
@@ -17,7 +17,7 @@
   };
 
   const DEFAULT_API = 'https://asafievbar.duckdns.org:8443';
-  const MENU_CACHE_KEY = 'asafiev_mini_menu_v6';
+  const MENU_CACHE_KEY = 'asafiev_mini_menu_v7';
   const MENU_IMAGE_BUST = 'img4';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
   const STATUS_LABELS = {

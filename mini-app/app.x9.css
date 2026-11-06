@@ -439,9 +439,9 @@ button.danger.is-pressed:not(:disabled) {
 .cocktail {
   position: relative;
   display: grid;
-  grid-template-columns: 88px 1fr;
+  grid-template-columns: 96px 1fr;
   gap: 12px;
-  padding: 10px;
+  padding: 12px;
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--line);
@@ -474,8 +474,8 @@ button.danger.is-pressed:not(:disabled) {
 }
 
 .thumb-wrap {
-  width: 88px;
-  height: 88px;
+  width: 96px;
+  height: 96px;
   border-radius: 14px;
   overflow: hidden;
   position: relative;
@@ -584,7 +584,7 @@ button.danger.is-pressed:not(:disabled) {
   font-weight: 400;
   line-height: var(--leading-snug);
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -2489,7 +2489,7 @@ body.field-focused {
 
   .cocktail-meta {
     font-size: 0.875rem;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 4;
     color: #ddd0c0;
   }
 
