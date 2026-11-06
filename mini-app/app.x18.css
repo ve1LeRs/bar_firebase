@@ -617,12 +617,21 @@ button.danger.is-pressed:not(:disabled) {
   flex: 0 0 auto;
 }
 
-.cocktail-foot > span:last-child {
+.cocktail-foot-meta,
+.cocktail-foot-price {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  flex: 0 1 auto;
   min-width: 0;
+}
+
+.cocktail-foot-meta {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+}
+
+.cocktail-foot-price {
+  flex: 0 0 auto;
   justify-content: flex-end;
 }
 
@@ -686,7 +695,7 @@ button.danger.is-pressed:not(:disabled) {
 .cocktail-rating {
   font-family: var(--font-body);
   font-size: var(--text-sm);
-  color: var(--accent);
+  color: var(--brand-gold);
   font-weight: 600;
 }
 
