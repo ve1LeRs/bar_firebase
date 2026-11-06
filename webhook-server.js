@@ -1,14 +1,13 @@
 require('dotenv').config();
 
 // Route Telegram API via local HTTP proxy when HTTPS_PROXY is set (RU VPS blocks Telegram).
-// Prefer explicit ProxyAgent: EnvHttpProxyAgent is experimental and long-polls are flaky.
+// EnvHttpProxyAgent honors NO_PROXY (localhost health/webhook tests must stay direct).
 try {
   const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.ALL_PROXY;
   if (proxyUrl) {
     const undici = require('undici');
-    if (typeof undici.ProxyAgent === 'function' && typeof undici.setGlobalDispatcher === 'function') {
-      undici.setGlobalDispatcher(new undici.ProxyAgent({
-        uri: proxyUrl,
+    if (typeof undici.EnvHttpProxyAgent === 'function' && typeof undici.setGlobalDispatcher === 'function') {
+      undici.setGlobalDispatcher(new undici.EnvHttpProxyAgent({
         // getUpdates long-poll must survive idle proxy hops
         headersTimeout: 90_000,
         bodyTimeout: 90_000,
@@ -16,10 +15,10 @@ try {
       }));
       globalThis.fetch = undici.fetch;
       console.log('🌐 fetch proxy enabled:', proxyUrl);
-    } else if (typeof undici.EnvHttpProxyAgent === 'function') {
-      undici.setGlobalDispatcher(new undici.EnvHttpProxyAgent());
+    } else if (typeof undici.ProxyAgent === 'function') {
+      undici.setGlobalDispatcher(new undici.ProxyAgent({ uri: proxyUrl }));
       globalThis.fetch = undici.fetch;
-      console.log('🌐 fetch proxy enabled (EnvHttpProxyAgent):', proxyUrl);
+      console.log('🌐 fetch proxy enabled (ProxyAgent):', proxyUrl);
     }
   }
 } catch (e) {
@@ -853,7 +852,7 @@ function getMiniAppPublicUrl() {
   // «Открыть» uses for most users. Menu Button + /start keyboard must match it,
   // with a fresh ?v= so Telegram does not reuse a stale WebView document.
   // DuckDNS /s is a fallback mirror with the same x9 assets.
-  return 'https://ve1lers.github.io/bar_firebase/mini-app/?v=x21';
+  return 'https://ve1lers.github.io/bar_firebase/mini-app/?v=x22';
 }
 
 const MINIAPP_BOT_DESCRIPTION =
@@ -4737,7 +4736,13 @@ module.exports = app;
 
 // Polling
 let pollOffset = 0;
+let pollingStarted = false;
 async function startPolling() {
+  if (pollingStarted) {
+    console.warn('Polling: already started, skip duplicate');
+    return;
+  }
+  pollingStarted = true;
   // Same bot handles /start + order-card callbacks (alerts/miniapp tokens are identical in prod)
   const token = alertsBotToken() || process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_MINIAPP_BOT_TOKEN;
   if (!token) return;
@@ -4752,32 +4757,41 @@ async function startPolling() {
     console.warn('Polling: deleteWebhook failed:', e.message);
   }
   console.log('Polling started');
-  let conflictBackoffMs = 3000;
+  let conflictBackoffMs = 2000;
   while (true) {
     try {
-      // timeout=20: under HTTP proxy idle cuts; undici headersTimeout is 90s
-      const res = await fetch(
-        `https://api.telegram.org/bot${token}/getUpdates?offset=${pollOffset}&timeout=20&allowed_updates=${encodeURIComponent(JSON.stringify(['message', 'callback_query']))}`
-      );
+      // POST body avoids huge query strings; timeout=15 is friendlier to HTTP proxies
+      const res = await fetch(`https://api.telegram.org/bot${token}/getUpdates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          offset: pollOffset,
+          timeout: 15,
+          allowed_updates: ['message', 'callback_query']
+        })
+      });
       const data = await res.json().catch(() => ({ ok: false }));
       if (!data.ok) {
         const desc = String(data.description || '');
         if (desc.includes('Conflict')) {
           console.warn('Polling conflict (another getUpdates); backing off', conflictBackoffMs, 'ms');
           await new Promise((r) => setTimeout(r, conflictBackoffMs));
-          conflictBackoffMs = Math.min(30000, conflictBackoffMs * 2);
+          conflictBackoffMs = Math.min(20000, Math.floor(conflictBackoffMs * 1.5));
         } else {
           console.warn('Polling getUpdates not ok:', data.error_code || '', desc || data);
           await new Promise((r) => setTimeout(r, 3000));
         }
         continue;
       }
-      conflictBackoffMs = 3000;
+      conflictBackoffMs = 2000;
       for (const u of (data.result || [])) {
         pollOffset = u.update_id + 1;
         try {
           if (u.message) await handleMiniAppBotMessage(u.message);
-          else if (u.callback_query) await handleCallbackQuery(u.callback_query);
+          else if (u.callback_query) {
+            console.log('📨 Polling callback_query:', u.callback_query.data);
+            await handleCallbackQuery(u.callback_query);
+          }
         } catch (handlerErr) {
           console.error('Polling handler error:', handlerErr.message);
         }
