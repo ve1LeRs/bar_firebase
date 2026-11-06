@@ -437,6 +437,7 @@ button.danger.is-pressed:not(:disabled) {
 }
 
 .cocktail {
+  position: relative;
   display: grid;
   grid-template-columns: 88px 1fr;
   gap: 12px;
@@ -614,6 +615,23 @@ button.danger.is-pressed:not(:disabled) {
   margin-top: 6px;
 }
 
+.cocktail-taste-corner {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  margin-top: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  max-width: 42%;
+  pointer-events: none;
+}
+
+.cocktail-body.has-taste-corner h3 {
+  padding-right: 4.75rem;
+}
+
 .taste-chip {
   display: inline-flex;
   align-items: center;
@@ -627,6 +645,12 @@ button.danger.is-pressed:not(:disabled) {
   color: rgba(210, 195, 179, 0.95);
   background: rgba(244, 238, 230, 0.06);
   border: 1px solid rgba(244, 238, 230, 0.1);
+}
+
+.cocktail-taste-corner .taste-chip {
+  background: rgba(20, 17, 15, 0.72);
+  border-color: rgba(244, 238, 230, 0.14);
+  backdrop-filter: blur(6px);
 }
 
 .cocktail-rating {
@@ -1697,10 +1721,6 @@ body.field-focused {
 
 .sheet-mood {
   color: #d2c3b3;
-}
-
-.sheet-taste-tags {
-  margin-top: 10px;
 }
 
 .sheet-ingredients {

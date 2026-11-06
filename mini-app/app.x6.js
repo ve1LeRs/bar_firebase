@@ -231,7 +231,6 @@
     sheetBackdrop: document.getElementById('sheetBackdrop'),
     sheetMedia: document.getElementById('sheetMedia'),
     sheetName: document.getElementById('sheetName'),
-    sheetTasteTags: document.getElementById('sheetTasteTags'),
     sheetIngredients: document.getElementById('sheetIngredients'),
     sheetMood: document.getElementById('sheetMood'),
     sheetPrice: document.getElementById('sheetPrice'),
@@ -3332,14 +3331,22 @@
       const imageUrl = cocktailImageSrc(cocktail.image);
       const hasImage = Boolean(imageUrl);
       const rating = state.ratings[cocktail.name];
+      const tasteChips = Array.isArray(cocktail.tasteTags)
+        ? cocktail.tasteTags
+            .map((t) => (TASTE_LABELS[t] ? `<span class="taste-chip">${TASTE_LABELS[t]}</span>` : ''))
+            .join('')
+        : '';
       btn.innerHTML = `
+        ${tasteChips
+          ? `<div class="taste-tags cocktail-taste-corner" aria-label="Вкус">${tasteChips}</div>`
+          : ''}
         <div class="thumb-wrap">
           ${hasImage
             ? `<img class="cocktail-thumb" src="${escapeAttr(imageUrl)}" alt="" loading="${index < 6 ? 'eager' : 'lazy'}" decoding="async" referrerpolicy="no-referrer">`
             : ''}
           ${cocktailPlaceholderHtml({ name: cocktail.name, hidden: hasImage })}
         </div>
-        <div class="cocktail-body">
+        <div class="cocktail-body${tasteChips ? ' has-taste-corner' : ''}">
           <h3>${escapeHtml(cocktail.name || 'Коктейль')}</h3>
           <p class="cocktail-meta">${escapeHtml(
             cocktail.mood || cocktail.description || 'Авторский рецепт бара'
@@ -3718,14 +3725,6 @@
     els.sheetIngredients.textContent = cocktail.ingredients
       ? `Состав: ${cocktail.ingredients}`
       : 'Состав уточнит бармен';
-    if (els.sheetTasteTags) {
-      const tags = Array.isArray(cocktail.tasteTags) ? cocktail.tasteTags : [];
-      const chips = tags
-        .map((t) => (TASTE_LABELS[t] ? `<span class="taste-chip">${TASTE_LABELS[t]}</span>` : ''))
-        .join('');
-      els.sheetTasteTags.innerHTML = chips;
-      els.sheetTasteTags.hidden = !chips;
-    }
 
     const sheetImageUrl = cocktailImageSrc(cocktail.image);
     if (sheetImageUrl) {
