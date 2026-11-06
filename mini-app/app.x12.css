@@ -845,6 +845,12 @@ body[data-view='admin'] #ratingBackdrop {
   flex: 0 0 auto;
 }
 
+/* Menu list card price — larger, scoped so admin/profile prices stay as-is */
+.cocktail .price {
+  font-size: 1.125rem; /* 18 — was 14 */
+  line-height: 1.15;
+}
+
 .badge {
   font-family: var(--font-body);
   font-size: var(--text-xs);
@@ -2544,6 +2550,10 @@ body.field-focused {
 
   .price {
     font-size: 1rem;
+  }
+
+  .cocktail .price {
+    font-size: 1.25rem;
   }
 
   .cocktail-rating,
