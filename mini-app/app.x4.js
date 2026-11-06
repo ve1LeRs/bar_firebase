@@ -664,32 +664,51 @@
 
   async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
     const controller = new AbortController();
+    const external = options.signal;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const onExternalAbort = () => controller.abort();
+    if (external) {
+      if (external.aborted) controller.abort();
+      else external.addEventListener('abort', onExternalAbort, { once: true });
+    }
     try {
-      return await fetch(url, { ...options, signal: controller.signal });
+      const { signal: _ignored, ...rest } = options;
+      return await fetch(url, { ...rest, signal: controller.signal });
     } finally {
       clearTimeout(timeoutId);
+      if (external) external.removeEventListener('abort', onExternalAbort);
+    }
+  }
+
+  function withTimeout(promise, ms, label = 'timeout') {
+    let timer = null;
+    return Promise.race([
+      Promise.resolve(promise).finally(() => {
+        if (timer) clearTimeout(timer);
+      }),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label}:${ms}`)), ms);
+      })
+    ]);
+  }
+
+  /** Quick reachability probe — carriers that block :8443 fail here in ~3s, not 40s+. */
+  async function probeApiReachable(timeoutMs = 3500) {
+    try {
+      const res = await fetchWithTimeout(
+        `${state.apiBase}/health`,
+        { method: 'GET', cache: 'no-store', mode: 'cors' },
+        timeoutMs
+      );
+      return Boolean(res?.ok);
+    } catch (_) {
+      return false;
     }
   }
 
   async function ensureApiAwake(onStatus) {
-    const started = Date.now();
-    const maxWait = 12000;
-    let attempt = 0;
-
-    while (Date.now() - started < maxWait) {
-      attempt += 1;
-      try {
-        const res = await fetchWithTimeout(
-          `${state.apiBase}/health`,
-          { method: 'GET', cache: 'no-store', mode: 'cors' },
-          4000
-        );
-        if (res.ok) return true;
-      } catch (_) {}
-      await sleep(400);
-    }
-    return false;
+    // Legacy Render cold-start helper — unused on always-on VPS; keep cheap.
+    return probeApiReachable(4000);
   }
 
   function dismissSessionToast() {
@@ -734,7 +753,12 @@
       };
     }
     if (state.authError === 'timeout') {
-      return { title: 'Сессия не подключена', hint: 'Связь слабая или сервер отвечает долго — нажмите «Подключить».', connecting: false, btn: 'Подключить' };
+      return {
+        title: 'Сессия не подключена',
+        hint: 'Нет ответа сервера (иногда мобильная сеть режет :8443). Попробуйте Wi‑Fi и «Подключить».',
+        connecting: false,
+        btn: 'Подключить'
+      };
     }
     return {
       title: 'Сессия не подключена',
@@ -841,13 +865,14 @@
     showToast(text, durationMs);
   }
 
-  async function postAuthOnce(initData, timeoutMs = 20000) {
+  async function postAuthOnce(initData, timeoutMs = 12000, externalSignal = null) {
     const res = await fetchWithTimeout(
       `${state.apiBase}/api/mini-app/auth`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initData })
+        body: JSON.stringify({ initData }),
+        signal: externalSignal || undefined
       },
       timeoutMs
     );
@@ -917,6 +942,7 @@
     }
 
     let settled = false;
+    const authAbort = new AbortController();
     state.authConnectingShown = true;
     syncSessionStatusUI();
 
@@ -946,11 +972,33 @@
       syncSessionStatusUI();
       void wakeApi();
 
-      // Up to 2 tries on timeout/network — first failure used to false-trigger «Сеть тормозит»
+      // Fail fast when :8443 is filtered (some mobile carriers) — avoid 40s «Вход…»
+      const reachable = await probeApiReachable(3500);
+      if (!reachable) {
+        const retryProbe = await probeApiReachable(2500);
+        if (!retryProbe) {
+          markSessionLost('timeout');
+          armAuthCooldown(15000);
+          state.authConnectingShown = false;
+          dismissSessionToast();
+          if (!quiet) {
+            setAuthStatus(
+              'Нет связи с сервером бара. Попробуйте Wi‑Fi или другую сеть, затем «Подключить».',
+              { error: true }
+            );
+          }
+          setAuthRetryVisible(true);
+          updateProfileUI();
+          return false;
+        }
+      }
+
+      // One quick retry only for gateway blips — total auth budget stays under ~20s
       let lastErr = null;
       for (let attempt = 1; attempt <= 2; attempt += 1) {
+        if (authAbort.signal.aborted) break;
         try {
-          const data = await postAuthOnce(initData, 20000);
+          const data = await postAuthOnce(initData, 12000, authAbort.signal);
           applyAuthSuccess(initData, data);
           return true;
         } catch (err) {
@@ -962,13 +1010,12 @@
             err?.status === 503 ||
             err?.status === 504 ||
             /Failed to fetch|NetworkError|network/i.test(String(err?.message || ''));
-          if (!transient || attempt >= 2) break;
-          await sleep(700);
+          if (!transient || attempt >= 2 || authAbort.signal.aborted) break;
+          await sleep(500);
         }
       }
 
       markSessionLost(lastErr?.name === 'AbortError' ? 'timeout' : (lastErr?.reason || 'auth_failed'));
-      // Soft cooldown on timeout — user can retry sooner
       armAuthCooldown(lastErr?.name === 'AbortError' ? 12000 : 25000);
       state.authConnectingShown = false;
       dismissSessionToast();
@@ -982,10 +1029,11 @@
       return false;
     })();
 
-    // Watchdog only as last resort (2×20s fetch + waits) — must not race initData wait
-    const watchdog = sleep(50000).then(() => {
+    // Hard cap — abort in-flight fetch so UI cannot stick on «Вход…»
+    const watchdog = sleep(28000).then(() => {
       if (settled) return false;
-      console.warn('auth watchdog: force-stop after 50s');
+      console.warn('auth watchdog: force-stop after 28s');
+      try { authAbort.abort(); } catch (_) { /* ignore */ }
       markSessionLost('timeout');
       armAuthCooldown(15000);
       return false;
@@ -995,6 +1043,7 @@
       return await Promise.race([state.authPromise, watchdog]);
     } finally {
       settled = true;
+      try { authAbort.abort(); } catch (_) { /* ignore */ }
       state.authPromise = null;
       state.authConnectingShown = false;
       dismissSessionToast();
@@ -3184,12 +3233,17 @@
     } catch (err) {
       console.warn('menu bootstrap failed, fallback Firestore', err);
       try {
-        await ensureFirebaseReady();
-        const [cocktailsSnap, stopSnap, ratingsOk] = await Promise.all([
-          db.collection('cocktails').get({ source: 'server' }),
-          db.collection('stoplist').get({ source: 'server' }).catch(() => null),
-          refreshRatingsSummary().then(() => true).catch(() => false)
-        ]);
+        // Hard deadlines — unbounded Firestore gets were hanging boot/session for some networks
+        await withTimeout(ensureFirebaseReady(7000), 7500, 'firebase-ready');
+        const [cocktailsSnap, stopSnap, ratingsOk] = await withTimeout(
+          Promise.all([
+            db.collection('cocktails').get({ source: 'server' }),
+            db.collection('stoplist').get({ source: 'server' }).catch(() => null),
+            refreshRatingsSummary().then(() => true).catch(() => false)
+          ]),
+          8000,
+          'firestore-menu'
+        );
         const cocktails = [];
         cocktailsSnap.forEach((doc) => {
           const data = doc.data();
@@ -3217,7 +3271,7 @@
             if (n) stoplistNames.push(n);
           });
         } else {
-          await refreshStoplistFromApi();
+          await withTimeout(refreshStoplistFromApi(), 4000, 'stoplist-api').catch(() => false);
           stoplistNames = [...state.stoplist];
         }
         writeMenuCache(cocktails, stoplistNames, state.ratings);
@@ -3232,7 +3286,8 @@
       } catch (fallbackErr) {
         console.error(fallbackErr);
         if (!state.cocktails.length) {
-          els.menuGrid.innerHTML = '<div class="empty-state">Не удалось загрузить меню</div>';
+          els.menuGrid.innerHTML =
+            '<div class="empty-state">Не удалось загрузить меню.<br>Проверьте сеть и откройте снова из бота.</div>';
         }
       }
     }
