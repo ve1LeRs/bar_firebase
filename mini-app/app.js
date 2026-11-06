@@ -3276,21 +3276,26 @@
       const imageUrl = cocktailImageSrc(cocktail.image);
       const hasImage = Boolean(imageUrl);
       const rating = state.ratings[cocktail.name];
+      const tasteChips = Array.isArray(cocktail.tasteTags)
+        ? cocktail.tasteTags
+            .map((t) => (TASTE_LABELS[t] ? `<span class="taste-chip">${TASTE_LABELS[t]}</span>` : ''))
+            .join('')
+        : '';
       btn.innerHTML = `
+        ${tasteChips
+          ? `<div class="taste-tags cocktail-taste-corner" aria-label="Вкус">${tasteChips}</div>`
+          : ''}
         <div class="thumb-wrap">
           ${hasImage
             ? `<img class="cocktail-thumb" src="${escapeAttr(imageUrl)}" alt="" loading="${index < 6 ? 'eager' : 'lazy'}" decoding="async" referrerpolicy="no-referrer">`
             : ''}
           ${cocktailPlaceholderHtml({ name: cocktail.name, hidden: hasImage })}
         </div>
-        <div class="cocktail-body">
+        <div class="cocktail-body${tasteChips ? ' has-taste-corner' : ''}">
           <h3>${escapeHtml(cocktail.name || 'Коктейль')}</h3>
-          <p class="cocktail-meta">${escapeHtml(cocktail.ingredients || cocktail.description || 'Авторский рецепт бара')}</p>
-          ${Array.isArray(cocktail.tasteTags) && cocktail.tasteTags.length
-            ? `<div class="taste-tags">${cocktail.tasteTags
-                .map((t) => TASTE_LABELS[t] ? `<span class="taste-chip">${TASTE_LABELS[t]}</span>` : '')
-                .join('')}</div>`
-            : ''}
+          <p class="cocktail-meta">${escapeHtml(
+            cocktail.mood || cocktail.description || 'Авторский рецепт бара'
+          )}</p>
           <div class="cocktail-foot">
             <span class="price">${Number(cocktail.price) || 0} ₽</span>
             <span>
