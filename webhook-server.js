@@ -887,6 +887,9 @@ app.post('/telegram-webhook', async (req, res) => {
     if (callback_query) {
       console.log('📨 Callback от кнопки:', { data: callback_query.data, id: callback_query.id });
       await handleCallbackQuery(callback_query);
+    } else if (body.message) {
+      // Same bot token serves mini-app /start + alert callbacks
+      await handleMiniAppBotMessage(body.message);
     } else {
       console.log('📨 Webhook (не кнопка):', body.update_id ? 'update_id=' + body.update_id : Object.keys(body));
     }
@@ -4571,7 +4574,9 @@ app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
     .then((r) => console.log('👑 Owner admin ensured:', r.uid))
     .catch((e) => console.warn('Owner admin ensure failed:', e.message));
 
-  // ensureAlertsBotWebhook().catch((e) => console.warn('Alerts webhook ensure failed:', e.message));
+  // One Telegram bot token → one webhook URL. ensureMiniAppBotWebhook would overwrite
+  // /telegram-webhook (callbacks/buttons) with /telegram-miniapp-webhook (messages only).
+  ensureAlertsBotWebhook().catch((e) => console.warn('Alerts webhook ensure failed:', e.message));
   // ensureMiniAppBotWebhook().catch((e) => console.warn('Mini App webhook ensure failed:', e.message));
 });
 
@@ -4599,4 +4604,9 @@ async function startPolling() {
     }
   }
 }
-setTimeout(startPolling, 2000);
+// Prefer webhook when PUBLIC_BASE_URL is set; long-poll only if FORCE_TELEGRAM_POLLING=1
+if (process.env.FORCE_TELEGRAM_POLLING === '1') {
+  setTimeout(startPolling, 2000);
+} else {
+  console.log('Webhook mode: long-poll disabled (set FORCE_TELEGRAM_POLLING=1 to override)');
+}
