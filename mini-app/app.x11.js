@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const UI_BUILD = 'x12';
+  const UI_BUILD = 'x13';
   try { document.documentElement.dataset.uiBuild = UI_BUILD; } catch (_) {}
 
   // Do NOT redirect github.io → duckdns. Cross-origin navigation inside the
@@ -3351,7 +3351,7 @@
         <div class="cocktail-body${tasteChips ? ' has-taste-corner' : ''}">
           <h3>${escapeHtml(cocktail.name || 'Коктейль')}</h3>
           <p class="cocktail-meta">${escapeHtml(
-            cocktail.ingredients || cocktail.description || 'Авторский рецепт бара'
+            cocktail.mood || cocktail.description || 'Авторский рецепт бара'
           )}</p>
           <div class="cocktail-foot">
             <span class="price">${Number(cocktail.price) || 0} ₽</span>
