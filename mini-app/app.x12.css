@@ -447,6 +447,13 @@ button.danger.is-pressed:not(:disabled) {
   border: 1px solid var(--line);
   text-align: left;
   width: 100%;
+  box-sizing: border-box;
+  /* Fixed equal card size regardless of mood / tag count */
+  height: 120px;
+  min-height: 120px;
+  max-height: 120px;
+  align-items: center;
+  overflow: hidden;
 }
 
 .cocktail.stopped {
@@ -560,6 +567,8 @@ button.danger.is-pressed:not(:disabled) {
 
 .cocktail-body {
   min-width: 0;
+  min-height: 0;
+  height: 96px;
   display: flex;
   flex-direction: column;
 }
@@ -573,6 +582,10 @@ button.danger.is-pressed:not(:disabled) {
   line-height: var(--leading-tight);
   /* Explicit light ink — never inherit a dark Telegram text color */
   color: #f4eee6;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cocktail-meta {
@@ -584,9 +597,11 @@ button.danger.is-pressed:not(:disabled) {
   font-weight: 400;
   line-height: var(--leading-snug);
   display: -webkit-box;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .cocktail-foot {
@@ -594,9 +609,10 @@ button.danger.is-pressed:not(:disabled) {
   align-items: center;
   justify-content: space-between;
   margin-top: auto;
-  padding-top: 8px;
+  padding-top: 6px;
   gap: 8px;
   min-width: 0;
+  flex: 0 0 auto;
 }
 
 .cocktail-foot > span:last-child {
@@ -631,7 +647,7 @@ button.danger.is-pressed:not(:disabled) {
   pointer-events: none;
 }
 
-/* Reserve room under absolute corner chips so title + ingredients never run under them */
+/* Reserve room under absolute corner chips so title + mood never run under them */
 .cocktail-body.has-taste-corner h3,
 .cocktail-body.has-taste-corner .cocktail-meta {
   padding-right: 8.75rem;
@@ -2482,12 +2498,19 @@ body.field-focused {
     gap: 12px;
     padding: 12px;
     border-radius: 18px;
+    height: 124px;
+    min-height: 124px;
+    max-height: 124px;
   }
 
   .thumb-wrap {
     width: 100px;
     height: 100px;
     border-radius: 14px;
+  }
+
+  .cocktail-body {
+    height: 100px;
   }
 
   .cocktail-body h3 {
@@ -2497,7 +2520,7 @@ body.field-focused {
 
   .cocktail-meta {
     font-size: 0.875rem;
-    -webkit-line-clamp: 4;
+    -webkit-line-clamp: 3;
     color: #ddd0c0;
   }
 
@@ -2559,6 +2582,9 @@ body.field-focused {
     grid-template-columns: 112px 1fr;
     gap: 14px;
     padding: 14px;
+    height: 140px;
+    min-height: 140px;
+    max-height: 140px;
   }
 
   .thumb-wrap {
@@ -2567,12 +2593,17 @@ body.field-focused {
     border-radius: 16px;
   }
 
+  .cocktail-body {
+    height: 112px;
+  }
+
   .cocktail-body h3 {
     font-size: 1.125rem;
   }
 
   .cocktail-meta {
     font-size: 0.9375rem;
+    -webkit-line-clamp: 3;
   }
 }
 
