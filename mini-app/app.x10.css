@@ -623,13 +623,16 @@ button.danger.is-pressed:not(:disabled) {
   margin-top: 0;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
-  max-width: 42%;
+  gap: 3px;
+  max-width: none;
+  width: max-content;
   pointer-events: none;
 }
 
-.cocktail-body.has-taste-corner h3 {
-  padding-right: 4.75rem;
+/* Reserve horizontal room under absolute chips so title + mood never run under them */
+.cocktail-body.has-taste-corner h3,
+.cocktail-body.has-taste-corner .cocktail-meta {
+  padding-right: 5.25rem;
 }
 
 .taste-chip {
@@ -648,6 +651,9 @@ button.danger.is-pressed:not(:disabled) {
 }
 
 .cocktail-taste-corner .taste-chip {
+  padding: 1px 6px;
+  font-size: 10px;
+  line-height: 1.25;
   background: rgba(20, 17, 15, 0.72);
   border-color: rgba(244, 238, 230, 0.14);
   backdrop-filter: blur(6px);
