@@ -647,10 +647,14 @@ button.danger.is-pressed:not(:disabled) {
   pointer-events: none;
 }
 
-/* Reserve room under absolute corner chips so title + mood never run under them */
-.cocktail-body.has-taste-corner h3,
+/* Chips sit on the title row only — reserve width there.
+   Mood is below the chip row, so it can use almost full width. */
+.cocktail-body.has-taste-corner h3 {
+  padding-right: 6.75rem;
+}
+
 .cocktail-body.has-taste-corner .cocktail-meta {
-  padding-right: 8.75rem;
+  padding-right: 0.35rem;
 }
 
 .taste-chip {
