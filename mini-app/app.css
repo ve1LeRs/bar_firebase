@@ -7,6 +7,8 @@
   --line: rgba(244, 238, 230, 0.1);
   --accent: #d4a35c;
   --accent-deep: #a56b2b;
+  /* Brand gold for menu prices — not remapped by Telegram theme button blue */
+  --brand-gold: #d4a35c;
   --good: #7cb89a;
   --warn: #e0b35c;
   --bad: #d87a6a;
@@ -437,15 +439,23 @@ button.danger.is-pressed:not(:disabled) {
 }
 
 .cocktail {
+  position: relative;
   display: grid;
-  grid-template-columns: 88px 1fr;
+  grid-template-columns: 96px 1fr;
   gap: 12px;
-  padding: 10px;
+  padding: 12px;
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--line);
   text-align: left;
   width: 100%;
+  box-sizing: border-box;
+  /* Fixed equal card size regardless of mood / tag count */
+  height: 120px;
+  min-height: 120px;
+  max-height: 120px;
+  align-items: center;
+  overflow: hidden;
 }
 
 .cocktail.stopped {
@@ -473,8 +483,8 @@ button.danger.is-pressed:not(:disabled) {
 }
 
 .thumb-wrap {
-  width: 88px;
-  height: 88px;
+  width: 96px;
+  height: 96px;
   border-radius: 14px;
   overflow: hidden;
   position: relative;
@@ -559,6 +569,8 @@ button.danger.is-pressed:not(:disabled) {
 
 .cocktail-body {
   min-width: 0;
+  min-height: 0;
+  height: 96px;
   display: flex;
   flex-direction: column;
 }
@@ -572,20 +584,26 @@ button.danger.is-pressed:not(:disabled) {
   line-height: var(--leading-tight);
   /* Explicit light ink — never inherit a dark Telegram text color */
   color: #f4eee6;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cocktail-meta {
   margin: 0;
-  /* Lighter than --muted so ingredients stay readable on dark cards / iPad */
+  /* Atmospheric caption (mood) — readable on dark cards / iPad */
   color: #d2c3b3;
   font-family: var(--font-body);
   font-size: var(--text-sm);
   font-weight: 400;
   line-height: var(--leading-snug);
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .cocktail-foot {
@@ -593,17 +611,27 @@ button.danger.is-pressed:not(:disabled) {
   align-items: center;
   justify-content: space-between;
   margin-top: auto;
-  padding-top: 8px;
+  padding-top: 6px;
   gap: 8px;
   min-width: 0;
+  flex: 0 0 auto;
 }
 
-.cocktail-foot > span:last-child {
+.cocktail-foot-meta,
+.cocktail-foot-price {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  flex: 0 1 auto;
   min-width: 0;
+}
+
+.cocktail-foot-meta {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+}
+
+.cocktail-foot-price {
+  flex: 0 0 auto;
   justify-content: flex-end;
 }
 
@@ -612,6 +640,32 @@ button.danger.is-pressed:not(:disabled) {
   flex-wrap: wrap;
   gap: 5px;
   margin-top: 6px;
+}
+
+.cocktail-taste-corner {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  margin-top: 0;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: none;
+  width: max-content;
+  pointer-events: none;
+}
+
+/* Chips sit on the title row only — reserve width there.
+   Mood is below the chip row, so it can use almost full width. */
+.cocktail-body.has-taste-corner h3 {
+  padding-right: 6.75rem;
+}
+
+.cocktail-body.has-taste-corner .cocktail-meta {
+  padding-right: 0.35rem;
 }
 
 .taste-chip {
@@ -629,10 +683,19 @@ button.danger.is-pressed:not(:disabled) {
   border: 1px solid rgba(244, 238, 230, 0.1);
 }
 
+.cocktail-taste-corner .taste-chip {
+  padding: 1px 6px;
+  font-size: 10px;
+  line-height: 1.25;
+  background: rgba(20, 17, 15, 0.72);
+  border-color: rgba(244, 238, 230, 0.14);
+  backdrop-filter: blur(6px);
+}
+
 .cocktail-rating {
   font-family: var(--font-body);
   font-size: var(--text-sm);
-  color: var(--accent);
+  color: var(--brand-gold);
   font-weight: 600;
 }
 
@@ -791,6 +854,13 @@ body[data-view='admin'] #ratingBackdrop {
   letter-spacing: var(--tracking-tight);
   white-space: nowrap;
   flex: 0 0 auto;
+}
+
+/* Menu list card price — brand gold (not TG button blue via --accent) */
+.cocktail .price {
+  font-size: 1.125rem; /* 18 — was 14 */
+  line-height: 1.15;
+  color: var(--brand-gold);
 }
 
 .badge {
@@ -1695,6 +1765,15 @@ body.field-focused {
   line-height: var(--leading-snug);
 }
 
+.sheet-mood {
+  color: #d2c3b3;
+}
+
+.sheet-ingredients {
+  font-size: var(--text-sm);
+  opacity: 0.92;
+}
+
 .qty-row {
   display: flex;
   align-items: center;
@@ -2441,12 +2520,19 @@ body.field-focused {
     gap: 12px;
     padding: 12px;
     border-radius: 18px;
+    height: 124px;
+    min-height: 124px;
+    max-height: 124px;
   }
 
   .thumb-wrap {
     width: 100px;
     height: 100px;
     border-radius: 14px;
+  }
+
+  .cocktail-body {
+    height: 100px;
   }
 
   .cocktail-body h3 {
@@ -2456,7 +2542,7 @@ body.field-focused {
 
   .cocktail-meta {
     font-size: 0.875rem;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     color: #ddd0c0;
   }
 
@@ -2476,6 +2562,10 @@ body.field-focused {
 
   .price {
     font-size: 1rem;
+  }
+
+  .cocktail .price {
+    font-size: 1.25rem;
   }
 
   .cocktail-rating,
@@ -2518,6 +2608,9 @@ body.field-focused {
     grid-template-columns: 112px 1fr;
     gap: 14px;
     padding: 14px;
+    height: 140px;
+    min-height: 140px;
+    max-height: 140px;
   }
 
   .thumb-wrap {
@@ -2526,12 +2619,17 @@ body.field-focused {
     border-radius: 16px;
   }
 
+  .cocktail-body {
+    height: 112px;
+  }
+
   .cocktail-body h3 {
     font-size: 1.125rem;
   }
 
   .cocktail-meta {
     font-size: 0.9375rem;
+    -webkit-line-clamp: 3;
   }
 }
 

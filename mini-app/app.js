@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const UI_BUILD = 'x25';
+  const UI_BUILD = 'x26';
   try { document.documentElement.dataset.uiBuild = UI_BUILD; } catch (_) {}
 
   // Do NOT redirect github.io → duckdns. Cross-origin navigation inside the
@@ -184,9 +184,9 @@
   function wakeApi() {
     const base = resolveApiBase();
     try {
+      // GET only — sendBeacon is always POST and used to 404 /health.
       fetch(`${base}/health`, { method: 'GET', cache: 'no-store', mode: 'cors' }).catch(() => {});
       fetch(`${base}/api/mini-app/menu-bootstrap`, { method: 'GET', cache: 'default', mode: 'cors' }).catch(() => {});
-      if (navigator.sendBeacon) navigator.sendBeacon(`${base}/health`);
     } catch (_) { /* ignore */ }
   }
 
@@ -733,7 +733,7 @@
 
   function sessionStatusCopy() {
     if (state.authPromise || state.authConnectingShown) {
-      return { title: 'Вход…', hint: 'Один запрос, без повторов', connecting: true, btn: 'Ждём…' };
+      return { title: 'Вход…', hint: 'Связь с баром…', connecting: true, btn: 'Ждём…' };
     }
     if (!tg) {
       return { title: 'Сессия не подключена', hint: 'Откройте Mini App из Telegram-бота', connecting: false, btn: 'Подключить' };
@@ -741,7 +741,7 @@
     if (!currentInitData() && tg.initDataUnsafe?.user) {
       return {
         title: 'Сессия не подключена',
-        hint: 'Telegram не передал данные входа. Закройте Mini App крестиком ✕ и откройте снова кнопкой «Открыть».',
+        hint: 'Telegram не передал данные входа (no_init_data). Закройте Mini App крестиком ✕ и откройте снова кнопкой «Открыть».',
         connecting: false,
         btn: 'Повторить'
       };
@@ -749,15 +749,32 @@
     if (!currentInitData()) {
       return {
         title: 'Сессия не подключена',
-        hint: 'Закройте Mini App крестиком ✕ и откройте кнопкой «Открыть» у бота.',
+        hint: 'Нет initData. Закройте Mini App крестиком ✕ и откройте кнопкой «Открыть» у бота.',
         connecting: false,
         btn: 'Повторить'
       };
     }
-    if (state.authError === 'timeout') {
+    const err = String(state.authError || '');
+    if (err === 'timeout' || err === 'api_unreachable') {
       return {
         title: 'Сессия не подключена',
-        hint: 'Нет ответа сервера. Проверьте интернет и нажмите «Подключить».',
+        hint: `Нет ответа API (${err}). Проверьте интернет и нажмите «Подключить».`,
+        connecting: false,
+        btn: 'Подключить'
+      };
+    }
+    if (err === 'bad_hash' || err === 'unauthorized') {
+      return {
+        title: 'Сессия не подключена',
+        hint: `Ошибка входа (${err}). Закройте Mini App и откройте снова из бота.`,
+        connecting: false,
+        btn: 'Подключить'
+      };
+    }
+    if (err) {
+      return {
+        title: 'Сессия не подключена',
+        hint: `Не удалось войти (${err}). Нажмите «Подключить».`,
         connecting: false,
         btn: 'Подключить'
       };
@@ -836,6 +853,8 @@
   }
 
   function markSessionLost(reason = 'auth_failed') {
+    // Never clear lastInitData here — Telegram WebView may drop live initData
+    // while the cached string is still valid for API calls.
     state.sessionOk = false;
     state.authReady = false;
     state.authError = reason;
@@ -953,6 +972,8 @@
       const initData = await waitForTelegramInitData(manual || force || userRetry ? 4500 : 3500);
 
       if (!initData) {
+        // Do not wipe a live session if Telegram briefly drops initData.
+        if (state.sessionOk) return true;
         markSessionLost('no_init_data');
         armAuthCooldown(30000);
         state.authConnectingShown = false;
@@ -972,16 +993,16 @@
 
       setAuthRetryVisible(false);
       syncSessionStatusUI();
-      // Must AWAIT wake — Render cold start otherwise loses the race to a 3.5s probe
       const reachable = await ensureApiAwake();
       if (!reachable) {
-        markSessionLost('timeout');
+        if (state.sessionOk) return true;
+        markSessionLost('api_unreachable');
         armAuthCooldown(15000);
         state.authConnectingShown = false;
         dismissSessionToast();
         if (!quiet) {
           setAuthStatus(
-            'Нет связи с сервером бара. Попробуйте ещё раз «Подключить» через несколько секунд.',
+            `Нет связи с ${state.apiBase}. Код: api_unreachable. Нажмите «Подключить» ещё раз.`,
             { error: true }
           );
         }
@@ -1012,15 +1033,22 @@
         }
       }
 
-      markSessionLost(lastErr?.name === 'AbortError' ? 'timeout' : (lastErr?.reason || 'auth_failed'));
+      // If a parallel attempt already succeeded, keep the session.
+      if (state.sessionOk) return true;
+
+      const failCode =
+        lastErr?.name === 'AbortError'
+          ? 'timeout'
+          : (lastErr?.reason || (lastErr?.status ? `http_${lastErr.status}` : 'auth_failed'));
+      markSessionLost(failCode);
       armAuthCooldown(lastErr?.name === 'AbortError' ? 12000 : 25000);
       state.authConnectingShown = false;
       dismissSessionToast();
       const msg =
         lastErr?.name === 'AbortError'
-          ? 'Сервер не ответил вовремя'
+          ? 'Сервер не ответил вовремя (timeout)'
           : (lastErr?.message || 'Не удалось войти');
-      if (!quiet) setAuthStatus(`Не удалось войти: ${msg}`, { error: true });
+      if (!quiet) setAuthStatus(`Не удалось войти: ${msg} [${failCode}]`, { error: true });
       setAuthRetryVisible(true);
       updateProfileUI();
       return false;
@@ -1028,11 +1056,13 @@
 
     // Hard cap — abort in-flight fetch so UI cannot stick on «Вход…»
     const watchdog = sleep(28000).then(() => {
-      if (settled) return false;
+      if (settled || state.sessionOk) return false;
       console.warn('auth watchdog: force-stop after 28s');
       try { authAbort.abort(); } catch (_) { /* ignore */ }
-      markSessionLost('timeout');
-      armAuthCooldown(15000);
+      if (!state.sessionOk) {
+        markSessionLost('timeout');
+        armAuthCooldown(15000);
+      }
       return false;
     });
 
@@ -1040,6 +1070,7 @@
       return await Promise.race([state.authPromise, watchdog]);
     } finally {
       settled = true;
+      // Abort only cancels in-flight fetch; do not clear a successful session.
       try { authAbort.abort(); } catch (_) { /* ignore */ }
       state.authPromise = null;
       state.authConnectingShown = false;
@@ -1073,14 +1104,18 @@
     dismissSessionToast();
     if (ok) {
       syncSessionStatusUI();
+      if (userRetry) showToast('Сессия подключена', 2600);
       return true;
     }
     syncSessionStatusUI();
-    if (!quiet && !userRetry) {
+    if (userRetry) {
+      const code = state.authError || 'auth_failed';
+      toastSessionOnce(`Не удалось подключить (${code})`, 4800);
+    } else if (!quiet) {
       toastSessionOnce(
-        state.authError === 'timeout'
+        state.authError === 'timeout' || state.authError === 'api_unreachable'
           ? 'Связь слабая — нажмите «Подключить» в профиле'
-          : 'Не удалось подключить сессию',
+          : `Не удалось подключить сессию (${state.authError || 'auth_failed'})`,
         4200
       );
     }

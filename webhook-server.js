@@ -366,20 +366,26 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  // Разрешаем CORS для фронтенда (GitHub Pages, локальный файл и т.п.)
+// Health check endpoint (GET + POST — older clients used sendBeacon POST)
+function sendHealth(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
 
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
     service: 'AsafievBar Webhook Server'
   });
-  // Warm caches after response (do not block health)
   try { refreshStoplistCache(false).catch(() => {}); } catch (_) { /* not ready yet */ }
+}
+app.get('/health', sendHealth);
+app.post('/health', sendHealth);
+app.options('/health', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.status(204).end();
 });
 
 // Диагностика переменных окружения
@@ -852,7 +858,7 @@ function getMiniAppPublicUrl() {
   // «Открыть» uses for most users. Menu Button + /start keyboard must match it,
   // with a fresh ?v= so Telegram does not reuse a stale WebView document.
   // DuckDNS /s is a fallback mirror with the same x9 assets.
-  return 'https://ve1lers.github.io/bar_firebase/mini-app/?v=x25';
+  return 'https://ve1lers.github.io/bar_firebase/mini-app/?v=x26';
 }
 
 const MINIAPP_BOT_DESCRIPTION =
