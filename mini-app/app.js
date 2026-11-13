@@ -19,7 +19,7 @@
   // VPS bar API on Cloudflare-style HTTPS alt-port (not :443 VPN, not :8443 carrier-blocked).
   const DEFAULT_API = 'https://asafievbar.duckdns.org:2083';
   const MENU_CACHE_KEY = 'asafiev_mini_menu_v7';
-  const MENU_IMAGE_BUST = 'img5';
+  const MENU_IMAGE_BUST = 'img6';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
   const STATUS_LABELS = {
     pending: 'Ожидание',
