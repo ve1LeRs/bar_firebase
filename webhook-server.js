@@ -2557,6 +2557,45 @@ app.post('/api/mini-app/me', async (req, res) => {
       billHistory.sort((a, b) => b.paidAtMs - a.paidAtMs);
     }
 
+    // Fallback: if no paid bills, synthesize profile history from completed orders
+    // (stale open bills / orphans used to hide history after migrate).
+    if (!billHistory.length) {
+      try {
+        let completedSnap;
+        try {
+          completedSnap = await db.collection('orders')
+            .where('userId', '==', session.userId)
+            .where('status', '==', 'completed')
+            .orderBy('createdAt', 'desc')
+            .limit(30)
+            .get();
+        } catch (_) {
+          completedSnap = await db.collection('orders')
+            .where('userId', '==', session.userId)
+            .limit(40)
+            .get();
+        }
+        const completed = completedSnap.docs
+          .map((doc) => ({ id: doc.id, ...(doc.data() || {}) }))
+          .filter((o) => String(o.status || '') === 'completed')
+          .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+        if (completed.length) {
+          const totalAmount = completed.reduce((s, o) => s + (Number(o.price) || 0), 0);
+          billHistory.push({
+            id: 'orders-completed',
+            totalAmount,
+            itemsCount: completed.length,
+            paymentMethod: null,
+            promoCode: null,
+            paidAtMs: completed[0].createdAt?.toMillis?.() || completed[0].updatedAt?.toMillis?.() || 0,
+            itemNames: completed.slice(0, 3).map((o) => o.name || 'Коктейль')
+          });
+        }
+      } catch (histFallbackErr) {
+        console.warn('me billHistory fallback:', histFallbackErr?.message || histFallbackErr);
+      }
+    }
+
     res.json({
       success: true,
       userId: session.userId,
@@ -2770,7 +2809,7 @@ app.post('/api/mini-app/my-orders', async (req, res) => {
         cancelledIds.has(o.id) ? { ...o, status: 'cancelled' } : o
       );
     }
-    // Do not invent a synthetic open bill for leftovers (cancelled/completed only)
+    // Active orphans → temporary open "Без счёта" bill (cancelled later if still orphan).
     const visibleOrphans = orphanOrders.filter((o) =>
       !['cancelled', 'completed'].includes(String(o.status || ''))
     );
@@ -2794,6 +2833,42 @@ app.post('/api/mini-app/my-orders', async (req, res) => {
           queuePosition: o.queuePosition,
           rated: o.rated
         }))
+      });
+    }
+
+    // Completed orphans used to be dropped entirely once any bill existed — surface them
+    // as a synthetic paid history bill so Orders/Profile stay non-empty after migrate.
+    const completedOrphans = orphanOrders.filter((o) => String(o.status || '') === 'completed');
+    if (completedOrphans.length) {
+      const paidAtMs = completedOrphans.reduce(
+        (max, o) => Math.max(max, Number(o.createdAtMs) || 0),
+        0
+      );
+      bills.push({
+        id: 'orphan-completed',
+        status: 'paid',
+        totalAmount: completedOrphans
+          .reduce((s, o) => s + (Number(o.price) || 0), 0),
+        paymentMethod: null,
+        promoCode: null,
+        discount: 0,
+        createdAtMs: paidAtMs || Date.now(),
+        paidAtMs: paidAtMs || Date.now(),
+        items: completedOrphans.map((o) => ({
+          orderId: o.id,
+          cocktailName: o.name,
+          price: o.price,
+          image: o.image || '',
+          status: o.status,
+          displayTime: o.displayTime,
+          queuePosition: o.queuePosition,
+          rated: o.rated
+        }))
+      });
+      bills.sort((a, b) => {
+        if (a.status === 'open' && b.status !== 'open') return -1;
+        if (b.status === 'open' && a.status !== 'open') return 1;
+        return (b.paidAtMs || b.createdAtMs) - (a.paidAtMs || a.createdAtMs);
       });
     }
 
