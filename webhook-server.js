@@ -2439,10 +2439,15 @@ app.post('/api/mini-app/auth', async (req, res) => {
       new Promise((resolve) => setTimeout(() => resolve(fallback), ms))
     ]);
 
-    // Critical path: only user + bonus. Bills/token hydrate later via /me (keeps mobile auth fast).
-    const [existingUser, bonusDoc] = await Promise.all([
+    // Critical path: user + bonus + paid billHistory (Profile). Keep under ~2s on mobile.
+    const [existingUser, bonusDoc, historySnap] = await Promise.all([
       withDeadline(userRef.get(), 1800, { exists: false, data: () => ({}) }),
-      withDeadline(db.collection('bonusAccounts').doc(uid).get(), 1800, { exists: false, data: () => ({}) })
+      withDeadline(db.collection('bonusAccounts').doc(uid).get(), 1800, { exists: false, data: () => ({}) }),
+      withDeadline(
+        db.collection('bills').where('userId', '==', uid).limit(30).get(),
+        1800,
+        null
+      )
     ]);
 
     const existingRole = existingUser.exists ? (existingUser.data().role || 'user') : 'user';
@@ -2464,17 +2469,37 @@ app.post('/api/mini-app/auth', async (req, res) => {
 
     const bonusBalance = bonusDoc.exists ? Number(bonusDoc.data().balance) || 0 : 0;
 
-    console.log(`Mini App auth ok: ${uid} ${tgUser.username || ''} { id: ${tgUser.id} } ${Date.now() - t0}ms`);
+    const billHistory = [];
+    if (historySnap && !historySnap.empty) {
+      historySnap.docs.forEach((doc) => {
+        const d = doc.data() || {};
+        if (d.status !== 'paid') return;
+        const items = Array.isArray(d.items) ? d.items : [];
+        billHistory.push({
+          id: doc.id,
+          totalAmount: Number(d.totalAmount) || 0,
+          itemsCount: items.length,
+          paymentMethod: d.paymentMethod || null,
+          promoCode: d.promoCode || null,
+          paidAtMs: d.paidAt?.toMillis?.() || d.updatedAt?.toMillis?.() || 0,
+          itemNames: items.slice(0, 3).map((i) => i.cocktailName || i.name || 'Коктейль')
+        });
+      });
+      billHistory.sort((a, b) => b.paidAtMs - a.paidAtMs);
+    }
+
+    console.log(`Mini App auth ok: ${uid} ${tgUser.username || ''} { id: ${tgUser.id} } ${Date.now() - t0}ms hist=${billHistory.length}`);
 
     res.json({
       success: true,
       // Session works even if client cannot use Firebase Auth domains
       session: true,
-      // customToken/bills hydrate via /me — keep this response under ~2s on mobile
+      // customToken still hydrates via /me — billHistory rides on auth for Profile
       customToken: null,
       bonusBalance,
       openBillTotal: 0,
       openBillItems: [],
+      billHistory: billHistory.slice(0, 10),
       role,
       user: {
         id: tgUser.id,
