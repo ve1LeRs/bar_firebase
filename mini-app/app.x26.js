@@ -36,7 +36,9 @@
     transfer: 'перевод',
     'Наличные': 'наличные',
     'Карта': 'карта',
-    'Перевод': 'перевод'
+    'Перевод': 'перевод',
+    'restored-after-migrate': 'восстановлено',
+    restored: 'восстановлено'
   };
 
   const tg = window.Telegram?.WebApp;
@@ -928,6 +930,10 @@
     if (Array.isArray(data.openBillItems)) {
       state.openBillItems = data.openBillItems;
     }
+    // Auth now carries paid billHistory so Profile is non-empty before /me returns
+    if (Array.isArray(data.billHistory)) {
+      state.billHistory = data.billHistory;
+    }
     if (data.role) state.role = data.role;
     applyAdminUi();
 
@@ -950,7 +956,7 @@
     updateProfileUI();
     startOrdersPolling({ deferMs: 2500 });
     startKeepAlive();
-    // Bills no longer ride on /auth — hydrate profile in background
+    // Full profile hydrate (bonus / open bill / history refresh)
     void refreshProfile();
   }
 
@@ -4338,12 +4344,35 @@
         const bills = data.bills || [];
         noteOrderStatusChanges(orders);
         syncOpenBillFromOrders(bills);
+        // Keep Profile «История счетов» in sync from the same paid bills Orders already has
+        syncBillHistoryFromBills(bills);
         renderOrders(orders, bills);
         syncOrdersPromoUI();
       }
     } catch (err) {
       console.warn('orders refresh failed', err);
     }
+  }
+
+  function syncBillHistoryFromBills(bills) {
+    const list = Array.isArray(bills) ? bills : [];
+    const paid = list.filter((b) => b && b.status === 'paid' && String(b.id) !== 'orphan');
+    if (!paid.length) return;
+    const next = paid.map((bill) => {
+      const items = Array.isArray(bill.items) ? bill.items : [];
+      return {
+        id: bill.id,
+        totalAmount: Number(bill.totalAmount) || 0,
+        itemsCount: items.length,
+        paymentMethod: bill.paymentMethod || null,
+        promoCode: bill.promoCode || null,
+        paidAtMs: Number(bill.paidAtMs) || Number(bill.createdAtMs) || 0,
+        itemNames: items.slice(0, 3).map((i) => i.cocktailName || i.name || 'Коктейль')
+      };
+    });
+    next.sort((a, b) => (b.paidAtMs || 0) - (a.paidAtMs || 0));
+    state.billHistory = next.slice(0, 10);
+    renderProfileBillHistory();
   }
 
   async function refreshProfile() {
