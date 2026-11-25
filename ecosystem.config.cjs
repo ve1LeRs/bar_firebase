@@ -19,7 +19,7 @@ function loadEnv(file) {
 const env = loadEnv(path.join(__dirname, '.env'));
 // Bar API on CF-style alt HTTPS port — never VPS :443 (VPN/xray), never Render
 env.PUBLIC_BASE_URL = 'https://asafievbar.duckdns.org:2083';
-env.TELEGRAM_WEBHOOK_BASE_URL = env.TELEGRAM_WEBHOOK_BASE_URL || 'https://asafievbar.duckdns.org:8443';
+env.TELEGRAM_WEBHOOK_BASE_URL = env.TELEGRAM_WEBHOOK_BASE_URL || 'https://141-0-184-24.sslip.io:8443';
 // Prefer .env FORCE_TELEGRAM_POLLING when set (NL uses 1 while Telegram sticky-DNS caches old RU IP)
 if (env.FORCE_TELEGRAM_POLLING == null || env.FORCE_TELEGRAM_POLLING === '') {
   env.FORCE_TELEGRAM_POLLING = '0';
