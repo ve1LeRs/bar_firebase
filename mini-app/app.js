@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const UI_BUILD = 'x30';
+  const UI_BUILD = 'x31';
   try { document.documentElement.dataset.uiBuild = UI_BUILD; } catch (_) {}
 
   // Do NOT redirect github.io → duckdns. Cross-origin navigation inside the
@@ -16,8 +16,8 @@
     appId: '1:493608422842:web:3b4b6bd8a4cb681c436183'
   };
 
-  // VPS bar API on Cloudflare-style HTTPS alt-port (not :443 VPN, not :8443 carrier-blocked).
-  const DEFAULT_API = 'https://141-0-184-24.sslip.io:2083';
+  // VPS bar API via sslip.io on :443 SNI (carrier-safe). Not DuckDNS; Reality/xray SNI hosts unchanged.
+  const DEFAULT_API = 'https://141-0-184-24.sslip.io';
   const MENU_CACHE_KEY = 'asafiev_mini_menu_v7';
   const MENU_IMAGE_BUST = 'img6';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
