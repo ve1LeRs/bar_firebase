@@ -858,7 +858,7 @@ function getMiniAppPublicUrl() {
   // «Открыть» uses for most users. Menu Button + /start keyboard must match it,
   // with a fresh ?v= so Telegram does not reuse a stale WebView document.
   // DuckDNS /s is a fallback mirror with the same x9 assets.
-  return 'https://ve1lers.github.io/bar_firebase/mini-app/?v=x26';
+  return 'https://ve1lers.github.io/bar_firebase/mini-app/?v=x29';
 }
 
 const MINIAPP_BOT_DESCRIPTION =
