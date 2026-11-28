@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const UI_BUILD = 'x26';
+  const UI_BUILD = 'x30';
   try { document.documentElement.dataset.uiBuild = UI_BUILD; } catch (_) {}
 
   // Do NOT redirect github.io → duckdns. Cross-origin navigation inside the
@@ -17,7 +17,7 @@
   };
 
   // VPS bar API on Cloudflare-style HTTPS alt-port (not :443 VPN, not :8443 carrier-blocked).
-  const DEFAULT_API = 'https://asafievbar.duckdns.org:2083';
+  const DEFAULT_API = 'https://141-0-184-24.sslip.io:2083';
   const MENU_CACHE_KEY = 'asafiev_mini_menu_v7';
   const MENU_IMAGE_BUST = 'img6';
   const MENU_CACHE_TTL_MS = 10 * 60 * 1000;
